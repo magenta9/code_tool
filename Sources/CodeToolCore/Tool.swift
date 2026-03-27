@@ -24,6 +24,11 @@ public enum ToolRegistry {
         Tool(name: "JSON Diff", description: "Compare two JSON objects and find differences.", systemImage: "arrow.left.arrow.right"),
         Tool(name: "Timestamp Converter", description: "Convert between timestamps and human-readable dates.", systemImage: "clock"),
         Tool(name: "JWT Tool", description: "Encode and decode JWT tokens.", systemImage: "key"),
-        Tool(name: "Word Cloud", description: "Generate word cloud visualizations from text.", systemImage: "cloud")
+        Tool(name: "Word Cloud", description: "Generate word cloud visualizations from text.", systemImage: "cloud"),
+        Tool(name: "AI Chat", description: "Chat with MiniMax M2.7-highspeed AI model.", systemImage: "bubble.left.and.bubble.right"),
+        Tool(name: "AI Speech", description: "Convert text to speech with MiniMax Speech 2.8.", systemImage: "waveform"),
+        Tool(name: "AI Image", description: "Generate images with MiniMax image-01 model.", systemImage: "photo.artframe"),
+        Tool(name: "AI Music", description: "Generate music with MiniMax Music-2.5 model.", systemImage: "music.note"),
+        Tool(name: "MiniMax Settings", description: "Configure MiniMax API provider settings.", systemImage: "gearshape.2")
     ]
 }

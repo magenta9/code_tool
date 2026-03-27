@@ -78,7 +78,7 @@ private struct SidebarView: View {
                     }
                 }
 
-                Text("6 tools, one interaction model")
+                Text("11 tools, one interaction model")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.accentWarm)
                     .textCase(.uppercase)
@@ -215,6 +215,16 @@ private struct ToolDetailView: View {
                 JWTToolView()
             case "Word Cloud":
                 WordCloudView()
+            case "AI Chat":
+                AIChatView()
+            case "AI Speech":
+                AISpeechView()
+            case "AI Image":
+                AIImageView()
+            case "AI Music":
+                AIMusicView()
+            case "MiniMax Settings":
+                MiniMaxSettingsView()
             default:
                 placeholderView
             }
@@ -265,7 +275,7 @@ private struct WelcomeView: View {
                     .textCase(.uppercase)
                     .tracking(1.6)
 
-                Text("Six tools. One visual language.")
+                Text("Eleven tools. One visual language.")
                     .font(.system(size: 40, weight: .bold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
 
@@ -277,7 +287,7 @@ private struct WelcomeView: View {
                     .frame(maxWidth: 680)
 
                 HStack(spacing: AppTheme.Spacing.md) {
-                    WelcomeMetric(title: "6", subtitle: "Core tools")
+                    WelcomeMetric(title: "11", subtitle: "Core tools")
                     WelcomeMetric(title: "1", subtitle: "Unified layout")
                     WelcomeMetric(title: "0", subtitle: "Purple gradients")
                 }
@@ -412,6 +422,16 @@ private extension Tool {
             return "Inspect"
         case "Word Cloud":
             return "Visualize"
+        case "AI Chat":
+            return "Chat"
+        case "AI Speech":
+            return "Speech"
+        case "AI Image":
+            return "Image"
+        case "AI Music":
+            return "Music"
+        case "MiniMax Settings":
+            return "Config"
         default:
             return "Tool"
         }

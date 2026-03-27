@@ -16,8 +16,9 @@ public struct Tool: Identifiable, Hashable {
 }
 
 /// Provides the default set of developer tools bundled with CodeTool.
+/// Additional tools can be registered at launch by appending to `ToolRegistry.defaults`.
 public enum ToolRegistry {
-    public static let defaults: [Tool] = [
+    public static var defaults: [Tool] = [
         Tool(name: "JSON Formatter", description: "Format and validate JSON documents.", systemImage: "curlybraces"),
         Tool(name: "Base64 Encoder", description: "Encode and decode Base64 strings.", systemImage: "lock.doc"),
         Tool(name: "UUID Generator", description: "Generate random UUIDs.", systemImage: "number"),

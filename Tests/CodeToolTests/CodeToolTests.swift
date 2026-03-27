@@ -23,6 +23,18 @@ final class CodeToolTests: XCTestCase {
 
     // MARK: - ToolRegistry tests
 
+    private var savedDefaults: [Tool] = []
+
+    override func setUp() {
+        super.setUp()
+        savedDefaults = ToolRegistry.defaults
+    }
+
+    override func tearDown() {
+        ToolRegistry.defaults = savedDefaults
+        super.tearDown()
+    }
+
     func testRegistryDefaultsNotEmpty() {
         XCTAssertFalse(ToolRegistry.defaults.isEmpty)
     }
@@ -31,5 +43,12 @@ final class CodeToolTests: XCTestCase {
         let names = ToolRegistry.defaults.map(\.name)
         let uniqueNames = Set(names)
         XCTAssertEqual(names.count, uniqueNames.count)
+    }
+
+    func testRegistryCanRegisterAdditionalTool() {
+        let originalCount = ToolRegistry.defaults.count
+        let extra = Tool(name: "Extra Tool", description: "Extra.", systemImage: "star")
+        ToolRegistry.defaults.append(extra)
+        XCTAssertEqual(ToolRegistry.defaults.count, originalCount + 1)
     }
 }

@@ -191,7 +191,7 @@ public final class MiniMaxAPIClient {
                 "format": format,
                 "channel": 1
             ],
-            "output_format": "base64"
+            "output_format": "hex"
         ]
         let request = try makeRequest(path: "/t2a_v2", body: body)
         let (data, _) = try await perform(request)
@@ -201,15 +201,35 @@ public final class MiniMaxAPIClient {
             throw MiniMaxError.invalidResponse
         }
 
-        // Handle both base64 audio in "audio" field and hex-encoded data
-        if let audioBase64 = dataObj["audio"] as? String,
-           let audioData = Data(base64Encoded: audioBase64) {
+          if let audioHex = dataObj["audio"] as? String,
+              let audioData = decodeHexAudio(audioHex) {
             let extraInfo = json["extra_info"] as? [String: Any]
             let audioLength = extraInfo?["audio_length"] as? Int ?? 0
             return TTSResponse(audioData: audioData, format: format, durationMs: audioLength)
         }
 
         throw MiniMaxError.invalidResponse
+    }
+
+    private func decodeHexAudio(_ hex: String) -> Data? {
+        let normalizedHex = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedHex.count.isMultiple(of: 2) else {
+            return nil
+        }
+
+        var audioData = Data(capacity: normalizedHex.count / 2)
+        var index = normalizedHex.startIndex
+
+        while index < normalizedHex.endIndex {
+            let nextIndex = normalizedHex.index(index, offsetBy: 2)
+            guard let byte = UInt8(normalizedHex[index..<nextIndex], radix: 16) else {
+                return nil
+            }
+            audioData.append(byte)
+            index = nextIndex
+        }
+
+        return audioData
     }
 
     // MARK: - Image Generation

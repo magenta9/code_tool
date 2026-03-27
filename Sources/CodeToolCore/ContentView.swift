@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct ContentView: View {
     @State private var selectedTool: Tool?
+    @State private var retainedToolNames: [String] = []
     private let tools = ToolRegistry.defaults
 
     private enum Layout {
@@ -19,18 +20,42 @@ public struct ContentView: View {
             SidebarDivider()
                 .frame(width: Layout.dividerWidth)
 
-            Group {
-                if let tool = selectedTool {
-                    ToolDetailView(tool: tool)
-                } else {
-                    WelcomeView(tools: tools, selectedTool: $selectedTool)
-                }
-            }
+            ToolDetailCacheView(
+                tools: tools,
+                selectedTool: $selectedTool,
+                retainedToolNames: retainedToolNames
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppTheme.background)
         }
         .frame(minWidth: 800, minHeight: 600)
         .background(AppTheme.background)
+        .onAppear {
+            retainedToolNames = ToolViewCache.retainedToolNames(
+                current: retainedToolNames,
+                selectedToolName: selectedTool?.name
+            )
+        }
+        .onChange(of: selectedTool?.name) { selectedToolName in
+            retainedToolNames = ToolViewCache.retainedToolNames(
+                current: retainedToolNames,
+                selectedToolName: selectedToolName
+            )
+        }
+    }
+}
+
+enum ToolViewCache {
+    static func retainedToolNames(current: [String], selectedToolName: String?) -> [String] {
+        guard let selectedToolName else {
+            return current
+        }
+
+        guard !current.contains(selectedToolName) else {
+            return current
+        }
+
+        return current + [selectedToolName]
     }
 }
 
@@ -196,6 +221,32 @@ private struct SidebarRow: View {
 }
 
 // MARK: - Tool Detail
+
+private struct ToolDetailCacheView: View {
+    let tools: [Tool]
+    @Binding var selectedTool: Tool?
+    let retainedToolNames: [String]
+
+    var body: some View {
+        ZStack {
+            WelcomeView(tools: tools, selectedTool: $selectedTool)
+                .opacity(selectedTool == nil ? 1 : 0)
+                .allowsHitTesting(selectedTool == nil)
+
+            ForEach(cachedTools) { tool in
+                ToolDetailView(tool: tool)
+                    .opacity(selectedTool == tool ? 1 : 0)
+                    .allowsHitTesting(selectedTool == tool)
+            }
+        }
+    }
+
+    private var cachedTools: [Tool] {
+        retainedToolNames.compactMap { retainedToolName in
+            tools.first { $0.name == retainedToolName }
+        }
+    }
+}
 
 private struct ToolDetailView: View {
     let tool: Tool

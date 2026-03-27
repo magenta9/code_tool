@@ -19,9 +19,11 @@ public struct Tool: Identifiable, Hashable {
 /// Additional tools can be registered at launch by appending to `ToolRegistry.defaults`.
 public enum ToolRegistry {
     public static var defaults: [Tool] = [
-        Tool(name: "JSON Formatter", description: "Format and validate JSON documents.", systemImage: "curlybraces"),
-        Tool(name: "Base64 Encoder", description: "Encode and decode Base64 strings.", systemImage: "lock.doc"),
-        Tool(name: "UUID Generator", description: "Generate random UUIDs.", systemImage: "number"),
-        Tool(name: "Hash Calculator", description: "Compute MD5, SHA-1, and SHA-256 hashes.", systemImage: "number.square")
+        Tool(name: "JSON Tool", description: "Format, validate, minify, and analyze JSON data.", systemImage: "curlybraces"),
+        Tool(name: "Image Converter", description: "Convert images between Base64 strings and files.", systemImage: "photo"),
+        Tool(name: "JSON Diff", description: "Compare two JSON objects and find differences.", systemImage: "arrow.left.arrow.right"),
+        Tool(name: "Timestamp Converter", description: "Convert between timestamps and human-readable dates.", systemImage: "clock"),
+        Tool(name: "JWT Tool", description: "Encode and decode JWT tokens.", systemImage: "key"),
+        Tool(name: "Word Cloud", description: "Generate word cloud visualizations from text.", systemImage: "cloud")
     ]
 }

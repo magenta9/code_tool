@@ -4,10 +4,12 @@ A macOS developer toolkit built with Swift and SwiftUI, providing a collection o
 
 ## Features
 
-- **JSON Formatter** – Format and validate JSON documents
-- **Base64 Encoder** – Encode and decode Base64 strings
-- **UUID Generator** – Generate random UUIDs
-- **Hash Calculator** – Compute MD5, SHA-1, and SHA-256 hashes
+- **JSON Tool** – Format, validate, minify, and analyze JSON data
+- **Image Converter** – Convert images between Base64 strings and files
+- **JSON Diff** – Compare two JSON objects and find differences
+- **Timestamp Converter** – Convert between timestamps and human-readable dates
+- **JWT Tool** – Encode and decode JWT tokens
+- **Word Cloud** – Generate word cloud visualizations from text
 
 ## Requirements
 
@@ -21,17 +23,23 @@ A macOS developer toolkit built with Swift and SwiftUI, providing a collection o
 
 ```
 CodeTool/
-├── Package.swift                  # Swift Package Manager manifest
+├── Package.swift                        # Swift Package Manager manifest
 ├── Sources/
-│   ├── CodeToolApp/               # App entry point & lifecycle
-│   │   ├── CodeToolApp.swift      # @main SwiftUI App struct
-│   │   └── AppDelegate.swift      # NSApplicationDelegate
-│   └── CodeToolCore/              # Reusable core library
-│       ├── Tool.swift             # Tool model & registry
-│       └── ContentView.swift      # Main SwiftUI view hierarchy
+│   ├── CodeToolApp/                     # App entry point & lifecycle
+│   │   ├── CodeToolApp.swift            # @main SwiftUI App struct
+│   │   └── AppDelegate.swift            # NSApplicationDelegate
+│   └── CodeToolCore/                    # Reusable core library
+│       ├── Tool.swift                   # Tool model & registry
+│       ├── ContentView.swift            # Main SwiftUI view hierarchy
+│       ├── JSONToolView.swift           # JSON formatter/validator/minifier
+│       ├── ImageConverterView.swift     # Image ↔ Base64 converter
+│       ├── JSONDiffView.swift           # JSON comparison tool
+│       ├── TimestampConverterView.swift # Timestamp ↔ date converter
+│       ├── JWTToolView.swift            # JWT encoder/decoder
+│       └── WordCloudView.swift          # Word cloud generator
 └── Tests/
     └── CodeToolTests/
-        └── CodeToolTests.swift    # Unit tests for CodeToolCore
+        └── CodeToolTests.swift          # Unit tests for CodeToolCore
 ```
 
 ## Getting Started

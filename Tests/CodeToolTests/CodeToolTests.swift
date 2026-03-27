@@ -39,10 +39,23 @@ final class CodeToolTests: XCTestCase {
         XCTAssertFalse(ToolRegistry.defaults.isEmpty)
     }
 
+    func testRegistryContainsSixTools() {
+        XCTAssertEqual(ToolRegistry.defaults.count, 6)
+    }
+
     func testRegistryDefaultNamesAreUnique() {
         let names = ToolRegistry.defaults.map(\.name)
         let uniqueNames = Set(names)
         XCTAssertEqual(names.count, uniqueNames.count)
+    }
+
+    func testRegistryContainsExpectedTools() {
+        let names = Set(ToolRegistry.defaults.map(\.name))
+        let expected: Set<String> = [
+            "JSON Tool", "Image Converter", "JSON Diff",
+            "Timestamp Converter", "JWT Tool", "Word Cloud"
+        ]
+        XCTAssertEqual(names, expected)
     }
 
     func testRegistryCanRegisterAdditionalTool() {

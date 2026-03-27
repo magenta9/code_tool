@@ -4,20 +4,48 @@ public struct ContentView: View {
     @State private var selectedTool: Tool?
     private let tools = ToolRegistry.defaults
 
+    private enum Layout {
+        static let sidebarWidth: CGFloat = 240
+        static let dividerWidth: CGFloat = 10
+    }
+
     public init() {}
 
     public var body: some View {
-        NavigationSplitView {
+        HStack(spacing: 0) {
             SidebarView(tools: tools, selectedTool: $selectedTool)
-        } detail: {
-            if let tool = selectedTool {
-                ToolDetailView(tool: tool)
-            } else {
-                WelcomeView(tools: tools, selectedTool: $selectedTool)
+                .frame(width: Layout.sidebarWidth)
+
+            SidebarDivider()
+                .frame(width: Layout.dividerWidth)
+
+            Group {
+                if let tool = selectedTool {
+                    ToolDetailView(tool: tool)
+                } else {
+                    WelcomeView(tools: tools, selectedTool: $selectedTool)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppTheme.background)
         }
         .frame(minWidth: 800, minHeight: 600)
         .background(AppTheme.background)
+    }
+}
+
+private struct SidebarDivider: View {
+    var body: some View {
+        ZStack {
+            AppTheme.sidebarBackground.opacity(0.92)
+
+            AppTheme.border
+                .frame(width: 1)
+
+            AppTheme.accent.opacity(0.08)
+                .frame(width: 1)
+                .blur(radius: 3)
+        }
     }
 }
 
@@ -94,7 +122,7 @@ private struct SidebarView: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.bottom, AppTheme.Spacing.lg)
         }
-        .frame(minWidth: 220, idealWidth: 240)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AppTheme.sidebarBackground)
     }
 }

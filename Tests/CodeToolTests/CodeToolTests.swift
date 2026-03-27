@@ -1,6 +1,10 @@
 import XCTest
 @testable import CodeToolCore
 
+#if canImport(SwiftUI)
+import SwiftUI
+#endif
+
 final class CodeToolTests: XCTestCase {
     // MARK: - Tool model tests
 
@@ -64,4 +68,11 @@ final class CodeToolTests: XCTestCase {
         ToolRegistry.defaults.append(extra)
         XCTAssertEqual(ToolRegistry.defaults.count, originalCount + 1)
     }
+
+    #if canImport(SwiftUI)
+    func testContentViewDoesNotUseNavigationSplitView() {
+        let bodyTypeDescription = String(describing: type(of: ContentView().body))
+        XCTAssertFalse(bodyTypeDescription.contains("NavigationSplitView"))
+    }
+    #endif
 }

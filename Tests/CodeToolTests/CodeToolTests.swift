@@ -15,7 +15,7 @@ final class CodeToolTests: XCTestCase {
     func testToolHashable() {
         let tool1 = Tool(name: "A", description: "A", systemImage: "a")
         let tool2 = Tool(name: "A", description: "A", systemImage: "a")
-        // Different UUIDs means they are not equal
+        // Different UUIDs mean they are not equal
         XCTAssertNotEqual(tool1, tool2)
         let set: Set<Tool> = [tool1, tool2]
         XCTAssertEqual(set.count, 2)

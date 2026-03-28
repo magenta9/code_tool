@@ -5,6 +5,7 @@ public final class MiniMaxAPIClient {
     public static let shared = MiniMaxAPIClient()
 
     private let session: URLSession
+    private let musicSession: URLSession
     private var provider: MiniMaxProvider { MiniMaxProvider.shared }
 
     private init() {
@@ -12,6 +13,11 @@ public final class MiniMaxAPIClient {
         config.timeoutIntervalForRequest = 120
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
+
+        let musicConfig = URLSessionConfiguration.default
+        musicConfig.timeoutIntervalForRequest = 600
+        musicConfig.timeoutIntervalForResource = 900
+        self.musicSession = URLSession(configuration: musicConfig)
     }
 
     private struct MusicDiagnosticsContext {
@@ -23,19 +29,6 @@ public final class MiniMaxAPIClient {
         let sampleRate: Int
         let bitrate: Int
         let taskID: String?
-
-        func with(taskID: String) -> MusicDiagnosticsContext {
-            MusicDiagnosticsContext(
-                referenceID: referenceID,
-                model: model,
-                promptSummary: promptSummary,
-                lyricsSummary: lyricsSummary,
-                format: format,
-                sampleRate: sampleRate,
-                bitrate: bitrate,
-                taskID: taskID
-            )
-        }
 
         func metadata(extra: [String: String] = [:]) -> [String: String] {
             var metadata: [String: String] = [
@@ -630,10 +623,12 @@ public final class MiniMaxAPIClient {
                 "bitrate": bitrate,
                 "format": format
             ],
-            "output_format": "hex"
+            "output_format": "url"
         ]
         if let lyrics = lyrics, !lyrics.isEmpty {
             body["lyrics"] = lyrics
+        } else {
+            body["lyrics_optimizer"] = true
         }
 
         await AppLogger.shared.info(
@@ -658,7 +653,7 @@ public final class MiniMaxAPIClient {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let dataObj = json["data"] as? [String: Any] else {
             throw await makeLoggedMusicError(
-                stage: "request_music_generation",
+                                stage: "parse_music_generation_response",
                 userMessage: "Music generation failed.",
                 underlying: MiniMaxError.invalidResponse,
                 context: context,
@@ -675,52 +670,20 @@ public final class MiniMaxAPIClient {
             return try extractMusicResponse(from: dataObj, context: context)
         }
 
-        guard let taskId = extractTaskId(from: json) else {
-            throw await makeLoggedMusicError(
-                stage: "request_music_generation",
-                userMessage: "Music generation failed.",
-                underlying: MiniMaxError.invalidResponse,
-                context: context,
-                request: request,
-                responseData: data,
-                startedAt: nil,
-                extra: [
-                    "httpStatus": String(response.statusCode)
-                ]
-            )
-        }
-
-        let acceptedContext = context.with(taskID: taskId)
-        await AppLogger.shared.info(
-            category: .aimusic,
-            event: "task_accepted",
-            referenceID: acceptedContext.referenceID,
-            message: "MiniMax accepted music generation task.",
-            metadata: acceptedContext.metadata(extra: [
-                "httpStatus": String(response.statusCode)
-            ])
+        throw await makeLoggedMusicError(
+            stage: "parse_music_generation_response",
+            userMessage: "Music generation failed.",
+            underlying: MiniMaxError.invalidResponse,
+            context: context,
+            request: request,
+            responseData: data,
+            startedAt: nil,
+            extra: [
+                "httpStatus": String(response.statusCode),
+                "traceID": stringValue(for: "trace_id", in: json) ?? "",
+                "status": String(dataObj["status"] as? Int ?? -1)
+            ]
         )
-
-        return try await pollMusicTask(taskId: taskId, context: acceptedContext)
-    }
-
-    /// Extracts a task identifier (trace_id or task_id) from the API response.
-    private func extractTaskId(from json: [String: Any]) -> String? {
-        for key in ["trace_id", "task_id"] {
-            if let value = stringValue(for: key, in: json) {
-                return value
-            }
-        }
-
-        if let dataObj = json["data"] as? [String: Any] {
-            for key in ["trace_id", "task_id"] {
-                if let value = stringValue(for: key, in: dataObj) {
-                    return value
-                }
-            }
-        }
-
-        return nil
     }
 
     private func stringValue(for key: String, in json: [String: Any]) -> String? {
@@ -743,120 +706,21 @@ public final class MiniMaxAPIClient {
         return false
     }
 
-    /// Polls the music generation status endpoint until audio is ready.
-    private func pollMusicTask(taskId: String, context: MusicDiagnosticsContext) async throws -> MusicResponse {
-        let maxAttempts = 90 // up to ~3 minutes at 2s intervals
-        await AppLogger.shared.info(
-            category: .aimusic,
-            event: "poll_started",
-            referenceID: context.referenceID,
-            message: "Started polling MiniMax music generation task.",
-            metadata: context.metadata(extra: [
-                "endpoint": "/query/music_generation",
-                "maxAttempts": String(maxAttempts)
-            ])
-        )
-
-        var lastStatus: Int?
-        for attempt in 1...maxAttempts {
-            try await Task.sleep(nanoseconds: 2_000_000_000)
-
-            let request = try makeGetRequest(
-                path: "/query/music_generation",
-                queryItems: [URLQueryItem(name: "task_id", value: taskId)]
-            )
-            let startedAt = Date()
-
-            do {
-                let (data, response) = try await perform(request)
-
-                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let dataObj = json["data"] as? [String: Any] else {
-                    throw await makeLoggedMusicError(
-                        stage: "poll_music_generation",
-                        userMessage: "Music generation polling failed.",
-                        underlying: MiniMaxError.invalidResponse,
-                        context: context,
-                        request: request,
-                        responseData: data,
-                        startedAt: startedAt,
-                        extra: [
-                            "attempt": String(attempt),
-                            "httpStatus": String(response.statusCode)
-                        ]
-                    )
-                }
-
-                let status = dataObj["status"] as? Int ?? 0
-                if status != lastStatus {
-                    lastStatus = status
-                    await AppLogger.shared.info(
-                        category: .aimusic,
-                        event: "poll_status_changed",
-                        referenceID: context.referenceID,
-                        message: "MiniMax music generation status changed.",
-                        metadata: context.metadata(extra: [
-                            "attempt": String(attempt),
-                            "status": String(status),
-                            "httpStatus": String(response.statusCode),
-                            "durationMs": Self.durationMSString(since: startedAt),
-                            "responseSummary": Self.summarizeJSONData(data)
-                        ])
-                    )
-                }
-
-                if status == 2 {
-                    return try extractMusicResponse(from: dataObj, context: context)
-                }
-            } catch {
-                if let loggedError = error as? LoggedDiagnosticError {
-                    throw loggedError
-                }
-
-                throw await makeLoggedMusicError(
-                    stage: "poll_music_generation",
-                    userMessage: "Music generation polling failed.",
-                    underlying: error,
-                    context: context,
-                    request: request,
-                    responseData: nil,
-                    startedAt: startedAt,
-                    extra: [
-                        "attempt": String(attempt)
-                    ]
-                )
-            }
-        }
-
-        throw await makeLoggedMusicError(
-            stage: "poll_music_generation",
-            userMessage: "Music generation timed out.",
-            underlying: MiniMaxError.apiError(code: -1, message: "Music generation timed out after polling"),
-            context: context,
-            request: nil,
-            responseData: nil,
-            startedAt: nil,
-            extra: [
-                "attempts": String(maxAttempts)
-            ]
-        )
-    }
-
     /// Parses the completed music generation data object into a MusicResponse.
     private func extractMusicResponse(from dataObj: [String: Any], context: MusicDiagnosticsContext) throws -> MusicResponse {
         if let audioURL = dataObj["audio_url"] as? String, !audioURL.isEmpty {
-            return MusicResponse(audioData: nil, audioURL: audioURL, referenceID: context.referenceID, taskID: context.taskID)
+            return MusicResponse(audioData: nil, audioURL: audioURL, referenceID: context.referenceID, taskID: nil)
         }
 
         if let audio = dataObj["audio"] as? String, !audio.isEmpty {
             if audio.hasPrefix("http://") || audio.hasPrefix("https://") {
-                return MusicResponse(audioData: nil, audioURL: audio, referenceID: context.referenceID, taskID: context.taskID)
+                return MusicResponse(audioData: nil, audioURL: audio, referenceID: context.referenceID, taskID: nil)
             }
             if let audioData = decodeHexAudio(audio) {
-                return MusicResponse(audioData: audioData, audioURL: nil, referenceID: context.referenceID, taskID: context.taskID)
+                return MusicResponse(audioData: audioData, audioURL: nil, referenceID: context.referenceID, taskID: nil)
             }
             if let audioData = Data(base64Encoded: audio) {
-                return MusicResponse(audioData: audioData, audioURL: nil, referenceID: context.referenceID, taskID: context.taskID)
+                return MusicResponse(audioData: audioData, audioURL: nil, referenceID: context.referenceID, taskID: nil)
             }
         }
         throw MiniMaxError.invalidResponse
@@ -883,7 +747,7 @@ public final class MiniMaxAPIClient {
         }
 
         do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await musicSession.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 throw MiniMaxError.invalidResponse
             }
@@ -942,7 +806,7 @@ public final class MiniMaxAPIClient {
         let startedAt = Date()
 
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await musicSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw MiniMaxError.invalidResponse
             }

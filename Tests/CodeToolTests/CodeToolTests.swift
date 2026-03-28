@@ -331,13 +331,15 @@ final class CodeToolTests: XCTestCase {
         }
     }
 
-    func testGenerateMusicRequestsHexOutputAndDecodesInlineAudio() async throws {
+    func testGenerateMusicWithLyricsUsesURLTransportAndParsesAudioURL() async throws {
         MockURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.url?.path, "/v1/music_generation")
 
             let bodyData = try XCTUnwrap(request.httpBody)
             let bodyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
-            XCTAssertEqual(bodyObject["output_format"] as? String, "hex")
+            XCTAssertEqual(bodyObject["output_format"] as? String, "url")
+            XCTAssertNil(bodyObject["lyrics_optimizer"])
+            XCTAssertNotNil(bodyObject["lyrics"])
 
             let audioSetting = try XCTUnwrap(bodyObject["audio_setting"] as? [String: Any])
             XCTAssertEqual(audioSetting["sample_rate"] as? Int, 44100)
@@ -346,7 +348,7 @@ final class CodeToolTests: XCTestCase {
 
             let responseBody: [String: Any] = [
                 "data": [
-                    "audio": "48656c6c6f",
+                    "audio": "https://example.com/generated-with-lyrics.mp3",
                     "status": 2
                 ],
                 "trace_id": "trace-123",
@@ -361,10 +363,13 @@ final class CodeToolTests: XCTestCase {
             return (response, responseData)
         }
 
-        let response = try await MiniMaxAPIClient.shared.generateMusic(prompt: "folk song")
+        let response = try await MiniMaxAPIClient.shared.generateMusic(
+            prompt: "folk song",
+            lyrics: "[Verse]\nHello world"
+        )
 
-        XCTAssertEqual(response.audioData, Data("Hello".utf8))
-        XCTAssertNil(response.audioURL)
+        XCTAssertNil(response.audioData)
+        XCTAssertEqual(response.audioURL, "https://example.com/generated-with-lyrics.mp3")
         XCTAssertFalse(response.referenceID.isEmpty)
     }
 
@@ -392,6 +397,84 @@ final class CodeToolTests: XCTestCase {
             XCTAssertTrue(logContent.contains("NSURLErrorDomain"))
             XCTAssertTrue(logContent.contains("-1001"))
             XCTAssertTrue(logContent.contains("stackTrace"))
+        }
+    }
+
+    func testGenerateMusicWithoutLyricsUsesLyricsOptimizerAndReturnsURL() async throws {
+        var requestCount = 0
+
+        MockURLProtocol.requestHandler = { request in
+            requestCount += 1
+            XCTAssertEqual(request.url?.path, "/v1/music_generation")
+            XCTAssertEqual(request.httpMethod, "POST")
+
+            let bodyData = try XCTUnwrap(request.httpBody)
+            let bodyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+
+            XCTAssertEqual(bodyObject["model"] as? String, MiniMaxProvider.shared.musicModel)
+            XCTAssertEqual(bodyObject["output_format"] as? String, "url")
+            XCTAssertEqual(bodyObject["lyrics_optimizer"] as? Bool, true)
+            XCTAssertNil(bodyObject["lyrics"])
+
+            let responseBody: [String: Any] = [
+                "data": [
+                    "audio": "https://example.com/generated.mp3",
+                    "status": 2
+                ],
+                "trace_id": "trace-456",
+                "base_resp": [
+                    "status_code": 0,
+                    "status_msg": "success"
+                ]
+            ]
+
+            let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+            return (response, responseData)
+        }
+
+        let response = try await MiniMaxAPIClient.shared.generateMusic(prompt: "folk song", lyrics: nil)
+
+        XCTAssertEqual(requestCount, 1)
+        XCTAssertNil(response.audioData)
+        XCTAssertEqual(response.audioURL, "https://example.com/generated.mp3")
+        XCTAssertFalse(response.referenceID.isEmpty)
+    }
+
+    func testGenerateMusicDoesNotQueryLegacyMusicStatusEndpoint() async throws {
+        var receivedPaths: [String] = []
+
+        MockURLProtocol.requestHandler = { request in
+            let path = request.url?.path ?? ""
+            receivedPaths.append(path)
+
+            if path == "/v1/music_generation" {
+                let responseBody: [String: Any] = [
+                    "data": [
+                        "status": 1
+                    ],
+                    "trace_id": "trace-pending",
+                    "base_resp": [
+                        "status_code": 0,
+                        "status_msg": "success"
+                    ]
+                ]
+
+                let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+                let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+                return (response, responseData)
+            }
+
+            XCTFail("Unexpected legacy query path: \(path)")
+            throw URLError(.badURL)
+        }
+
+        do {
+            _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "folk song", lyrics: nil)
+            XCTFail("Expected generateMusic to fail when music API does not return audio payload")
+        } catch {
+            XCTAssertEqual(receivedPaths, ["/v1/music_generation"])
+            XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
         }
     }
 }

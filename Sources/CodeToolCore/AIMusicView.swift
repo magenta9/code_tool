@@ -17,6 +17,7 @@ public struct AIMusicView: View {
     @State private var outputFormat: String = "mp3"
     @State private var sampleRate: Int = 44100
     @State private var bitrate: Int = 256000
+    @State private var latestReferenceID: String = ""
 
     public init() {}
 
@@ -280,6 +281,7 @@ public struct AIMusicView: View {
 
         isGenerating = true
         errorMessage = ""
+        latestReferenceID = ""
         stopPlayback()
         audioData = nil
 
@@ -296,10 +298,15 @@ public struct AIMusicView: View {
 
                 var data = response.audioData
                 if data == nil, let urlString = response.audioURL {
-                    data = try await MiniMaxAPIClient.shared.downloadAudio(from: urlString)
+                    data = try await MiniMaxAPIClient.shared.downloadAudio(
+                        from: urlString,
+                        referenceID: response.referenceID,
+                        taskID: response.taskID
+                    )
                 }
 
                 await MainActor.run {
+                    latestReferenceID = response.referenceID
                     audioData = data
                     isGenerating = false
                     preparePlayer()
@@ -319,7 +326,26 @@ public struct AIMusicView: View {
             audioPlayer = try AVAudioPlayer(data: data)
             audioPlayer?.prepareToPlay()
         } catch {
-            errorMessage = "Failed to prepare audio playback: \(error.localizedDescription)"
+            let playbackError = error
+            let referenceID = latestReferenceID
+            Task {
+                let resolvedReferenceID = await AppLogger.shared.error(
+                    category: .aimusic,
+                    event: "player_prepare_failed",
+                    referenceID: referenceID.isEmpty ? nil : referenceID,
+                    message: "Failed to prepare generated audio for playback.",
+                    metadata: [
+                        "stage": "prepare_audio_player",
+                        "byteCount": String(data.count),
+                        "format": outputFormat
+                    ],
+                    error: playbackError
+                )
+
+                await MainActor.run {
+                    errorMessage = "Audio playback failed. Reference ID: \(resolvedReferenceID)"
+                }
+            }
         }
     }
 
@@ -376,6 +402,7 @@ public struct AIMusicView: View {
         audioData = nil
         audioPlayer = nil
         errorMessage = ""
+        latestReferenceID = ""
     }
 }
 

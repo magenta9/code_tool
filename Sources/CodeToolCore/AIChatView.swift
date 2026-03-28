@@ -282,6 +282,7 @@ public struct AIChatView: View {
         errorMessage = ""
         isStreaming = true
         streamingContent = ""
+        let referenceID = AppLogger.makeReferenceID()
 
         Task {
             do {
@@ -299,7 +300,8 @@ public struct AIChatView: View {
                 try await MiniMaxAPIClient.shared.chatCompletionStream(
                     messages: apiMessages,
                     temperature: 0.7,
-                    maxTokens: 2048
+                    maxTokens: 2048,
+                    referenceID: referenceID
                 ) { delta in
                     Task { @MainActor in
                         streamingContent += delta

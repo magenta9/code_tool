@@ -17,6 +17,7 @@ public struct AISpeechView: View {
     @State private var volume: Double = 1.0
     @State private var pitch: Double = 0
     @State private var outputFormat: String = "mp3"
+    @State private var latestReferenceID: String = ""
 
     private let voices: [(id: String, name: String)] = [
         ("male-qn-qingse", "青涩青年"),
@@ -301,6 +302,7 @@ public struct AISpeechView: View {
 
         isGenerating = true
         errorMessage = ""
+        latestReferenceID = ""
         stopPlayback()
 
         Task {
@@ -315,11 +317,12 @@ public struct AISpeechView: View {
                 )
                 await MainActor.run {
                     audioData = response.audioData
+                    latestReferenceID = response.referenceID
                     isGenerating = false
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Speech generation failed: \(error.localizedDescription)"
+                    errorMessage = error.localizedDescription
                     isGenerating = false
                 }
             }
@@ -345,7 +348,27 @@ public struct AISpeechView: View {
             audioPlayer = player
             isPlaying = true
         } catch {
-            errorMessage = "Playback failed: \(error.localizedDescription)"
+            let playbackError = error
+            let referenceID = latestReferenceID
+            Task {
+                let resolvedReferenceID = await AppLogger.shared.error(
+                    category: .aispeech,
+                    event: "player_prepare_failed",
+                    referenceID: referenceID.isEmpty ? nil : referenceID,
+                    message: "Failed to prepare generated speech for playback.",
+                    metadata: [
+                        "stage": "prepare_audio_player",
+                        "byteCount": String(data.count),
+                        "format": outputFormat
+                    ],
+                    error: playbackError
+                )
+
+                await MainActor.run {
+                    errorMessage = "Speech playback failed. Reference ID: \(resolvedReferenceID)"
+                    isPlaying = false
+                }
+            }
         }
     }
 
@@ -387,6 +410,7 @@ public struct AISpeechView: View {
         inputText = ""
         audioData = nil
         errorMessage = ""
+        latestReferenceID = ""
     }
 
     private func formattedSize(_ bytes: Int) -> String {

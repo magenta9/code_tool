@@ -11,6 +11,7 @@ public struct AIImageView: View {
     @State private var errorMessage: String = ""
     @State private var aspectRatio: String = "1:1"
     @State private var imageCount: Int = 1
+    @State private var latestReferenceID: String = ""
 
     private let aspectRatios = ["1:1", "16:9", "9:16", "4:3", "3:4"]
 
@@ -310,6 +311,7 @@ public struct AIImageView: View {
 
         isGenerating = true
         errorMessage = ""
+        latestReferenceID = ""
 
         Task {
             do {
@@ -321,13 +323,33 @@ public struct AIImageView: View {
 
                 let images = response.images.compactMap { NSImage(data: $0) }
 
+                if images.isEmpty {
+                    let resolvedReferenceID = await AppLogger.shared.error(
+                        category: .aiimage,
+                        event: "image_decode_failed",
+                        referenceID: response.referenceID,
+                        message: "Failed to decode generated image data.",
+                        metadata: [
+                            "stage": "decode_generated_images",
+                            "imageCount": String(response.images.count),
+                            "aspectRatio": aspectRatio
+                        ],
+                        error: MiniMaxError.invalidResponse
+                    )
+
+                    await MainActor.run {
+                        latestReferenceID = response.referenceID
+                        generatedImages = []
+                        isGenerating = false
+                        errorMessage = "Image generation failed. Reference ID: \(resolvedReferenceID)"
+                    }
+                    return
+                }
+
                 await MainActor.run {
+                    latestReferenceID = response.referenceID
                     generatedImages = images
                     isGenerating = false
-
-                    if images.isEmpty {
-                        errorMessage = "No valid images were returned."
-                    }
                 }
             } catch {
                 await MainActor.run {
@@ -371,6 +393,7 @@ public struct AIImageView: View {
         promptText = ""
         generatedImages = []
         errorMessage = ""
+        latestReferenceID = ""
     }
 }
 

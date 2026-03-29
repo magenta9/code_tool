@@ -17,6 +17,7 @@ public struct AIMusicView: View {
     @State private var outputFormat: String = "mp3"
     @State private var sampleRate: Int = 44100
     @State private var bitrate: Int = 256000
+    @State private var isInstrumental: Bool = false
     @State private var latestReferenceID: String = ""
 
     public init() {}
@@ -133,6 +134,14 @@ public struct AIMusicView: View {
                         label: { "\($0 / 1000)k" }
                     )
                 }
+
+                StyledDivider()
+
+                settingsRow("Instrumental") {
+                    Toggle("", isOn: $isInstrumental)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
             }
         }
     }
@@ -159,6 +168,14 @@ public struct AIMusicView: View {
                 )
             }
 
+            if shouldShowLongRequestWarning {
+                ToolMessageBanner(
+                    systemImage: "timer",
+                    message: "Long lyric requests at higher quality can be dropped upstream after about 60 seconds. If this happens, retry with 32kHz and 128k or shorten the lyrics.",
+                    tint: AppTheme.warning
+                )
+            }
+
             if !errorMessage.isEmpty {
                 ToolMessageBanner(
                     systemImage: "xmark.octagon.fill",
@@ -179,6 +196,16 @@ public struct AIMusicView: View {
                 emptyStatePanel
             }
         }
+    }
+
+    private var shouldShowLongRequestWarning: Bool {
+        let trimmedLyrics = lyricsText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedLyrics.isEmpty else {
+            return false
+        }
+
+        let lineCount = trimmedLyrics.split(whereSeparator: \ .isNewline).count
+        return trimmedLyrics.count >= 120 || lineCount >= 6 || sampleRate > 32000 || bitrate > 128000
     }
 
     // MARK: - Generating Panel
@@ -279,6 +306,12 @@ public struct AIMusicView: View {
             return
         }
 
+        let hasLyrics = !lyricsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !isInstrumental && !hasLyrics {
+            errorMessage = "Please provide lyrics or enable Instrumental mode."
+            return
+        }
+
         isGenerating = true
         errorMessage = ""
         latestReferenceID = ""
@@ -287,10 +320,11 @@ public struct AIMusicView: View {
 
         Task {
             do {
-                let lyrics = lyricsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : lyricsText
+                let lyrics = hasLyrics ? lyricsText : nil
                 let response = try await MiniMaxAPIClient.shared.generateMusic(
                     prompt: promptText,
                     lyrics: lyrics,
+                    isInstrumental: isInstrumental,
                     format: outputFormat,
                     sampleRate: sampleRate,
                     bitrate: bitrate
@@ -403,6 +437,7 @@ public struct AIMusicView: View {
         audioPlayer = nil
         errorMessage = ""
         latestReferenceID = ""
+        isInstrumental = false
     }
 }
 

@@ -17,6 +17,9 @@ public final class MiniMaxAPIClient {
         let musicConfig = URLSessionConfiguration.default
         musicConfig.timeoutIntervalForRequest = 600
         musicConfig.timeoutIntervalForResource = 900
+        // Bypass HTTP proxy for music generation — local proxies often drop
+        // idle connections after ~60 s, well before music generation completes.
+        musicConfig.connectionProxyDictionary = [:]
         self.musicSession = URLSession(configuration: musicConfig)
     }
 
@@ -600,6 +603,7 @@ public final class MiniMaxAPIClient {
     public func generateMusic(
         prompt: String,
         lyrics: String? = nil,
+        isInstrumental: Bool = false,
         format: String = "mp3",
         sampleRate: Int = 44100,
         bitrate: Int = 256000
@@ -627,9 +631,11 @@ public final class MiniMaxAPIClient {
         ]
         if let lyrics = lyrics, !lyrics.isEmpty {
             body["lyrics"] = lyrics
-        } else {
-            body["lyrics_optimizer"] = true
+        } else if isInstrumental {
+            body["is_instrumental"] = true
         }
+
+        let requestSummary = Self.musicRequestSummary(prompt: prompt, lyrics: lyrics, format: format, sampleRate: sampleRate, bitrate: bitrate)
 
         await AppLogger.shared.info(
             category: .aimusic,
@@ -638,92 +644,193 @@ public final class MiniMaxAPIClient {
             message: "Started MiniMax music generation request.",
             metadata: context.metadata(extra: [
                 "endpoint": "/music_generation",
-                "requestSummary": Self.musicRequestSummary(prompt: prompt, lyrics: lyrics, format: format, sampleRate: sampleRate, bitrate: bitrate)
+                "requestSummary": requestSummary
             ])
         )
 
-        let request = try makeRequest(path: "/music_generation", body: body)
-        let (data, response) = try await performMusicGenerationRequest(
-            request,
-            context: context,
-            stage: "request_music_generation",
-            requestSummary: Self.musicRequestSummary(prompt: prompt, lyrics: lyrics, format: format, sampleRate: sampleRate, bitrate: bitrate)
-        )
-
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let dataObj = json["data"] as? [String: Any] else {
+        var request: URLRequest
+        do {
+            request = try makeRequest(path: "/music_generation", body: body)
+        } catch {
             throw await makeLoggedMusicError(
-                                stage: "parse_music_generation_response",
+                stage: "build_music_generation_request",
+                userMessage: "Music generation failed.",
+                underlying: error,
+                context: context,
+                request: nil,
+                responseData: nil,
+                startedAt: nil,
+                extra: ["endpoint": "/music_generation"]
+            )
+        }
+        // Music generation can take several minutes; override default 60s timeout.
+        request.timeoutInterval = 600
+
+        let startedAt = Date()
+
+        do {
+            let (data, response) = try await musicSession.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw MiniMaxError.invalidResponse
+            }
+            if httpResponse.statusCode != 200 {
+                let errorBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let baseResp = errorBody?["base_resp"] as? [String: Any]
+                let statusMsg = baseResp?["status_msg"] as? String ?? "Unknown error"
+                let statusCode = baseResp?["status_code"] as? Int ?? httpResponse.statusCode
+                throw await makeLoggedMusicError(
+                    stage: "request_music_generation",
+                    userMessage: "Music generation failed.",
+                    underlying: MiniMaxError.apiError(code: statusCode, message: statusMsg),
+                    context: context,
+                    request: request,
+                    responseData: data,
+                    startedAt: startedAt,
+                    extra: [
+                        "httpStatus": String(httpResponse.statusCode),
+                        "requestSummary": requestSummary
+                    ]
+                )
+            }
+
+            // Check API-level errors in base_resp even when HTTP 200
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let baseResp = json["base_resp"] as? [String: Any],
+               let statusCode = baseResp["status_code"] as? Int,
+               statusCode != 0 {
+                let statusMsg = baseResp["status_msg"] as? String ?? "Unknown API error"
+                throw await makeLoggedMusicError(
+                    stage: "request_music_generation",
+                    userMessage: "Music generation failed.",
+                    underlying: MiniMaxError.apiError(code: statusCode, message: statusMsg),
+                    context: context,
+                    request: request,
+                    responseData: data,
+                    startedAt: startedAt,
+                    extra: [
+                        "httpStatus": String(httpResponse.statusCode),
+                        "requestSummary": requestSummary,
+                        "responseSummary": Self.summarizeJSONData(data)
+                    ]
+                )
+            }
+
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let dataObj = json["data"] as? [String: Any] else {
+                throw await makeLoggedMusicError(
+                    stage: "parse_music_generation_response",
+                    userMessage: "Music generation failed.",
+                    underlying: MiniMaxError.invalidResponse,
+                    context: context,
+                    request: request,
+                    responseData: data,
+                    startedAt: startedAt,
+                    extra: [
+                        "httpStatus": String(httpResponse.statusCode),
+                        "responseSummary": Self.summarizeJSONData(data)
+                    ]
+                )
+            }
+
+            if let audioValue = dataObj["audio"] as? String, !audioValue.isEmpty {
+                if audioValue.hasPrefix("http://") || audioValue.hasPrefix("https://") {
+                    await AppLogger.shared.info(
+                        category: .aimusic,
+                        event: "request_finished",
+                        referenceID: context.referenceID,
+                        message: "MiniMax music generation completed.",
+                        metadata: context.metadata(extra: [
+                            "stage": "request_music_generation",
+                            "durationMs": Self.durationMSString(since: startedAt),
+                            "httpStatus": String(httpResponse.statusCode),
+                            "audioURL": AppLogger.summarize(text: audioValue),
+                            "requestSummary": requestSummary
+                        ])
+                    )
+
+                    return MusicResponse(audioData: nil, audioURL: audioValue, referenceID: context.referenceID, taskID: nil)
+                }
+
+                if let audioData = decodeHexAudio(audioValue) {
+                    await AppLogger.shared.info(
+                        category: .aimusic,
+                        event: "request_finished",
+                        referenceID: context.referenceID,
+                        message: "MiniMax music generation completed.",
+                        metadata: context.metadata(extra: [
+                            "stage": "request_music_generation",
+                            "durationMs": Self.durationMSString(since: startedAt),
+                            "httpStatus": String(httpResponse.statusCode),
+                            "audioBytes": String(audioData.count),
+                            "requestSummary": requestSummary
+                        ])
+                    )
+
+                    return MusicResponse(audioData: audioData, audioURL: nil, referenceID: context.referenceID, taskID: nil)
+                }
+
+                throw await makeLoggedMusicError(
+                    stage: "decode_music_audio",
+                    userMessage: "Music generation failed.",
+                    underlying: MiniMaxError.invalidResponse,
+                    context: context,
+                    request: request,
+                    responseData: nil,
+                    startedAt: startedAt,
+                    extra: [
+                        "audioPreview": AppLogger.summarize(text: audioValue),
+                        "audioLength": String(audioValue.count)
+                    ]
+                )
+            }
+
+            if let audioURL = dataObj["audio_url"] as? String, !audioURL.isEmpty {
+                await AppLogger.shared.info(
+                    category: .aimusic,
+                    event: "request_finished",
+                    referenceID: context.referenceID,
+                    message: "MiniMax music generation completed.",
+                    metadata: context.metadata(extra: [
+                        "stage": "request_music_generation",
+                        "durationMs": Self.durationMSString(since: startedAt),
+                        "httpStatus": String(httpResponse.statusCode),
+                        "audioURL": AppLogger.summarize(text: audioURL),
+                        "requestSummary": requestSummary
+                    ])
+                )
+
+                return MusicResponse(audioData: nil, audioURL: audioURL, referenceID: context.referenceID, taskID: nil)
+            }
+
+            throw await makeLoggedMusicError(
+                stage: "parse_music_generation_response",
                 userMessage: "Music generation failed.",
                 underlying: MiniMaxError.invalidResponse,
                 context: context,
                 request: request,
                 responseData: data,
-                startedAt: nil,
+                startedAt: startedAt,
                 extra: [
-                    "httpStatus": String(response.statusCode)
+                    "httpStatus": String(httpResponse.statusCode),
+                    "responseSummary": Self.summarizeJSONData(data)
                 ]
             )
-        }
-
-        if hasMusicPayload(in: dataObj) {
-            return try extractMusicResponse(from: dataObj, context: context)
-        }
-
-        throw await makeLoggedMusicError(
-            stage: "parse_music_generation_response",
-            userMessage: "Music generation failed.",
-            underlying: MiniMaxError.invalidResponse,
-            context: context,
-            request: request,
-            responseData: data,
-            startedAt: nil,
-            extra: [
-                "httpStatus": String(response.statusCode),
-                "traceID": stringValue(for: "trace_id", in: json) ?? "",
-                "status": String(dataObj["status"] as? Int ?? -1)
-            ]
-        )
-    }
-
-    private func stringValue(for key: String, in json: [String: Any]) -> String? {
-        if let str = json[key] as? String {
-            return str
-        }
-        if let num = json[key] as? NSNumber {
-            return num.stringValue
-        }
-        return nil
-    }
-
-    private func hasMusicPayload(in dataObj: [String: Any]) -> Bool {
-        if let audio = dataObj["audio"] as? String, !audio.isEmpty {
-            return true
-        }
-        if let audioURL = dataObj["audio_url"] as? String, !audioURL.isEmpty {
-            return true
-        }
-        return false
-    }
-
-    /// Parses the completed music generation data object into a MusicResponse.
-    private func extractMusicResponse(from dataObj: [String: Any], context: MusicDiagnosticsContext) throws -> MusicResponse {
-        if let audioURL = dataObj["audio_url"] as? String, !audioURL.isEmpty {
-            return MusicResponse(audioData: nil, audioURL: audioURL, referenceID: context.referenceID, taskID: nil)
-        }
-
-        if let audio = dataObj["audio"] as? String, !audio.isEmpty {
-            if audio.hasPrefix("http://") || audio.hasPrefix("https://") {
-                return MusicResponse(audioData: nil, audioURL: audio, referenceID: context.referenceID, taskID: nil)
+        } catch {
+            if let loggedError = error as? LoggedDiagnosticError {
+                throw loggedError
             }
-            if let audioData = decodeHexAudio(audio) {
-                return MusicResponse(audioData: audioData, audioURL: nil, referenceID: context.referenceID, taskID: nil)
-            }
-            if let audioData = Data(base64Encoded: audio) {
-                return MusicResponse(audioData: audioData, audioURL: nil, referenceID: context.referenceID, taskID: nil)
-            }
+
+            throw await makeLoggedMusicError(
+                stage: "request_music_generation",
+                userMessage: "Music generation failed.",
+                underlying: error,
+                context: context,
+                request: request,
+                responseData: nil,
+                startedAt: startedAt,
+                extra: ["requestSummary": requestSummary]
+            )
         }
-        throw MiniMaxError.invalidResponse
     }
 
     /// Downloads audio data from a URL (used for music generation results).
@@ -794,96 +901,6 @@ public final class MiniMaxAPIClient {
             }
 
             throw error
-        }
-    }
-
-    private func performMusicGenerationRequest(
-        _ request: URLRequest,
-        context: MusicDiagnosticsContext,
-        stage: String,
-        requestSummary: String
-    ) async throws -> (Data, HTTPURLResponse) {
-        let startedAt = Date()
-
-        do {
-            let (data, response) = try await musicSession.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw MiniMaxError.invalidResponse
-            }
-            if httpResponse.statusCode != 200 {
-                let errorBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                let baseResp = errorBody?["base_resp"] as? [String: Any]
-                let statusMsg = baseResp?["status_msg"] as? String ?? "Unknown error"
-                let statusCode = baseResp?["status_code"] as? Int ?? httpResponse.statusCode
-                throw await makeLoggedMusicError(
-                    stage: stage,
-                    userMessage: "Music generation failed.",
-                    underlying: MiniMaxError.apiError(code: statusCode, message: statusMsg),
-                    context: context,
-                    request: request,
-                    responseData: data,
-                    startedAt: startedAt,
-                    extra: [
-                        "httpStatus": String(httpResponse.statusCode),
-                        "requestSummary": requestSummary
-                    ]
-                )
-            }
-
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let baseResp = json["base_resp"] as? [String: Any],
-               let statusCode = baseResp["status_code"] as? Int,
-               statusCode != 0 {
-                let statusMsg = baseResp["status_msg"] as? String ?? "Unknown API error"
-                throw await makeLoggedMusicError(
-                    stage: stage,
-                    userMessage: "Music generation failed.",
-                    underlying: MiniMaxError.apiError(code: statusCode, message: statusMsg),
-                    context: context,
-                    request: request,
-                    responseData: data,
-                    startedAt: startedAt,
-                    extra: [
-                        "httpStatus": String(httpResponse.statusCode),
-                        "requestSummary": requestSummary
-                    ]
-                )
-            }
-
-            await AppLogger.shared.info(
-                category: .aimusic,
-                event: "request_finished",
-                referenceID: context.referenceID,
-                message: "MiniMax music generation request completed.",
-                metadata: context.metadata(extra: [
-                    "stage": stage,
-                    "url": request.url?.absoluteString ?? "",
-                    "method": request.httpMethod ?? "",
-                    "durationMs": Self.durationMSString(since: startedAt),
-                    "httpStatus": String(httpResponse.statusCode),
-                    "requestSummary": requestSummary,
-                    "responseSummary": Self.summarizeJSONData(data)
-                ])
-            )
-
-            return (data, httpResponse)
-        } catch {
-            if let loggedError = error as? LoggedDiagnosticError {
-                throw loggedError
-            }
-
-            throw await makeLoggedMusicError(
-                stage: stage,
-                userMessage: "Music generation failed.",
-                underlying: error,
-                context: context,
-                request: request,
-                responseData: nil,
-                startedAt: startedAt,
-                extra: [
-                    "requestSummary": requestSummary
-                ]
-            )
         }
     }
 

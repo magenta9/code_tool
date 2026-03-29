@@ -400,6 +400,50 @@ final class CodeToolTests: XCTestCase {
         }
     }
 
+    func testGenerateMusicUnsupportedModelSurfacesActionableError() async throws {
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/music_generation")
+
+            let responseBody: [String: Any] = [
+                "data": NSNull(),
+                "trace_id": "trace-unsupported-model",
+                "base_resp": [
+                    "status_code": 2061,
+                    "status_msg": "your current token plan not support model, music-2.5+"
+                ]
+            ]
+
+            let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+            return (response, responseData)
+        }
+
+        do {
+            _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "dark piano")
+            XCTFail("Expected generateMusic to throw")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("Current MiniMax token plan does not support the configured music model."))
+            XCTAssertTrue(error.localizedDescription.contains("MiniMax Settings"))
+            XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
+        }
+    }
+
+    func testGenerateMusicNetworkConnectionLostSurfacesIdleTimeoutHint() async throws {
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/music_generation")
+            throw URLError(.networkConnectionLost)
+        }
+
+        do {
+            _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "dark piano", lyrics: "[Verse]\nHello\n[Chorus]\nWorld")
+            XCTFail("Expected generateMusic to throw")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("upstream request sat idle for about 60 seconds"))
+            XCTAssertTrue(error.localizedDescription.contains("32kHz and 128k"))
+            XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
+        }
+    }
+
     func testGenerateMusicWithoutLyricsUsesLyricsOptimizerAndReturnsURL() async throws {
         var requestCount = 0
 

@@ -20,7 +20,44 @@ public struct LoggedDiagnosticError: LocalizedError {
     public let underlyingError: Error
 
     public var errorDescription: String? {
-        "\(userMessage) Reference ID: \(referenceID)"
+        var parts = [userMessage]
+
+        if let detail = userFacingDetail {
+            parts.append(detail)
+        }
+
+        parts.append("Reference ID: \(referenceID)")
+        return parts.joined(separator: " ")
+    }
+
+    private var userFacingDetail: String? {
+        if let miniMaxError = underlyingError as? MiniMaxError {
+            switch miniMaxError {
+            case .apiError(let code, let message):
+                if category == .aimusic,
+                   code == 2061,
+                   message.localizedCaseInsensitiveContains("not support model") {
+                    return "Current MiniMax token plan does not support the configured music model. Update the Music Model in MiniMax Settings or use a token plan with access."
+                }
+
+                return miniMaxError.localizedDescription
+            default:
+                return miniMaxError.localizedDescription
+            }
+        }
+
+        if category == .aimusic,
+           let urlError = underlyingError as? URLError,
+           urlError.code == .networkConnectionLost {
+            return "The connection dropped before MiniMax returned any music data. This usually means the upstream request sat idle for about 60 seconds. Try shorter lyrics or retry with 32kHz and 128k settings."
+        }
+
+        let detail = underlyingError.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !detail.isEmpty, detail != userMessage else {
+            return nil
+        }
+
+        return detail
     }
 }
 

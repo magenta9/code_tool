@@ -1,6 +1,7 @@
 import SwiftUI
+
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #endif
 
 public struct AIChatView: View {
@@ -36,7 +37,8 @@ public struct AIChatView: View {
                 if !provider.isConfigured {
                     ToolMessageBanner(
                         systemImage: "exclamationmark.triangle",
-                        message: "MiniMax API key is not configured. Please set it in MiniMax Settings.",
+                        message:
+                            "MiniMax API key is not configured. Please set it in MiniMax Settings.",
                         tint: AppTheme.warning
                     )
                     .padding(.horizontal, AppTheme.Spacing.xxl)
@@ -78,30 +80,34 @@ public struct AIChatView: View {
         var items: [ToolStatusItem] = []
         if !messages.isEmpty {
             let count = messages.count
-            items.append(ToolStatusItem(
-                title: "\(count) message\(count == 1 ? "" : "s")",
-                systemImage: "bubble.left.and.bubble.right",
-                tint: AppTheme.accent
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "\(count) message\(count == 1 ? "" : "s")",
+                    systemImage: "bubble.left.and.bubble.right",
+                    tint: AppTheme.accent
+                ))
         }
         if lastTotalTokens > 0 {
-            items.append(ToolStatusItem(
-                title: "~\(lastTotalTokens) tokens",
-                systemImage: "number.circle",
-                tint: AppTheme.accentWarm
-            ))
-            items.append(ToolStatusItem(
-                title: "↑~\(lastPromptTokens) ↓~\(lastCompletionTokens)",
-                systemImage: "arrow.up.arrow.down",
-                tint: AppTheme.textMuted
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "~\(lastTotalTokens) tokens",
+                    systemImage: "number.circle",
+                    tint: AppTheme.accentWarm
+                ))
+            items.append(
+                ToolStatusItem(
+                    title: "↑~\(lastPromptTokens) ↓~\(lastCompletionTokens)",
+                    systemImage: "arrow.up.arrow.down",
+                    tint: AppTheme.textMuted
+                ))
         }
         if isStreaming {
-            items.append(ToolStatusItem(
-                title: "Streaming…",
-                systemImage: "ellipsis.circle",
-                tint: AppTheme.success
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "Streaming…",
+                    systemImage: "ellipsis.circle",
+                    tint: AppTheme.success
+                ))
         }
         return items
     }
@@ -130,8 +136,11 @@ public struct AIChatView: View {
             .buttonStyle(.plain)
 
             if showSystemPrompt {
-                StyledTextEditor(text: $systemPrompt, placeholder: "Enter a system prompt to guide the AI behavior…")
-                    .frame(height: 72)
+                StyledTextEditor(
+                    text: $systemPrompt,
+                    placeholder: "Enter a system prompt to guide the AI behavior…"
+                )
+                .frame(height: 72)
             }
         }
     }
@@ -266,8 +275,12 @@ public struct AIChatView: View {
             StyledIconButton("paperplane.fill", help: "Send message") {
                 sendMessage()
             }
-            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isStreaming)
-            .opacity(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isStreaming ? 0.5 : 1.0)
+            .disabled(
+                inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isStreaming
+            )
+            .opacity(
+                inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isStreaming
+                    ? 0.5 : 1.0)
         }
     }
 
@@ -290,11 +303,13 @@ public struct AIChatView: View {
 
                 let trimmedPrompt = systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !trimmedPrompt.isEmpty {
-                    apiMessages.append(MiniMaxAPIClient.ChatMessage(role: "system", content: trimmedPrompt))
+                    apiMessages.append(
+                        MiniMaxAPIClient.ChatMessage(role: "system", content: trimmedPrompt))
                 }
 
                 for msg in messages {
-                    apiMessages.append(MiniMaxAPIClient.ChatMessage(role: msg.role, content: msg.content))
+                    apiMessages.append(
+                        MiniMaxAPIClient.ChatMessage(role: msg.role, content: msg.content))
                 }
 
                 try await MiniMaxAPIClient.shared.chatCompletionStream(
@@ -321,6 +336,24 @@ public struct AIChatView: View {
                     lastCompletionTokens = approxCompletion
                     lastTotalTokens = approxPrompt + approxCompletion
                 }
+
+                let (snapshotMessages, promptTk, completionTk, totalTk) = await MainActor.run {
+                    (messages, lastPromptTokens, lastCompletionTokens, lastTotalTokens)
+                }
+                let record = ChatHistoryRecord(
+                    id: UUID(),
+                    createdAt: Date(),
+                    systemPrompt: trimmedPrompt,
+                    messages: snapshotMessages.map {
+                        ChatMessageRecord(role: $0.role, content: $0.content)
+                    },
+                    model: MiniMaxProvider.shared.chatModel,
+                    promptTokens: promptTk,
+                    completionTokens: completionTk,
+                    totalTokens: totalTk,
+                    referenceID: referenceID
+                )
+                try? await HistoryStore.shared.save(record)
             } catch {
                 await MainActor.run {
                     if !streamingContent.isEmpty {
@@ -351,10 +384,10 @@ public struct AIChatView: View {
 }
 
 #if DEBUG
-struct AIChatView_Previews: PreviewProvider {
-    static var previews: some View {
-        AIChatView()
-            .frame(width: 700, height: 600)
+    struct AIChatView_Previews: PreviewProvider {
+        static var previews: some View {
+            AIChatView()
+                .frame(width: 700, height: 600)
+        }
     }
-}
 #endif

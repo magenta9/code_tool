@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AIImageView: View {
@@ -87,7 +87,9 @@ public struct AIImageView: View {
                 StyledButton("Generate", systemImage: "sparkles", variant: .primary) {
                     generateImages()
                 }
-                .disabled(promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating || !provider.isConfigured)
+                .disabled(
+                    promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || isGenerating || !provider.isConfigured)
 
                 StyledButton("Save Image", systemImage: "square.and.arrow.down") {
                     saveImage()
@@ -104,7 +106,8 @@ public struct AIImageView: View {
                 if !provider.isConfigured {
                     ToolMessageBanner(
                         systemImage: "exclamationmark.triangle.fill",
-                        message: "MiniMax API key not configured. Go to Settings to add your API key.",
+                        message:
+                            "MiniMax API key not configured. Go to Settings to add your API key.",
                         tint: AppTheme.warning
                     )
                 }
@@ -136,40 +139,45 @@ public struct AIImageView: View {
     private var statusItems: [ToolStatusItem] {
         var items: [ToolStatusItem] = []
 
-        items.append(ToolStatusItem(
-            title: aspectRatio,
-            systemImage: "aspectratio",
-            tint: AppTheme.accentWarm
-        ))
+        items.append(
+            ToolStatusItem(
+                title: aspectRatio,
+                systemImage: "aspectratio",
+                tint: AppTheme.accentWarm
+            ))
 
         if imageCount > 1 {
-            items.append(ToolStatusItem(
-                title: "\(imageCount) images",
-                systemImage: "square.grid.2x2",
-                tint: AppTheme.accent
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "\(imageCount) images",
+                    systemImage: "square.grid.2x2",
+                    tint: AppTheme.accent
+                ))
         }
 
         if isGenerating {
-            items.append(ToolStatusItem(
-                title: "Generating…",
-                systemImage: "hourglass",
-                tint: AppTheme.accent
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "Generating…",
+                    systemImage: "hourglass",
+                    tint: AppTheme.accent
+                ))
         } else if !generatedImages.isEmpty {
-            items.append(ToolStatusItem(
-                title: "\(generatedImages.count) generated",
-                systemImage: "checkmark.circle.fill",
-                tint: AppTheme.success
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "\(generatedImages.count) generated",
+                    systemImage: "checkmark.circle.fill",
+                    tint: AppTheme.success
+                ))
         }
 
         if !errorMessage.isEmpty {
-            items.append(ToolStatusItem(
-                title: "Error",
-                systemImage: "exclamationmark.triangle.fill",
-                tint: AppTheme.error
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "Error",
+                    systemImage: "exclamationmark.triangle.fill",
+                    tint: AppTheme.error
+                ))
         }
 
         return items
@@ -279,8 +287,11 @@ public struct AIImageView: View {
     }
 
     private var imageGrid: some View {
-        let columns = generatedImages.count <= 2
-            ? Array(repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.sm), count: generatedImages.count)
+        let columns =
+            generatedImages.count <= 2
+            ? Array(
+                repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.sm),
+                count: generatedImages.count)
             : Array(repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.sm), count: 2)
 
         return ScrollView {
@@ -332,7 +343,7 @@ public struct AIImageView: View {
                         metadata: [
                             "stage": "decode_generated_images",
                             "imageCount": String(response.images.count),
-                            "aspectRatio": aspectRatio
+                            "aspectRatio": aspectRatio,
                         ],
                         error: MiniMaxError.invalidResponse
                     )
@@ -341,7 +352,8 @@ public struct AIImageView: View {
                         latestReferenceID = response.referenceID
                         generatedImages = []
                         isGenerating = false
-                        errorMessage = "Image generation failed. Reference ID: \(resolvedReferenceID)"
+                        errorMessage =
+                            "Image generation failed. Reference ID: \(resolvedReferenceID)"
                     }
                     return
                 }
@@ -351,6 +363,22 @@ public struct AIImageView: View {
                     generatedImages = images
                     isGenerating = false
                 }
+
+                let recordID = UUID()
+                let imageFileNames = (0..<response.images.count).map {
+                    "\(recordID.uuidString)_\($0).png"
+                }
+                let record = ImageHistoryRecord(
+                    id: recordID,
+                    createdAt: Date(),
+                    prompt: promptText,
+                    aspectRatio: aspectRatio,
+                    imageCount: response.images.count,
+                    model: MiniMaxProvider.shared.imageModel,
+                    imageFileNames: imageFileNames,
+                    referenceID: response.referenceID
+                )
+                try? await HistoryStore.shared.save(record, images: response.images)
             } catch {
                 await MainActor.run {
                     isGenerating = false
@@ -375,8 +403,9 @@ public struct AIImageView: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            let bitmap = NSBitmapImageRep(data: tiffData),
+            let pngData = bitmap.representation(using: .png, properties: [:])
+        else {
             errorMessage = "Failed to encode image as PNG."
             return
         }
@@ -400,10 +429,10 @@ public struct AIImageView: View {
 // MARK: - Preview
 
 #if DEBUG
-struct AIImageView_Previews: PreviewProvider {
-    static var previews: some View {
-        AIImageView()
-            .frame(width: 900, height: 600)
+    struct AIImageView_Previews: PreviewProvider {
+        static var previews: some View {
+            AIImageView()
+                .frame(width: 900, height: 600)
+        }
     }
-}
 #endif

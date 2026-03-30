@@ -1,6 +1,6 @@
-import SwiftUI
 import AVFoundation
 import AppKit
+import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AISpeechView: View {
@@ -47,7 +47,9 @@ public struct AISpeechView: View {
             StyledButton("Generate Speech", systemImage: "waveform.path", variant: .primary) {
                 generateSpeech()
             }
-            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating || !provider.isConfigured)
+            .disabled(
+                inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating
+                    || !provider.isConfigured)
 
             if audioData != nil {
                 StyledButton("Save Audio", systemImage: "square.and.arrow.down") {
@@ -82,34 +84,38 @@ public struct AISpeechView: View {
     private var statusItems: [ToolStatusItem] {
         var items: [ToolStatusItem] = []
 
-        items.append(ToolStatusItem(
-            title: "\(inputText.count) chars",
-            systemImage: "character.cursor.ibeam",
-            tint: AppTheme.accent
-        ))
+        items.append(
+            ToolStatusItem(
+                title: "\(inputText.count) chars",
+                systemImage: "character.cursor.ibeam",
+                tint: AppTheme.accent
+            ))
 
         if isGenerating {
-            items.append(ToolStatusItem(
-                title: "Generating…",
-                systemImage: "arrow.triangle.2.circlepath",
-                tint: AppTheme.accentWarm
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "Generating…",
+                    systemImage: "arrow.triangle.2.circlepath",
+                    tint: AppTheme.accentWarm
+                ))
         }
 
         if audioData != nil {
-            items.append(ToolStatusItem(
-                title: isPlaying ? "Playing" : "Audio ready",
-                systemImage: isPlaying ? "speaker.wave.3.fill" : "checkmark.circle.fill",
-                tint: isPlaying ? AppTheme.accentWarm : AppTheme.success
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: isPlaying ? "Playing" : "Audio ready",
+                    systemImage: isPlaying ? "speaker.wave.3.fill" : "checkmark.circle.fill",
+                    tint: isPlaying ? AppTheme.accentWarm : AppTheme.success
+                ))
         }
 
         if !provider.isConfigured {
-            items.append(ToolStatusItem(
-                title: "Not configured",
-                systemImage: "exclamationmark.triangle.fill",
-                tint: AppTheme.warning
-            ))
+            items.append(
+                ToolStatusItem(
+                    title: "Not configured",
+                    systemImage: "exclamationmark.triangle.fill",
+                    tint: AppTheme.warning
+                ))
         }
 
         return items
@@ -190,7 +196,9 @@ public struct AISpeechView: View {
         }
     }
 
-    private func sliderRow(label: String, value: Binding<Double>, range: ClosedRange<Double>, format: String) -> some View {
+    private func sliderRow(
+        label: String, value: Binding<Double>, range: ClosedRange<Double>, format: String
+    ) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
             HStack {
                 Text(label)
@@ -259,39 +267,40 @@ public struct AISpeechView: View {
 
     // MARK: - Status Banner
 
+    @ViewBuilder
     private var statusBanner: some View {
-        Group {
-            if !provider.isConfigured {
-                ToolMessageBanner(
-                    systemImage: "key.fill",
-                    message: "MiniMax API key is required. Configure it in MiniMax Settings.",
-                    tint: AppTheme.warning
-                )
-            } else if isGenerating {
-                ToolMessageBanner(
-                    systemImage: "arrow.triangle.2.circlepath",
-                    message: "Generating speech…",
-                    tint: AppTheme.accent
-                )
-            } else if !errorMessage.isEmpty {
-                ToolMessageBanner(
-                    systemImage: "exclamationmark.triangle.fill",
-                    message: errorMessage,
-                    tint: AppTheme.error
-                )
-            } else if audioData != nil {
-                ToolMessageBanner(
-                    systemImage: "checkmark.circle.fill",
-                    message: "Audio generated successfully. Use the playback controls or save to file.",
-                    tint: AppTheme.success
-                )
-            } else {
-                ToolMessageBanner(
-                    systemImage: "sparkles",
-                    message: "Enter text and select a voice, then generate speech using MiniMax Speech 2.8.",
-                    tint: AppTheme.accentWarm
-                )
-            }
+        if !provider.isConfigured {
+            ToolMessageBanner(
+                systemImage: "key.fill",
+                message: "MiniMax API key is required. Configure it in MiniMax Settings.",
+                tint: AppTheme.warning
+            )
+        } else if isGenerating {
+            ToolMessageBanner(
+                systemImage: "arrow.triangle.2.circlepath",
+                message: "Generating speech…",
+                tint: AppTheme.accent
+            )
+        } else if !errorMessage.isEmpty {
+            ToolMessageBanner(
+                systemImage: "exclamationmark.triangle.fill",
+                message: errorMessage,
+                tint: AppTheme.error
+            )
+        } else if audioData != nil {
+            ToolMessageBanner(
+                systemImage: "checkmark.circle.fill",
+                message:
+                    "Audio generated successfully. Use the playback controls or save to file.",
+                tint: AppTheme.success
+            )
+        } else {
+            ToolMessageBanner(
+                systemImage: "sparkles",
+                message:
+                    "Enter text and select a voice, then generate speech using MiniMax Speech 2.8.",
+                tint: AppTheme.accentWarm
+            )
         }
     }
 
@@ -320,6 +329,24 @@ public struct AISpeechView: View {
                     latestReferenceID = response.referenceID
                     isGenerating = false
                 }
+
+                let recordID = UUID()
+                let audioFileName = "\(recordID.uuidString).\(outputFormat)"
+                let record = SpeechHistoryRecord(
+                    id: recordID,
+                    createdAt: Date(),
+                    inputText: inputText,
+                    voice: selectedVoice,
+                    speed: speed,
+                    volume: volume,
+                    pitch: pitch,
+                    outputFormat: outputFormat,
+                    model: MiniMaxProvider.shared.speechModel,
+                    durationMs: response.durationMs,
+                    audioFileName: audioFileName,
+                    referenceID: response.referenceID
+                )
+                try? await HistoryStore.shared.save(record, audioData: response.audioData)
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
@@ -359,7 +386,7 @@ public struct AISpeechView: View {
                     metadata: [
                         "stage": "prepare_audio_player",
                         "byteCount": String(data.count),
-                        "format": outputFormat
+                        "format": outputFormat,
                     ],
                     error: playbackError
                 )
@@ -414,23 +441,17 @@ public struct AISpeechView: View {
     }
 
     private func formattedSize(_ bytes: Int) -> String {
-        if bytes < 1024 {
-            return "\(bytes) B"
-        } else if bytes < 1024 * 1024 {
-            return String(format: "%.1f KB", Double(bytes) / 1024)
-        } else {
-            return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
-        }
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 }
 
 // MARK: - Preview
 
 #if DEBUG
-struct AISpeechView_Previews: PreviewProvider {
-    static var previews: some View {
-        AISpeechView()
-            .frame(width: 900, height: 620)
+    struct AISpeechView_Previews: PreviewProvider {
+        static var previews: some View {
+            AISpeechView()
+                .frame(width: 900, height: 620)
+        }
     }
-}
 #endif

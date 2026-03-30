@@ -37,7 +37,7 @@ public struct WordCloudView: View {
         "my", "myself", "we", "our", "ours", "ourselves", "you", "your",
         "yours", "yourself", "yourselves", "he", "him", "his", "himself",
         "she", "her", "hers", "herself", "it", "its", "itself", "they", "them",
-        "their", "theirs", "themselves"
+        "their", "theirs", "themselves",
     ]
 
     public init() {}
@@ -46,7 +46,8 @@ public struct WordCloudView: View {
         ToolWorkbench(
             eyebrow: "Text signals",
             title: "Word Cloud",
-            description: "Generate a weighted word map and ranked frequency list inside the same studio layout used by the other tools.",
+            description:
+                "Generate a weighted word map and ranked frequency list inside the same studio layout used by the other tools.",
             systemImage: "cloud",
             statusItems: statusItems
         ) {
@@ -56,7 +57,9 @@ public struct WordCloudView: View {
             .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
             if !wordCounts.isEmpty {
-                CopyButton("Copy Stats", text: wordCounts.map { "\($0.word): \($0.count)" }.joined(separator: "\n"))
+                CopyButton(
+                    "Copy Stats",
+                    text: wordCounts.map { "\($0.word): \($0.count)" }.joined(separator: "\n"))
                 StyledButton("Reset", systemImage: "trash", variant: .ghost) {
                     inputText = ""
                     wordCounts = []
@@ -78,11 +81,17 @@ public struct WordCloudView: View {
 
     private var statusItems: [ToolStatusItem] {
         var items = [
-            ToolStatusItem(title: "Min length \(minWordLength)", systemImage: "line.3.horizontal.decrease.circle", tint: AppTheme.accentWarm),
-            ToolStatusItem(title: "Max \(maxWords)", systemImage: "number.circle", tint: AppTheme.accent)
+            ToolStatusItem(
+                title: "Min length \(minWordLength)",
+                systemImage: "line.3.horizontal.decrease.circle", tint: AppTheme.accentWarm),
+            ToolStatusItem(
+                title: "Max \(maxWords)", systemImage: "number.circle", tint: AppTheme.accent),
         ]
         if !wordCounts.isEmpty {
-            items.append(ToolStatusItem(title: "\(wordCounts.count) words", systemImage: "textformat.abc", tint: AppTheme.success))
+            items.append(
+                ToolStatusItem(
+                    title: "\(wordCounts.count) words", systemImage: "textformat.abc",
+                    tint: AppTheme.success))
         }
         return items
     }
@@ -100,7 +109,11 @@ public struct WordCloudView: View {
                 if !wordCounts.isEmpty {
                     frequencyTable
                 } else {
-                    ToolMessageBanner(systemImage: "sparkles", message: "Paste text, tune filters, then generate to build the cloud and frequency table.", tint: AppTheme.accentWarm)
+                    ToolMessageBanner(
+                        systemImage: "sparkles",
+                        message:
+                            "Paste text, tune filters, then generate to build the cloud and frequency table.",
+                        tint: AppTheme.accentWarm)
                 }
             }
         }
@@ -249,7 +262,8 @@ public struct WordCloudView: View {
             frequencies[token, default: 0] += 1
         }
 
-        wordCounts = frequencies
+        wordCounts =
+            frequencies
             .sorted { $0.value > $1.value }
             .prefix(maxWords)
             .map { (word: $0.key, count: $0.value) }
@@ -278,18 +292,20 @@ public struct WordCloudView: View {
 
     private func fontSize(for count: Int) -> CGFloat {
         guard let maxCount = wordCounts.first?.count,
-              let minCount = wordCounts.last?.count,
-              maxCount > minCount else {
+            let minCount = wordCounts.last?.count,
+            maxCount > minCount
+        else {
             return 24
         }
         let ratio = CGFloat(count - minCount) / CGFloat(maxCount - minCount)
-        return 12 + ratio * 36 // range: 12pt – 48pt
+        return 12 + ratio * 36  // range: 12pt – 48pt
     }
 
     private func fontWeight(for count: Int) -> Font.Weight {
         guard let maxCount = wordCounts.first?.count,
-              let minCount = wordCounts.last?.count,
-              maxCount > minCount else {
+            let minCount = wordCounts.last?.count,
+            maxCount > minCount
+        else {
             return .regular
         }
         let ratio = CGFloat(count - minCount) / CGFloat(maxCount - minCount)
@@ -298,13 +314,6 @@ public struct WordCloudView: View {
         return .regular
     }
 
-    private func copyStats() {
-        let text = wordCounts
-            .map { "\($0.word): \($0.count)" }
-            .joined(separator: "\n")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
 }
 
 // MARK: - Flow Layout
@@ -325,7 +334,9 @@ struct FlowLayout: Layout {
         return CGSize(width: proposal.width ?? 0, height: height)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
         let rows = computeRows(proposal: proposal, subviews: subviews)
         var y = bounds.minY
 
@@ -345,7 +356,9 @@ struct FlowLayout: Layout {
         }
     }
 
-    private func computeRows(proposal: ProposedViewSize, subviews: Subviews) -> [[LayoutSubviews.Element]] {
+    private func computeRows(proposal: ProposedViewSize, subviews: Subviews) -> [[LayoutSubviews
+        .Element]]
+    {
         let maxWidth = proposal.width ?? .infinity
         var rows: [[LayoutSubviews.Element]] = [[]]
         var currentRowWidth: CGFloat = 0
@@ -366,10 +379,10 @@ struct FlowLayout: Layout {
 // MARK: - Preview
 
 #if DEBUG
-struct WordCloudView_Previews: PreviewProvider {
-    static var previews: some View {
-        WordCloudView()
-            .preferredColorScheme(.dark)
+    struct WordCloudView_Previews: PreviewProvider {
+        static var previews: some View {
+            WordCloudView()
+                .preferredColorScheme(.dark)
+        }
     }
-}
 #endif

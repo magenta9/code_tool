@@ -1,6 +1,7 @@
 import SwiftUI
+
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #endif
 
 public struct StyledToolbar<Content: View>: View {
@@ -40,7 +41,10 @@ public struct StyledButton: View {
 
     @State private var isHovered = false
 
-    public init(_ title: String, systemImage: String? = nil, variant: StyledButtonVariant = .secondary, action: @escaping () -> Void) {
+    public init(
+        _ title: String, systemImage: String? = nil, variant: StyledButtonVariant = .secondary,
+        action: @escaping () -> Void
+    ) {
         self.title = title
         self.systemImage = systemImage
         self.variant = variant
@@ -67,8 +71,7 @@ public struct StyledButton: View {
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.01 : 1.0)
-        .animation(AppTheme.Anim.fast, value: isHovered)
-        .onHover { isHovered = $0 }
+        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
     }
 
     private var foregroundColor: Color {
@@ -147,8 +150,7 @@ public struct StyledIconButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
-        .onHover { isHovered = $0 }
-        .animation(AppTheme.Anim.fast, value: isHovered)
+        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
     }
 }
 
@@ -166,8 +168,8 @@ public struct CopyButton: View {
     public var body: some View {
         Button {
             #if canImport(AppKit)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
             #endif
             showCheck = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
@@ -382,14 +384,17 @@ public struct StyledSegmentedPicker<T: Hashable>: View {
                 } label: {
                     Text(label(option))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(selection == option ? AppTheme.background : AppTheme.textMuted)
+                        .foregroundStyle(
+                            selection == option ? AppTheme.background : AppTheme.textMuted
+                        )
                         .padding(.horizontal, AppTheme.Spacing.md)
                         .padding(.vertical, AppTheme.Spacing.sm)
                         .background {
                             if selection == option {
                                 Capsule()
                                     .fill(AppTheme.accentGradient)
-                                    .matchedGeometryEffect(id: "picker-selection", in: pickerNamespace)
+                                    .matchedGeometryEffect(
+                                        id: "picker-selection", in: pickerNamespace)
                             }
                         }
                 }
@@ -434,8 +439,8 @@ public struct ThemedValueCard: View {
                     Spacer()
                     Button {
                         #if canImport(AppKit)
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(value, forType: .string)
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(value, forType: .string)
                         #endif
                         showCheck = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { showCheck = false }
@@ -487,8 +492,8 @@ public struct ThemedConversionRow: View {
 
             Button {
                 #if canImport(AppKit)
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(value, forType: .string)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(value, forType: .string)
                 #endif
                 showCheck = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { showCheck = false }

@@ -1,5 +1,5 @@
-import SwiftUI
 import Foundation
+import SwiftUI
 
 // MARK: - Diff Model
 
@@ -32,9 +32,14 @@ public func compareJSON(_ left: Any, _ right: Any, path: String = "root") -> [Di
             let childPath = "\(path).\(key)"
             switch (lDict[key], rDict[key]) {
             case (.none, .some(let rVal)):
-                diffs.append(DiffItem(path: childPath, type: .added, leftValue: nil, rightValue: describe(rVal)))
+                diffs.append(
+                    DiffItem(
+                        path: childPath, type: .added, leftValue: nil, rightValue: describe(rVal)))
             case (.some(let lVal), .none):
-                diffs.append(DiffItem(path: childPath, type: .removed, leftValue: describe(lVal), rightValue: nil))
+                diffs.append(
+                    DiffItem(
+                        path: childPath, type: .removed, leftValue: describe(lVal), rightValue: nil)
+                )
             case (.some(let lVal), .some(let rVal)):
                 diffs.append(contentsOf: compareJSON(lVal, rVal, path: childPath))
             default:
@@ -47,9 +52,15 @@ public func compareJSON(_ left: Any, _ right: Any, path: String = "root") -> [Di
         for i in 0..<maxCount {
             let childPath = "\(path)[\(i)]"
             if i >= lArr.count {
-                diffs.append(DiffItem(path: childPath, type: .added, leftValue: nil, rightValue: describe(rArr[i])))
+                diffs.append(
+                    DiffItem(
+                        path: childPath, type: .added, leftValue: nil, rightValue: describe(rArr[i])
+                    ))
             } else if i >= rArr.count {
-                diffs.append(DiffItem(path: childPath, type: .removed, leftValue: describe(lArr[i]), rightValue: nil))
+                diffs.append(
+                    DiffItem(
+                        path: childPath, type: .removed, leftValue: describe(lArr[i]),
+                        rightValue: nil))
             } else {
                 diffs.append(contentsOf: compareJSON(lArr[i], rArr[i], path: childPath))
             }
@@ -57,7 +68,10 @@ public func compareJSON(_ left: Any, _ right: Any, path: String = "root") -> [Di
 
     default:
         if !isEqual(left, right) {
-            diffs.append(DiffItem(path: path, type: .modified, leftValue: describe(left), rightValue: describe(right)))
+            diffs.append(
+                DiffItem(
+                    path: path, type: .modified, leftValue: describe(left),
+                    rightValue: describe(right)))
         }
     }
 
@@ -70,14 +84,16 @@ private func describe(_ value: Any) -> String {
     if value is NSNull { return "null" }
     if let dict = value as? [String: Any] {
         if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
-           let str = String(data: data, encoding: .utf8) {
+            let str = String(data: data, encoding: .utf8)
+        {
             return str
         }
         return "{...}"
     }
     if let arr = value as? [Any] {
         if let data = try? JSONSerialization.data(withJSONObject: arr, options: [.sortedKeys]),
-           let str = String(data: data, encoding: .utf8) {
+            let str = String(data: data, encoding: .utf8)
+        {
             return str
         }
         return "[...]"
@@ -127,7 +143,8 @@ public struct JSONDiffView: View {
         ToolWorkbench(
             eyebrow: "Delta analysis",
             title: "JSON Diff",
-            description: "Compare left and right payloads in the same split workbench used across the toolkit.",
+            description:
+                "Compare left and right payloads in the same split workbench used across the toolkit.",
             systemImage: "arrow.left.arrow.right",
             statusItems: statusItems
         ) {
@@ -173,21 +190,37 @@ public struct JSONDiffView: View {
 
     private var statusItems: [ToolStatusItem] {
         if let errorMessage {
-            return [ToolStatusItem(title: errorMessage, systemImage: "exclamationmark.triangle.fill", tint: AppTheme.error)]
+            return [
+                ToolStatusItem(
+                    title: errorMessage, systemImage: "exclamationmark.triangle.fill",
+                    tint: AppTheme.error)
+            ]
         }
         if hasCompared && diffs.isEmpty {
-            return [ToolStatusItem(title: "No differences", systemImage: "checkmark.circle.fill", tint: AppTheme.success)]
+            return [
+                ToolStatusItem(
+                    title: "No differences", systemImage: "checkmark.circle.fill",
+                    tint: AppTheme.success)
+            ]
         }
         if hasCompared {
             let added = diffs.filter { $0.type == .added }.count
             let removed = diffs.filter { $0.type == .removed }.count
             let modified = diffs.filter { $0.type == .modified }.count
             return [
-                ToolStatusItem(title: "\(diffs.count) total", systemImage: "chart.bar.xaxis", tint: AppTheme.accent),
-                ToolStatusItem(title: "+\(added) / -\(removed) / ~\(modified)", systemImage: "list.bullet.indent", tint: AppTheme.accentWarm)
+                ToolStatusItem(
+                    title: "\(diffs.count) total", systemImage: "chart.bar.xaxis",
+                    tint: AppTheme.accent),
+                ToolStatusItem(
+                    title: "+\(added) / -\(removed) / ~\(modified)",
+                    systemImage: "list.bullet.indent", tint: AppTheme.accentWarm),
             ]
         }
-        return [ToolStatusItem(title: "Ready to compare", systemImage: "rectangle.split.2x1", tint: AppTheme.accentWarm)]
+        return [
+            ToolStatusItem(
+                title: "Ready to compare", systemImage: "rectangle.split.2x1",
+                tint: AppTheme.accentWarm)
+        ]
     }
 
     // MARK: - Diff Results
@@ -195,11 +228,20 @@ public struct JSONDiffView: View {
     private var diffResultsPanel: some View {
         StyledPanel(title: "Differences") {
             if let error = errorMessage {
-                ToolMessageBanner(systemImage: "exclamationmark.triangle.fill", message: error, tint: AppTheme.error)
+                ToolMessageBanner(
+                    systemImage: "exclamationmark.triangle.fill", message: error,
+                    tint: AppTheme.error)
             } else if !hasCompared {
-                ToolMessageBanner(systemImage: "sparkles", message: "Enter JSON in both panels and run Compare from the shared action bar.", tint: AppTheme.accentWarm)
+                ToolMessageBanner(
+                    systemImage: "sparkles",
+                    message:
+                        "Enter JSON in both panels and run Compare from the shared action bar.",
+                    tint: AppTheme.accentWarm)
             } else if diffs.isEmpty {
-                ToolMessageBanner(systemImage: "checkmark.circle.fill", message: "No differences found. The JSON structures are identical.", tint: AppTheme.success)
+                ToolMessageBanner(
+                    systemImage: "checkmark.circle.fill",
+                    message: "No differences found. The JSON structures are identical.",
+                    tint: AppTheme.success)
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -260,30 +302,6 @@ public struct JSONDiffView: View {
         }
     }
 
-    private var diffSummary: some View {
-        let added = diffs.filter { $0.type == .added }.count
-        let removed = diffs.filter { $0.type == .removed }.count
-        let modified = diffs.filter { $0.type == .modified }.count
-        return HStack(spacing: AppTheme.Spacing.sm) {
-            Text("\(diffs.count) difference\(diffs.count == 1 ? "" : "s")")
-                .fontWeight(.medium)
-                .foregroundStyle(AppTheme.textPrimary)
-            if added > 0 {
-                Text("+\(added)")
-                    .foregroundStyle(AppTheme.success)
-            }
-            if removed > 0 {
-                Text("-\(removed)")
-                    .foregroundStyle(AppTheme.error)
-            }
-            if modified > 0 {
-                Text("~\(modified)")
-                    .foregroundStyle(AppTheme.warning)
-            }
-        }
-        .font(.callout)
-    }
-
     // MARK: - Actions
 
     private func compare() {
@@ -300,13 +318,17 @@ public struct JSONDiffView: View {
         }
 
         guard let leftData = trimmedLeft.data(using: .utf8),
-              let leftObj = try? JSONSerialization.jsonObject(with: leftData, options: .fragmentsAllowed) else {
+            let leftObj = try? JSONSerialization.jsonObject(
+                with: leftData, options: .fragmentsAllowed)
+        else {
             errorMessage = "Left JSON is invalid."
             return
         }
 
         guard let rightData = trimmedRight.data(using: .utf8),
-              let rightObj = try? JSONSerialization.jsonObject(with: rightData, options: .fragmentsAllowed) else {
+            let rightObj = try? JSONSerialization.jsonObject(
+                with: rightData, options: .fragmentsAllowed)
+        else {
             errorMessage = "Right JSON is invalid."
             return
         }
@@ -316,37 +338,37 @@ public struct JSONDiffView: View {
 
     private func loadSampleData() {
         leftText = """
-        {
-          "user": {
-            "name": "Alice",
-            "age": 30,
-            "email": "alice@example.com",
-            "active": true,
-            "tags": ["admin", "editor"]
-          },
-          "settings": {
-            "theme": "dark",
-            "notifications": true
-          }
-        }
-        """
+            {
+              "user": {
+                "name": "Alice",
+                "age": 30,
+                "email": "alice@example.com",
+                "active": true,
+                "tags": ["admin", "editor"]
+              },
+              "settings": {
+                "theme": "dark",
+                "notifications": true
+              }
+            }
+            """
 
         rightText = """
-        {
-          "user": {
-            "name": "Alice",
-            "age": 31,
-            "phone": "+1-555-0100",
-            "active": false,
-            "tags": ["admin", "viewer"]
-          },
-          "settings": {
-            "theme": "light",
-            "notifications": true,
-            "language": "en"
-          }
-        }
-        """
+            {
+              "user": {
+                "name": "Alice",
+                "age": 31,
+                "phone": "+1-555-0100",
+                "active": false,
+                "tags": ["admin", "viewer"]
+              },
+              "settings": {
+                "theme": "light",
+                "notifications": true,
+                "language": "en"
+              }
+            }
+            """
 
         compare()
     }
@@ -355,11 +377,11 @@ public struct JSONDiffView: View {
 // MARK: - Preview
 
 #if DEBUG
-struct JSONDiffView_Previews: PreviewProvider {
-    static var previews: some View {
-        JSONDiffView()
-            .frame(width: 900, height: 700)
-            .preferredColorScheme(.dark)
+    struct JSONDiffView_Previews: PreviewProvider {
+        static var previews: some View {
+            JSONDiffView()
+                .frame(width: 900, height: 700)
+                .preferredColorScheme(.dark)
+        }
     }
-}
 #endif

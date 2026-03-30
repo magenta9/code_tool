@@ -80,9 +80,22 @@ private struct SidebarView: View {
     let tools: [Tool]
     @Binding var selectedTool: Tool?
 
+    @State private var logoHovered = false
+    @State private var showSettings = false
+
+    private var groupedTools: [(category: ToolCategory, tools: [Tool])] {
+        ToolCategory.allCases.compactMap { category in
+            let matched = tools.filter { $0.category == category }
+            return matched.isEmpty ? nil : (category, matched)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            // Logo / Home button
+            Button {
+                selectedTool = nil
+            } label: {
                 HStack(spacing: AppTheme.Spacing.md) {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.md)
                         .fill(AppTheme.accentGradient)
@@ -92,6 +105,7 @@ private struct SidebarView: View {
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(AppTheme.background)
                         }
+                        .scaleEffect(logoHovered ? 1.06 : 1.0)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("CodeTool")
@@ -102,26 +116,39 @@ private struct SidebarView: View {
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
-
-                Text("11 tools, one interaction model")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.accentWarm)
-                    .textCase(.uppercase)
-                    .tracking(1.1)
             }
+            .buttonStyle(.plain)
+            .onHover { logoHovered = $0 }
+            .animation(AppTheme.Anim.fast, value: logoHovered)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, AppTheme.Spacing.lg)
             .padding(.top, AppTheme.Spacing.xxl)
             .padding(.bottom, AppTheme.Spacing.lg)
 
             ScrollView {
-                VStack(spacing: AppTheme.Spacing.sm) {
-                    ForEach(tools) { tool in
-                        SidebarRow(
-                            tool: tool,
-                            isSelected: selectedTool == tool,
-                            action: { selectedTool = tool }
-                        )
+                VStack(spacing: AppTheme.Spacing.lg) {
+                    ForEach(groupedTools, id: \.category) { group in
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                            HStack(spacing: AppTheme.Spacing.sm) {
+                                Image(systemName: group.category.systemImage)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(AppTheme.textMuted)
+                                Text(group.category.displayName)
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppTheme.textMuted)
+                                    .textCase(.uppercase)
+                                    .tracking(1.2)
+                            }
+                            .padding(.horizontal, AppTheme.Spacing.md + 4)
+
+                            ForEach(group.tools) { tool in
+                                SidebarRow(
+                                    tool: tool,
+                                    isSelected: selectedTool == tool,
+                                    action: { selectedTool = tool }
+                                )
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
@@ -129,13 +156,27 @@ private struct SidebarView: View {
             }
 
             VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                Text("Unified surfaces")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text("Consistent actions, panels, status chips, and editor treatments across every tool.")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Text("Unified surfaces")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Spacer()
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("MiniMax Settings")
+                }
+                Text(
+                    "Consistent actions, panels, status chips, and editor treatments across every tool."
+                )
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
             }
             .padding(AppTheme.Spacing.lg)
             .background(AppTheme.surface.opacity(0.62))
@@ -149,6 +190,9 @@ private struct SidebarView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AppTheme.sidebarBackground)
+        .sheet(isPresented: $showSettings) {
+            MiniMaxSettingsSheet()
+        }
     }
 }
 
@@ -170,7 +214,10 @@ private struct SidebarRow: View {
                     .frame(width: 34, height: 34)
                     .background(
                         RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .fill(isSelected ? AnyShapeStyle(AppTheme.accentGradient) : AnyShapeStyle(AppTheme.surfaceRaised))
+                            .fill(
+                                isSelected
+                                    ? AnyShapeStyle(AppTheme.accentGradient)
+                                    : AnyShapeStyle(AppTheme.surfaceRaised))
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -190,19 +237,25 @@ private struct SidebarRow: View {
 
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(isSelected ? AppTheme.accentWarm : AppTheme.textMuted.opacity(0.7))
+                    .foregroundStyle(
+                        isSelected ? AppTheme.accentWarm : AppTheme.textMuted.opacity(0.7))
             }
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.md)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                    .fill(isSelected
-                          ? AnyShapeStyle(AppTheme.selectionGradient)
-                          : AnyShapeStyle(isHovered ? AppTheme.surface.opacity(0.72) : Color.clear))
+                    .fill(
+                        isSelected
+                            ? AnyShapeStyle(AppTheme.selectionGradient)
+                            : AnyShapeStyle(
+                                isHovered ? AppTheme.surface.opacity(0.72) : Color.clear))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                    .strokeBorder(isSelected ? AppTheme.borderHover : AppTheme.border.opacity(isHovered ? 1 : 0), lineWidth: 1)
+                    .strokeBorder(
+                        isSelected
+                            ? AppTheme.borderHover : AppTheme.border.opacity(isHovered ? 1 : 0),
+                        lineWidth: 1)
             )
             .overlay(alignment: .leading) {
                 if isSelected {
@@ -214,8 +267,7 @@ private struct SidebarRow: View {
             }
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(AppTheme.Anim.fast, value: isHovered)
+        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
         .animation(AppTheme.Anim.fast, value: isSelected)
     }
 }
@@ -274,8 +326,6 @@ private struct ToolDetailView: View {
                 AIImageView()
             case "AI Music":
                 AIMusicView()
-            case "MiniMax Settings":
-                MiniMaxSettingsView()
             default:
                 placeholderView
             }
@@ -291,7 +341,6 @@ private struct ToolDetailView: View {
                 .foregroundStyle(AppTheme.accent)
             Text(tool.name)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
-                .fontWeight(.semibold)
                 .foregroundStyle(AppTheme.textPrimary)
             Text(tool.description)
                 .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -302,73 +351,269 @@ private struct ToolDetailView: View {
     }
 }
 
-// MARK: - Welcome
+// MARK: - Welcome / Landing Page
 
 private struct WelcomeView: View {
     let tools: [Tool]
     @Binding var selectedTool: Tool?
 
     @State private var appeared = false
+    @State private var heroAnimated = false
+    @State private var cardsAnimated = false
 
-    private let columns = [
-        GridItem(.flexible(), spacing: AppTheme.Spacing.lg),
-        GridItem(.flexible(), spacing: AppTheme.Spacing.lg)
-    ]
+    private var devTools: [Tool] { tools.filter { $0.category == .devTools } }
+    private var aiTools: [Tool] { tools.filter { $0.category == .aiTools } }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppTheme.Spacing.xxl) {
-                Spacer().frame(height: AppTheme.Spacing.xxxl)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                // Hero Section
+                heroSection
+                    .padding(.bottom, AppTheme.Spacing.xxxl)
 
-                Text("Modern utility cockpit")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.accentWarm)
-                    .textCase(.uppercase)
-                    .tracking(1.6)
+                // Dev Tools Section
+                toolGroupSection(
+                    eyebrow: "Essentials",
+                    title: "Dev Tools",
+                    subtitle: "Formatters, converters, and analyzers built for daily workflows.",
+                    icon: "wrench.and.screwdriver",
+                    accentColor: AppTheme.accent,
+                    tools: devTools,
+                    columns: 3,
+                    delayBase: 0
+                )
+                .padding(.bottom, 56)
 
-                Text("Eleven tools. One visual language.")
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
+                // AI Tools Section
+                toolGroupSection(
+                    eyebrow: "Intelligence",
+                    title: "AI Tools",
+                    subtitle: "Chat, speech, image, and music powered by MiniMax.",
+                    icon: "cpu",
+                    accentColor: AppTheme.accentWarm,
+                    tools: aiTools,
+                    columns: 2,
+                    delayBase: 6
+                )
+                .padding(.bottom, 56)
 
-                Text("Switch between formatters, converters and analyzers without relearning the interface. Every workspace now shares the same action rhythm, panel geometry and feedback states.")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-                    .frame(maxWidth: 680)
-
-                HStack(spacing: AppTheme.Spacing.md) {
-                    WelcomeMetric(title: "11", subtitle: "Core tools")
-                    WelcomeMetric(title: "1", subtitle: "Unified layout")
-                    WelcomeMetric(title: "0", subtitle: "Purple gradients")
-                }
-
-                LazyVGrid(columns: columns, spacing: AppTheme.Spacing.lg) {
-                    ForEach(tools) { tool in
-                        ToolCard(tool: tool) {
-                            selectedTool = tool
-                        }
-                    }
-                }
-                .padding(.horizontal, AppTheme.Spacing.xxxl)
-
-                Spacer().frame(height: AppTheme.Spacing.xxl)
+                // Footer
+                footerSection
             }
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, 48)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackdrop())
         .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
         .animation(AppTheme.Anim.slow, value: appeared)
-        .onAppear { appeared = true }
+        .onAppear {
+            appeared = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                heroAnimated = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                cardsAnimated = true
+            }
+        }
+    }
+
+    // MARK: - Hero
+
+    private var heroSection: some View {
+        VStack(spacing: AppTheme.Spacing.xl) {
+            Spacer().frame(height: 60)
+
+            // Decorative top line
+            HStack(spacing: AppTheme.Spacing.md) {
+                Rectangle()
+                    .fill(AppTheme.accentGradient)
+                    .frame(width: heroAnimated ? 48 : 0, height: 2)
+                    .animation(.easeOut(duration: 0.6).delay(0.2), value: heroAnimated)
+
+                Text("CodeTool")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .textCase(.uppercase)
+                    .tracking(3)
+                    .opacity(heroAnimated ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.3), value: heroAnimated)
+
+                Rectangle()
+                    .fill(AppTheme.accentGradient)
+                    .frame(width: heroAnimated ? 48 : 0, height: 2)
+                    .animation(.easeOut(duration: 0.6).delay(0.2), value: heroAnimated)
+            }
+
+            // Main headline with gradient text
+            VStack(spacing: AppTheme.Spacing.sm) {
+                Text("Your developer")
+                    .font(.system(size: 52, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .opacity(heroAnimated ? 1 : 0)
+                    .offset(y: heroAnimated ? 0 : 20)
+                    .animation(.spring(duration: 0.5, bounce: 0.1).delay(0.1), value: heroAnimated)
+
+                Text("utility cockpit.")
+                    .font(.system(size: 52, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.accentGradient)
+                    .opacity(heroAnimated ? 1 : 0)
+                    .offset(y: heroAnimated ? 0 : 20)
+                    .animation(.spring(duration: 0.5, bounce: 0.1).delay(0.2), value: heroAnimated)
+            }
+
+            Text("Ten tools. Two categories. One unified language.")
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+                .opacity(heroAnimated ? 1 : 0)
+                .animation(.easeOut(duration: 0.5).delay(0.4), value: heroAnimated)
+
+            // Stats row
+            HStack(spacing: AppTheme.Spacing.xl) {
+                LandingMetric(
+                    value: "\(devTools.count)", label: "Dev Tools", color: AppTheme.accent
+                )
+                .opacity(heroAnimated ? 1 : 0)
+                .offset(y: heroAnimated ? 0 : 12)
+                .animation(.spring(duration: 0.4, bounce: 0.1).delay(0.45), value: heroAnimated)
+
+                // Divider dot
+                Circle()
+                    .fill(AppTheme.textMuted.opacity(0.4))
+                    .frame(width: 4, height: 4)
+
+                LandingMetric(
+                    value: "\(aiTools.count)", label: "AI Tools", color: AppTheme.accentWarm
+                )
+                .opacity(heroAnimated ? 1 : 0)
+                .offset(y: heroAnimated ? 0 : 12)
+                .animation(.spring(duration: 0.4, bounce: 0.1).delay(0.55), value: heroAnimated)
+
+                Circle()
+                    .fill(AppTheme.textMuted.opacity(0.4))
+                    .frame(width: 4, height: 4)
+
+                LandingMetric(value: "1", label: "Unified Layout", color: AppTheme.accentCoral)
+                    .opacity(heroAnimated ? 1 : 0)
+                    .offset(y: heroAnimated ? 0 : 12)
+                    .animation(.spring(duration: 0.4, bounce: 0.1).delay(0.65), value: heroAnimated)
+            }
+            .padding(.top, AppTheme.Spacing.sm)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Tool Group Section
+
+    private func toolGroupSection(
+        eyebrow: String,
+        title: String,
+        subtitle: String,
+        icon: String,
+        accentColor: Color,
+        tools: [Tool],
+        columns: Int,
+        delayBase: Int
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+            // Section header
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(accentColor)
+                    Text(eyebrow)
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(accentColor)
+                        .textCase(.uppercase)
+                        .tracking(2)
+
+                    Rectangle()
+                        .fill(accentColor.opacity(0.25))
+                        .frame(height: 1)
+                }
+
+                Text(title)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            // Tool cards grid
+            let gridColumns = Array(
+                repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.lg), count: columns)
+            LazyVGrid(columns: gridColumns, spacing: AppTheme.Spacing.lg) {
+                ForEach(Array(tools.enumerated()), id: \.element.id) { index, tool in
+                    LandingToolCard(tool: tool, accentColor: accentColor) {
+                        selectedTool = tool
+                    }
+                    .opacity(cardsAnimated ? 1 : 0)
+                    .offset(y: cardsAnimated ? 0 : 24)
+                    .animation(
+                        .spring(duration: 0.45, bounce: 0.12)
+                            .delay(Double(delayBase + index) * 0.06),
+                        value: cardsAnimated
+                    )
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Footer
+
+    private var footerSection: some View {
+        VStack(spacing: AppTheme.Spacing.md) {
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(height: 1)
+                .padding(.horizontal, 40)
+
+            HStack {
+                Text("Built with SwiftUI")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .tracking(0.8)
+                Spacer()
+                Text("Powered by MiniMax")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .tracking(0.8)
+            }
+        }
+        .padding(.bottom, 40)
     }
 }
 
-// MARK: - Tool Card
+// MARK: - Landing Metric
 
-private struct ToolCard: View {
+private struct LandingMetric: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.sm) {
+            Text(value)
+                .font(.system(size: 28, weight: .black, design: .rounded))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
+                .textCase(.uppercase)
+                .tracking(0.8)
+        }
+    }
+}
+
+// MARK: - Landing Tool Card
+
+private struct LandingToolCard: View {
     let tool: Tool
+    let accentColor: Color
     let action: () -> Void
 
     @State private var isHovered = false
@@ -376,43 +621,54 @@ private struct ToolCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                // Icon + tag row
                 HStack {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .fill(AppTheme.heroGradient)
-                        .frame(width: 42, height: 42)
-                        .overlay {
-                            Image(systemName: tool.systemImage)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
+                    ZStack {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                            .fill(accentColor.opacity(isHovered ? 0.22 : 0.12))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: tool.systemImage)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(isHovered ? accentColor : AppTheme.textSecondary)
+                    }
 
                     Spacer()
 
                     Text(tool.navigationTag)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.accentWarm)
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(accentColor.opacity(0.7))
                         .textCase(.uppercase)
-                        .tracking(1.0)
+                        .tracking(1.2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule().fill(accentColor.opacity(0.08))
+                        )
                 }
 
+                // Name + description
                 VStack(alignment: .leading, spacing: 6) {
                     Text(tool.name)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
                     Text(tool.description)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(3)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
+                // CTA row
                 HStack {
-                    Text("Open workspace")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("Open")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(isHovered ? accentColor : AppTheme.textMuted)
                     Spacer()
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(AppTheme.accent)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(isHovered ? accentColor : AppTheme.textMuted)
+                        .offset(x: isHovered ? 3 : 0)
                 }
             }
             .padding(AppTheme.Spacing.lg)
@@ -422,44 +678,19 @@ private struct ToolCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.xl)
-                    .strokeBorder(isHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1)
+                    .strokeBorder(
+                        isHovered ? accentColor.opacity(0.3) : AppTheme.border, lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(isHovered ? 0.18 : 0.10), radius: isHovered ? 26 : 16, y: 10)
+            .shadow(
+                color: isHovered ? accentColor.opacity(0.08) : Color.black.opacity(0.10),
+                radius: isHovered ? 24 : 12, y: 8)
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(AppTheme.Anim.fast, value: isHovered)
+        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
     }
 }
-
-private struct WelcomeMetric: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.system(size: 24, weight: .bold, design: .monospaced))
-                .foregroundStyle(AppTheme.textPrimary)
-            Text(subtitle)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(AppTheme.textMuted)
-                .textCase(.uppercase)
-                .tracking(1.0)
-        }
-        .frame(width: 132)
-        .padding(.vertical, AppTheme.Spacing.md)
-        .background(AppTheme.surface.opacity(0.68))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
-    }
-}
-
-private extension Tool {
-    var navigationTag: String {
+extension Tool {
+    fileprivate var navigationTag: String {
         switch name {
         case "JSON Tool":
             return "Format"
@@ -481,20 +712,45 @@ private extension Tool {
             return "Image"
         case "AI Music":
             return "Music"
-        case "MiniMax Settings":
-            return "Config"
         default:
             return "Tool"
         }
     }
 }
 
+// MARK: - MiniMax Settings Sheet
+
+private struct MiniMaxSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AppTheme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .padding(AppTheme.Spacing.md)
+            }
+
+            MiniMaxSettingsView()
+        }
+        .frame(minWidth: 600, minHeight: 500)
+        .background(AppTheme.background)
+    }
+}
+
 // MARK: - Previews
 
 #if DEBUG
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+    struct ContentView_Previews: PreviewProvider {
+        static var previews: some View {
+            ContentView()
+        }
     }
-}
 #endif

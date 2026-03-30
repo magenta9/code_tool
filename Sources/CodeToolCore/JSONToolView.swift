@@ -1,6 +1,7 @@
 import SwiftUI
+
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #endif
 
 public struct JSONToolView: View {
@@ -74,25 +75,43 @@ public struct JSONToolView: View {
 
     private var statusItems: [ToolStatusItem] {
         if !errorMessage.isEmpty {
-            return [ToolStatusItem(title: "Invalid input", systemImage: "exclamationmark.triangle.fill", tint: AppTheme.error)]
+            return [
+                ToolStatusItem(
+                    title: "Invalid input", systemImage: "exclamationmark.triangle.fill",
+                    tint: AppTheme.error)
+            ]
         }
         if !stats.isEmpty {
-            return [ToolStatusItem(title: stats, systemImage: "chart.bar.doc.horizontal", tint: AppTheme.accent)]
+            return [
+                ToolStatusItem(
+                    title: stats, systemImage: "chart.bar.doc.horizontal", tint: AppTheme.accent)
+            ]
         }
         return [
-            ToolStatusItem(title: "Object, array, or fragment", systemImage: "checkmark.shield", tint: AppTheme.accentWarm),
-            ToolStatusItem(title: "Sorted output supported", systemImage: "arrow.up.arrow.down", tint: AppTheme.accent)
+            ToolStatusItem(
+                title: "Object, array, or fragment", systemImage: "checkmark.shield",
+                tint: AppTheme.accentWarm),
+            ToolStatusItem(
+                title: "Sorted output supported", systemImage: "arrow.up.arrow.down",
+                tint: AppTheme.accent),
         ]
     }
 
     private var statusBanner: some View {
         Group {
             if !errorMessage.isEmpty {
-                ToolMessageBanner(systemImage: "exclamationmark.triangle.fill", message: errorMessage, tint: AppTheme.error)
+                ToolMessageBanner(
+                    systemImage: "exclamationmark.triangle.fill", message: errorMessage,
+                    tint: AppTheme.error)
             } else if !stats.isEmpty {
-                ToolMessageBanner(systemImage: "waveform.path.ecg", message: stats, tint: AppTheme.accent)
+                ToolMessageBanner(
+                    systemImage: "waveform.path.ecg", message: stats, tint: AppTheme.accent)
             } else {
-                ToolMessageBanner(systemImage: "sparkles", message: "Paste JSON on the left, then format, minify or validate from the shared action bar.", tint: AppTheme.accentWarm)
+                ToolMessageBanner(
+                    systemImage: "sparkles",
+                    message:
+                        "Paste JSON on the left, then format, minify or validate from the shared action bar.",
+                    tint: AppTheme.accentWarm)
             }
         }
     }
@@ -194,13 +213,6 @@ public struct JSONToolView: View {
         }
     }
 
-    private func copyOutput() {
-        #if canImport(AppKit)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(outputText, forType: .string)
-        #endif
-    }
-
     private func clearAll() {
         inputText = ""
         outputText = ""
@@ -213,7 +225,8 @@ public struct JSONToolView: View {
     private func updateStats(object: Any, dataSize: Int) {
         let keyCount = countKeys(in: object)
         let depth = nestingDepth(of: object)
-        let sizeString = ByteCountFormatter.string(fromByteCount: Int64(dataSize), countStyle: .file)
+        let sizeString = ByteCountFormatter.string(
+            fromByteCount: Int64(dataSize), countStyle: .file)
         stats = "Keys: \(keyCount) · Depth: \(depth) · Size: \(sizeString)"
     }
 
@@ -241,11 +254,11 @@ public struct JSONToolView: View {
 // MARK: - Previews
 
 #if DEBUG
-struct JSONToolView_Previews: PreviewProvider {
-    static var previews: some View {
-        JSONToolView()
-            .frame(width: 800, height: 500)
-            .preferredColorScheme(.dark)
+    struct JSONToolView_Previews: PreviewProvider {
+        static var previews: some View {
+            JSONToolView()
+                .frame(width: 800, height: 500)
+                .preferredColorScheme(.dark)
+        }
     }
-}
 #endif

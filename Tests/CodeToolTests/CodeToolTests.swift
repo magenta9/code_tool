@@ -1,9 +1,10 @@
-import XCTest
-@testable import CodeToolCore
 import Foundation
+import XCTest
+
+@testable import CodeToolCore
 
 #if canImport(SwiftUI)
-import SwiftUI
+    import SwiftUI
 #endif
 
 private final class MockURLProtocol: URLProtocol {
@@ -88,7 +89,8 @@ final class CodeToolTests: XCTestCase {
         let tempDirectoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("CodeToolTests-\(UUID().uuidString)", isDirectory: true)
         temporaryLogDirectoryURL = tempDirectoryURL
-        try? FileManager.default.createDirectory(at: tempDirectoryURL, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(
+            at: tempDirectoryURL, withIntermediateDirectories: true)
 
         let setupExpectation = expectation(description: "configure log directory")
         Task {
@@ -138,8 +140,8 @@ final class CodeToolTests: XCTestCase {
         XCTAssertFalse(ToolRegistry.defaults.isEmpty)
     }
 
-    func testRegistryContainsElevenTools() {
-        XCTAssertEqual(ToolRegistry.defaults.count, 11)
+    func testRegistryContainsTenTools() {
+        XCTAssertEqual(ToolRegistry.defaults.count, 10)
     }
 
     func testRegistryDefaultNamesAreUnique() {
@@ -154,7 +156,6 @@ final class CodeToolTests: XCTestCase {
             "JSON Tool", "Image Converter", "JSON Diff",
             "Timestamp Converter", "JWT Tool", "Word Cloud",
             "AI Chat", "AI Speech", "AI Image", "AI Music",
-            "MiniMax Settings"
         ]
         XCTAssertEqual(names, expected)
     }
@@ -195,10 +196,10 @@ final class CodeToolTests: XCTestCase {
     }
 
     #if canImport(SwiftUI)
-    func testContentViewDoesNotUseNavigationSplitView() {
-        let bodyTypeDescription = String(describing: type(of: ContentView().body))
-        XCTAssertFalse(bodyTypeDescription.contains("NavigationSplitView"))
-    }
+        func testContentViewDoesNotUseNavigationSplitView() {
+            let bodyTypeDescription = String(describing: type(of: ContentView().body))
+            XCTAssertFalse(bodyTypeDescription.contains("NavigationSplitView"))
+        }
     #endif
 
     func testTextToSpeechRequestsHexOutputAndDecodesHexAudio() async throws {
@@ -206,7 +207,8 @@ final class CodeToolTests: XCTestCase {
             XCTAssertEqual(request.url?.path, "/v1/t2a_v2")
 
             let bodyData = try XCTUnwrap(request.httpBody)
-            let bodyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
             XCTAssertEqual(bodyObject["output_format"] as? String, "hex")
 
             let audioSetting = try XCTUnwrap(bodyObject["audio_setting"] as? [String: Any])
@@ -215,18 +217,21 @@ final class CodeToolTests: XCTestCase {
             let responseBody: [String: Any] = [
                 "base_resp": [
                     "status_code": 0,
-                    "status_msg": "success"
+                    "status_msg": "success",
                 ],
                 "data": [
                     "audio": "48656c6c6f"
                 ],
                 "extra_info": [
                     "audio_length": 321
-                ]
+                ],
             ]
 
             let responseData = try JSONSerialization.data(withJSONObject: responseBody)
-            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
             return (response, responseData)
         }
 
@@ -270,12 +275,15 @@ final class CodeToolTests: XCTestCase {
             let responseBody: [String: Any] = [
                 "base_resp": [
                     "status_code": 4001,
-                    "status_msg": "invalid prompt"
+                    "status_msg": "invalid prompt",
                 ]
             ]
 
             let responseData = try JSONSerialization.data(withJSONObject: responseBody)
-            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 500, httpVersion: nil, headerFields: nil))
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 500, httpVersion: nil,
+                    headerFields: nil))
             return (response, responseData)
         }
 
@@ -304,12 +312,15 @@ final class CodeToolTests: XCTestCase {
             let responseBody: [String: Any] = [
                 "base_resp": [
                     "status_code": 4290,
-                    "status_msg": "rate limited"
+                    "status_msg": "rate limited",
                 ]
             ]
 
             let responseData = try JSONSerialization.data(withJSONObject: responseBody)
-            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 429, httpVersion: nil, headerFields: nil))
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 429, httpVersion: nil,
+                    headerFields: nil))
             return (response, responseData)
         }
 
@@ -336,7 +347,8 @@ final class CodeToolTests: XCTestCase {
             XCTAssertEqual(request.url?.path, "/v1/music_generation")
 
             let bodyData = try XCTUnwrap(request.httpBody)
-            let bodyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
             XCTAssertEqual(bodyObject["output_format"] as? String, "url")
             XCTAssertNil(bodyObject["lyrics_optimizer"])
             XCTAssertNotNil(bodyObject["lyrics"])
@@ -349,17 +361,20 @@ final class CodeToolTests: XCTestCase {
             let responseBody: [String: Any] = [
                 "data": [
                     "audio": "https://example.com/generated-with-lyrics.mp3",
-                    "status": 2
+                    "status": 2,
                 ],
                 "trace_id": "trace-123",
                 "base_resp": [
                     "status_code": 0,
-                    "status_msg": "success"
-                ]
+                    "status_msg": "success",
+                ],
             ]
 
             let responseData = try JSONSerialization.data(withJSONObject: responseBody)
-            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
             return (response, responseData)
         }
 
@@ -380,7 +395,8 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "slow orchestral soundtrack")
+            _ = try await MiniMaxAPIClient.shared.generateMusic(
+                prompt: "slow orchestral soundtrack")
             XCTFail("Expected generateMusic to throw")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
@@ -409,12 +425,15 @@ final class CodeToolTests: XCTestCase {
                 "trace_id": "trace-unsupported-model",
                 "base_resp": [
                     "status_code": 2061,
-                    "status_msg": "your current token plan not support model, music-2.5+"
-                ]
+                    "status_msg": "your current token plan not support model, music-2.5+",
+                ],
             ]
 
             let responseData = try JSONSerialization.data(withJSONObject: responseBody)
-            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
             return (response, responseData)
         }
 
@@ -422,7 +441,9 @@ final class CodeToolTests: XCTestCase {
             _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "dark piano")
             XCTFail("Expected generateMusic to throw")
         } catch {
-            XCTAssertTrue(error.localizedDescription.contains("Current MiniMax token plan does not support the configured music model."))
+            XCTAssertTrue(
+                error.localizedDescription.contains(
+                    "Current MiniMax token plan does not support the configured music model."))
             XCTAssertTrue(error.localizedDescription.contains("MiniMax Settings"))
             XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
         }
@@ -435,10 +456,13 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "dark piano", lyrics: "[Verse]\nHello\n[Chorus]\nWorld")
+            _ = try await MiniMaxAPIClient.shared.generateMusic(
+                prompt: "dark piano", lyrics: "[Verse]\nHello\n[Chorus]\nWorld")
             XCTFail("Expected generateMusic to throw")
         } catch {
-            XCTAssertTrue(error.localizedDescription.contains("upstream request sat idle for about 60 seconds"))
+            XCTAssertTrue(
+                error.localizedDescription.contains(
+                    "upstream request sat idle for about 60 seconds"))
             XCTAssertTrue(error.localizedDescription.contains("32kHz and 128k"))
             XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
         }
@@ -453,7 +477,8 @@ final class CodeToolTests: XCTestCase {
             XCTAssertEqual(request.httpMethod, "POST")
 
             let bodyData = try XCTUnwrap(request.httpBody)
-            let bodyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
 
             XCTAssertEqual(bodyObject["model"] as? String, MiniMaxProvider.shared.musicModel)
             XCTAssertEqual(bodyObject["output_format"] as? String, "url")
@@ -463,21 +488,25 @@ final class CodeToolTests: XCTestCase {
             let responseBody: [String: Any] = [
                 "data": [
                     "audio": "https://example.com/generated.mp3",
-                    "status": 2
+                    "status": 2,
                 ],
                 "trace_id": "trace-456",
                 "base_resp": [
                     "status_code": 0,
-                    "status_msg": "success"
-                ]
+                    "status_msg": "success",
+                ],
             ]
 
             let responseData = try JSONSerialization.data(withJSONObject: responseBody)
-            let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
             return (response, responseData)
         }
 
-        let response = try await MiniMaxAPIClient.shared.generateMusic(prompt: "folk song", lyrics: nil)
+        let response = try await MiniMaxAPIClient.shared.generateMusic(
+            prompt: "folk song", lyrics: nil)
 
         XCTAssertEqual(requestCount, 1)
         XCTAssertNil(response.audioData)
@@ -500,12 +529,15 @@ final class CodeToolTests: XCTestCase {
                     "trace_id": "trace-pending",
                     "base_resp": [
                         "status_code": 0,
-                        "status_msg": "success"
-                    ]
+                        "status_msg": "success",
+                    ],
                 ]
 
                 let responseData = try JSONSerialization.data(withJSONObject: responseBody)
-                let response = try XCTUnwrap(HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil))
+                let response = try XCTUnwrap(
+                    HTTPURLResponse(
+                        url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                        headerFields: nil))
                 return (response, responseData)
             }
 

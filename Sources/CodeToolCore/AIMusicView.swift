@@ -1,6 +1,6 @@
-import SwiftUI
-import AppKit
 import AVFoundation
+import AppKit
+import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AIMusicView: View {
@@ -31,14 +31,16 @@ public struct AIMusicView: View {
             items.append(ToolStatusItem(title: duration, systemImage: "clock"))
         }
         if audioData != nil {
-            let size = ByteCountFormatter.string(fromByteCount: Int64(audioData!.count), countStyle: .file)
+            let size = ByteCountFormatter.string(
+                fromByteCount: Int64(audioData!.count), countStyle: .file)
             items.append(ToolStatusItem(title: size, systemImage: "doc.fill"))
         }
-        items.append(ToolStatusItem(
-            title: provider.musicModel,
-            systemImage: "cpu",
-            tint: provider.isConfigured ? AppTheme.success : AppTheme.error
-        ))
+        items.append(
+            ToolStatusItem(
+                title: provider.musicModel,
+                systemImage: "cpu",
+                tint: provider.isConfigured ? AppTheme.success : AppTheme.error
+            ))
         return items
     }
 
@@ -48,7 +50,8 @@ public struct AIMusicView: View {
         ToolWorkbench(
             eyebrow: "Music Generation",
             title: "AI Music",
-            description: "Generate original music with MiniMax's Music-2.5 model — describe a style or provide lyrics",
+            description:
+                "Generate original music with MiniMax's Music-2.5 model — describe a style or provide lyrics",
             systemImage: "music.note",
             statusItems: statusItems
         ) {
@@ -93,7 +96,8 @@ public struct AIMusicView: View {
             StyledPanel(title: "Lyrics (optional)") {
                 StyledTextEditor(
                     text: $lyricsText,
-                    placeholder: "Add lyrics with section tags:\n[Intro]\n[Verse]\n[Chorus]\n[Bridge]\n[Outro]"
+                    placeholder:
+                        "Add lyrics with section tags:\n[Intro]\n[Verse]\n[Chorus]\n[Bridge]\n[Outro]"
                 )
                 .frame(minHeight: 160)
             }
@@ -146,7 +150,9 @@ public struct AIMusicView: View {
         }
     }
 
-    private func settingsRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func settingsRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content)
+        -> some View
+    {
         HStack {
             Text(label)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
@@ -171,7 +177,8 @@ public struct AIMusicView: View {
             if shouldShowLongRequestWarning {
                 ToolMessageBanner(
                     systemImage: "timer",
-                    message: "Long lyric requests at higher quality can be dropped upstream after about 60 seconds. If this happens, retry with 32kHz and 128k or shorten the lyrics.",
+                    message:
+                        "Long lyric requests at higher quality can be dropped upstream after about 60 seconds. If this happens, retry with 32kHz and 128k or shorten the lyrics.",
                     tint: AppTheme.warning
                 )
             }
@@ -204,8 +211,9 @@ public struct AIMusicView: View {
             return false
         }
 
-        let lineCount = trimmedLyrics.split(whereSeparator: \ .isNewline).count
-        return trimmedLyrics.count >= 120 || lineCount >= 6 || sampleRate > 32000 || bitrate > 128000
+        let lineCount = trimmedLyrics.split(whereSeparator: \.isNewline).count
+        return trimmedLyrics.count >= 120 || lineCount >= 6 || sampleRate > 32000
+            || bitrate > 128000
     }
 
     // MARK: - Generating Panel
@@ -237,7 +245,9 @@ public struct AIMusicView: View {
         StyledPanel(title: "Playback") {
             VStack(spacing: AppTheme.Spacing.lg) {
                 HStack(spacing: AppTheme.Spacing.md) {
-                    StyledIconButton(isPlaying ? "pause.fill" : "play.fill", help: isPlaying ? "Pause" : "Play") {
+                    StyledIconButton(
+                        isPlaying ? "pause.fill" : "play.fill", help: isPlaying ? "Pause" : "Play"
+                    ) {
                         togglePlayback()
                     }
 
@@ -262,7 +272,8 @@ public struct AIMusicView: View {
                         ).asLabel
 
                         ToolStatusItem(
-                            title: ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file),
+                            title: ByteCountFormatter.string(
+                                fromByteCount: Int64(data.count), countStyle: .file),
                             systemImage: "internaldrive"
                         ).asLabel
 
@@ -345,6 +356,23 @@ public struct AIMusicView: View {
                     isGenerating = false
                     preparePlayer()
                 }
+
+                let recordID = UUID()
+                let audioFileName = data != nil ? "\(recordID.uuidString).\(outputFormat)" : nil
+                let record = MusicHistoryRecord(
+                    id: recordID,
+                    createdAt: Date(),
+                    prompt: promptText,
+                    lyrics: lyrics ?? "",
+                    isInstrumental: isInstrumental,
+                    outputFormat: outputFormat,
+                    sampleRate: sampleRate,
+                    bitrate: bitrate,
+                    model: MiniMaxProvider.shared.musicModel,
+                    audioFileName: audioFileName,
+                    referenceID: response.referenceID
+                )
+                try? await HistoryStore.shared.save(record, audioData: data)
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
@@ -371,7 +399,7 @@ public struct AIMusicView: View {
                     metadata: [
                         "stage": "prepare_audio_player",
                         "byteCount": String(data.count),
-                        "format": outputFormat
+                        "format": outputFormat,
                     ],
                     error: playbackError
                 )
@@ -443,8 +471,8 @@ public struct AIMusicView: View {
 
 // MARK: - ToolStatusItem Label Helper
 
-private extension ToolStatusItem {
-    var asLabel: some View {
+extension ToolStatusItem {
+    fileprivate var asLabel: some View {
         HStack(spacing: 4) {
             Image(systemName: systemImage)
                 .font(.system(size: 11))
@@ -458,10 +486,10 @@ private extension ToolStatusItem {
 // MARK: - Preview
 
 #if DEBUG
-struct AIMusicView_Previews: PreviewProvider {
-    static var previews: some View {
-        AIMusicView()
-            .frame(width: 900, height: 700)
+    struct AIMusicView_Previews: PreviewProvider {
+        static var previews: some View {
+            AIMusicView()
+                .frame(width: 900, height: 700)
+        }
     }
-}
 #endif

@@ -171,12 +171,12 @@ public struct AIChatView: View {
                     }
                     .padding(AppTheme.Spacing.md)
                 }
-                .onChange(of: messages.count) { _ in
+                .onChange(of: messages.count) {
                     withAnimation(AppTheme.Anim.fast) {
                         proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
-                .onChange(of: streamingContent) { _ in
+                .onChange(of: streamingContent) {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }

@@ -50,7 +50,7 @@ public struct ImageConverterView: View {
             .padding(.bottom, AppTheme.Spacing.xxl)
         }
         .preferredColorScheme(.dark)
-        .onChange(of: selectedMode) { _ in clearState() }
+        .onChange(of: selectedMode) { clearState() }
     }
 
     private var statusItems: [ToolStatusItem] {

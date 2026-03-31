@@ -102,7 +102,7 @@ public struct JWTToolView: View {
             StyledPanel(title: "JWT Token") {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                     StyledTextEditor(text: $jwtInput, placeholder: "Paste JWT token here…")
-                        .onChange(of: jwtInput) { _ in
+                        .onChange(of: jwtInput) {
                             decodeJWT()
                         }
 

@@ -81,6 +81,7 @@ public enum AppTheme {
     // MARK: Animations
 
     public enum Anim {
+        public static let hover = Animation.linear(duration: 0.08)
         public static let fast = Animation.easeOut(duration: 0.16)
         public static let normal = Animation.spring(duration: 0.28, bounce: 0.14)
         public static let slow = Animation.spring(duration: 0.42, bounce: 0.12)

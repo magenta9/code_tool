@@ -8,6 +8,8 @@ public struct WordCloudView: View {
     @State private var minWordLength: Int = 2
     @State private var maxWords: Int = 50
     @State private var ignoreStopWords: Bool = true
+    @State private var showHistory = false
+    @State private var wordCloudHistory: [WordCloudHistoryRecord] = []
 
     private let colors: [Color] = [
         Color(red: 0.55, green: 0.36, blue: 0.97),  // violet
@@ -65,6 +67,10 @@ public struct WordCloudView: View {
                     wordCounts = []
                 }
             }
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
         } content: {
             HSplitView {
                 leftPanel
@@ -77,6 +83,18 @@ public struct WordCloudView: View {
             .padding(.bottom, AppTheme.Spacing.xxl)
         }
         .frame(minHeight: 500)
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "Word Cloud History",
+                    items: wordCloudHistory,
+                    onSelect: { record in restoreWordCloud(record) },
+                    onDelete: { record in deleteWordCloudRecord(record) },
+                    onClearAll: { clearWordCloudHistory() }
+                )
+            }
+        }
     }
 
     private var statusItems: [ToolStatusItem] {
@@ -267,6 +285,8 @@ public struct WordCloudView: View {
             .sorted { $0.value > $1.value }
             .prefix(maxWords)
             .map { (word: $0.key, count: $0.value) }
+
+        saveWordCloudHistory()
     }
 
     private func tokenize(_ text: String) -> [String] {
@@ -312,6 +332,55 @@ public struct WordCloudView: View {
         if ratio > 0.7 { return .bold }
         if ratio > 0.4 { return .semibold }
         return .regular
+    }
+
+    // MARK: - History Helpers
+
+    private func saveWordCloudHistory() {
+        let topWordsStr = wordCounts.prefix(20).map { "\($0.word):\($0.count)" }.joined(separator: ", ")
+        let preview = String(inputText.prefix(2000))
+
+        let record = WordCloudHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            inputText: inputText,
+            inputPreview: preview,
+            topWords: topWordsStr,
+            minWordLength: minWordLength,
+            maxWords: maxWords,
+            ignoreStopWords: ignoreStopWords
+        )
+        Task { try? await HistoryStore.shared.save(record) }
+    }
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listWordCloud()) ?? []
+            await MainActor.run { wordCloudHistory = records }
+        }
+    }
+
+    private func restoreWordCloud(_ record: WordCloudHistoryRecord) {
+        inputText = record.inputText
+        minWordLength = record.minWordLength
+        maxWords = record.maxWords
+        ignoreStopWords = record.ignoreStopWords
+        wordCounts = []
+    }
+
+    private func deleteWordCloudRecord(_ record: WordCloudHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteWordCloud(id: record.id)
+            let records = (try? await HistoryStore.shared.listWordCloud()) ?? []
+            await MainActor.run { wordCloudHistory = records }
+        }
+    }
+
+    private func clearWordCloudHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .wordCloud)
+            await MainActor.run { wordCloudHistory = [] }
+        }
     }
 
 }

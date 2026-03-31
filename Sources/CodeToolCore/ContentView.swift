@@ -111,9 +111,8 @@ private struct SidebarDivider: View {
                 .transition(.opacity)
             }
         }
-        .onHover { hovering in
-            withAnimation(AppTheme.Anim.fast) { isHovered = hovering }
-        }
+        .animation(AppTheme.Anim.hover, value: isHovered)
+        .onHover { isHovered = $0 }
     }
 }
 
@@ -178,7 +177,7 @@ private struct SidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { logoHovered = $0 }
-                .animation(AppTheme.Anim.fast, value: logoHovered)
+                .animation(AppTheme.Anim.hover, value: logoHovered)
 
                 if !collapsed {
                     Spacer(minLength: 0)
@@ -205,7 +204,8 @@ private struct SidebarView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .onHover { h in withAnimation(AppTheme.Anim.fast) { toggleHovered = h } }
+                    .animation(AppTheme.Anim.hover, value: toggleHovered)
+                    .onHover { toggleHovered = $0 }
                     .help("收起侧边栏 (⌘\\)")
                     .transition(.opacity)
                 }
@@ -236,7 +236,8 @@ private struct SidebarView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .onHover { h in withAnimation(AppTheme.Anim.fast) { toggleHovered = h } }
+                .animation(AppTheme.Anim.hover, value: toggleHovered)
+                .onHover { toggleHovered = $0 }
                 .help("展开侧边栏 (⌘\\)")
                 .padding(.bottom, AppTheme.Spacing.sm)
             }
@@ -438,7 +439,8 @@ private struct SidebarRow: View {
         }
         .buttonStyle(.plain)
         .help(collapsed ? tool.name : "")
-        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
+        .animation(AppTheme.Anim.hover, value: isHovered)
+        .onHover { isHovered = $0 }
         .animation(AppTheme.Anim.fast, value: isSelected)
     }
 }

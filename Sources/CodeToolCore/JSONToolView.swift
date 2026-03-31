@@ -9,6 +9,8 @@ public struct JSONToolView: View {
     @State private var outputText = ""
     @State private var errorMessage = ""
     @State private var stats = ""
+    @State private var showHistory = false
+    @State private var jsonHistory: [JSONToolHistoryRecord] = []
 
     public init() {}
 
@@ -32,6 +34,10 @@ public struct JSONToolView: View {
             if !outputText.isEmpty {
                 CopyButton("Copy Output", text: outputText)
             }
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
             StyledButton("Clear", systemImage: "trash", variant: .ghost) {
                 clearAll()
             }
@@ -47,6 +53,18 @@ public struct JSONToolView: View {
             .padding(.horizontal, AppTheme.Spacing.xxl)
             .padding(.top, AppTheme.Spacing.xl)
             .padding(.bottom, AppTheme.Spacing.xxl)
+        }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "JSON Tool History",
+                    items: jsonHistory,
+                    onSelect: { record in restoreJSON(record) },
+                    onDelete: { record in deleteJSONRecord(record) },
+                    onClearAll: { clearJSONHistory() }
+                )
+            }
         }
     }
 
@@ -144,8 +162,10 @@ public struct JSONToolView: View {
             let raw = String(data: formatted, encoding: .utf8) ?? ""
             outputText = raw.replacingOccurrences(of: "\\/", with: "/")
             updateStats(object: object, dataSize: data.count)
+            saveToHistory(operation: "format")
         } catch {
-            errorMessage = "Invalid JSON: \(error.localizedDescription)"
+            outputText = ""
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -174,8 +194,10 @@ public struct JSONToolView: View {
             let raw = String(data: minified, encoding: .utf8) ?? ""
             outputText = raw.replacingOccurrences(of: "\\/", with: "/")
             updateStats(object: object, dataSize: data.count)
+            saveToHistory(operation: "minify")
         } catch {
-            errorMessage = "Invalid JSON: \(error.localizedDescription)"
+            outputText = ""
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -207,6 +229,7 @@ public struct JSONToolView: View {
             }
             outputText = "✅ Valid JSON (\(typeName))"
             updateStats(object: object, dataSize: data.count)
+            saveToHistory(operation: "validate")
         } catch {
             outputText = "❌ Invalid JSON"
             errorMessage = error.localizedDescription
@@ -248,6 +271,49 @@ public struct JSONToolView: View {
             return 1 + childMax
         }
         return 0
+    }
+
+    // MARK: - History
+
+    private func saveToHistory(operation: String) {
+        let record = JSONToolHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            operation: operation,
+            inputText: inputText,
+            outputText: outputText,
+            stats: stats
+        )
+        Task { try? await HistoryStore.shared.save(record) }
+    }
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listJSONTool()) ?? []
+            await MainActor.run { jsonHistory = records }
+        }
+    }
+
+    private func restoreJSON(_ record: JSONToolHistoryRecord) {
+        inputText = record.inputText
+        outputText = ""
+        errorMessage = ""
+        stats = ""
+    }
+
+    private func deleteJSONRecord(_ record: JSONToolHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteJSONTool(id: record.id)
+            let records = (try? await HistoryStore.shared.listJSONTool()) ?? []
+            await MainActor.run { jsonHistory = records }
+        }
+    }
+
+    private func clearJSONHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .jsonTool)
+            await MainActor.run { jsonHistory = [] }
+        }
     }
 }
 

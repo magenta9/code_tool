@@ -19,6 +19,8 @@ public struct JWTToolView: View {
     @State private var encodeHeader: String = "{\n  \"alg\": \"HS256\",\n  \"typ\": \"JWT\"\n}"
     @State private var encodePayload: String = "{\n  \"sub\": \"1234567890\",\n  \"name\": \"John Doe\",\n  \"iat\": 1516239022\n}"
     @State private var encodedResult: String = ""
+    @State private var showHistory = false
+    @State private var jwtHistory: [JWTHistoryRecord] = []
 
     // Semantic colors tuned for dark backgrounds
     private let headerColor = Color.orange
@@ -51,6 +53,10 @@ public struct JWTToolView: View {
                     CopyButton("Copy", text: encodedResult)
                 }
             }
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
         } content: {
             Group {
                 switch mode {
@@ -63,6 +69,18 @@ public struct JWTToolView: View {
             .padding(.horizontal, AppTheme.Spacing.xxl)
             .padding(.top, AppTheme.Spacing.xl)
             .padding(.bottom, AppTheme.Spacing.xxl)
+        }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "JWT History",
+                    items: jwtHistory,
+                    onSelect: { record in restoreJWT(record) },
+                    onDelete: { record in deleteJWTRecord(record) },
+                    onClearAll: { clearJWTHistory() }
+                )
+            }
         }
     }
 
@@ -355,6 +373,8 @@ public struct JWTToolView: View {
         } else {
             signatureHex = String(parts[2])
         }
+
+        saveJWTHistory(mode: "Decode")
     }
 
     // MARK: - JWT Encoding Logic
@@ -377,6 +397,8 @@ public struct JWTToolView: View {
         let headerB64 = base64URLEncode(headerData)
         let payloadB64 = base64URLEncode(payloadData)
         encodedResult = "\(headerB64).\(payloadB64).unsigned"
+
+        saveJWTHistory(mode: "Encode")
     }
 
     // MARK: - Base64URL Helpers
@@ -397,6 +419,62 @@ public struct JWTToolView: View {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+
+    // MARK: - History Helpers
+
+    private func saveJWTHistory(mode: String) {
+        var expInfo = ""
+        switch expirationStatus {
+        case .valid(let date): expInfo = "Valid — expires \(date.formatted())"
+        case .expired(let date): expInfo = "Expired — \(date.formatted())"
+        case .none: expInfo = ""
+        }
+
+        let record = JWTHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            mode: mode,
+            jwtInput: mode == "Decode" ? jwtInput : encodedResult,
+            headerJSON: mode == "Decode" ? headerJSON : encodeHeader,
+            payloadJSON: mode == "Decode" ? payloadJSON : encodePayload,
+            expirationInfo: expInfo
+        )
+        Task { try? await HistoryStore.shared.save(record) }
+    }
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listJWT()) ?? []
+            await MainActor.run { jwtHistory = records }
+        }
+    }
+
+    private func restoreJWT(_ record: JWTHistoryRecord) {
+        if record.mode == "Decode" {
+            mode = .decode
+            jwtInput = record.jwtInput
+        } else {
+            mode = .encode
+            encodeHeader = record.headerJSON
+            encodePayload = record.payloadJSON
+            encodedResult = ""
+        }
+    }
+
+    private func deleteJWTRecord(_ record: JWTHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteJWT(id: record.id)
+            let records = (try? await HistoryStore.shared.listJWT()) ?? []
+            await MainActor.run { jwtHistory = records }
+        }
+    }
+
+    private func clearJWTHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .jwtTool)
+            await MainActor.run { jwtHistory = [] }
+        }
     }
 
     // MARK: - Sample Data

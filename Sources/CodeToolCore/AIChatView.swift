@@ -17,6 +17,8 @@ public struct AIChatView: View {
     @State private var lastPromptTokens: Int = 0
     @State private var lastCompletionTokens: Int = 0
     @State private var lastTotalTokens: Int = 0
+    @State private var showHistory = false
+    @State private var chatHistory: [ChatHistoryRecord] = []
 
     public init() {}
 
@@ -28,6 +30,10 @@ public struct AIChatView: View {
             systemImage: "bubble.left.and.bubble.right",
             statusItems: statusItems
         ) {
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
             StyledButton("Clear Chat", systemImage: "trash", variant: .ghost) {
                 clearChat()
             }
@@ -70,6 +76,18 @@ public struct AIChatView: View {
                     .padding(.horizontal, AppTheme.Spacing.xxl)
                     .padding(.top, AppTheme.Spacing.md)
                     .padding(.bottom, AppTheme.Spacing.xxl)
+            }
+        }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "Chat History",
+                    items: chatHistory,
+                    onSelect: { record in restoreChat(record) },
+                    onDelete: { record in deleteChat(record) },
+                    onClearAll: { clearChatHistory() }
+                )
             }
         }
     }
@@ -380,6 +398,40 @@ public struct AIChatView: View {
 
     private var lastAssistantReply: String {
         messages.last(where: { $0.role == "assistant" })?.content ?? ""
+    }
+
+    // MARK: - History
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listChat()) ?? []
+            await MainActor.run { chatHistory = records }
+        }
+    }
+
+    private func restoreChat(_ record: ChatHistoryRecord) {
+        messages = record.messages.map { (role: $0.role, content: $0.content) }
+        systemPrompt = record.systemPrompt
+        lastPromptTokens = record.promptTokens
+        lastCompletionTokens = record.completionTokens
+        lastTotalTokens = record.totalTokens
+        errorMessage = ""
+        if !record.systemPrompt.isEmpty { showSystemPrompt = true }
+    }
+
+    private func deleteChat(_ record: ChatHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteChat(id: record.id)
+            let records = (try? await HistoryStore.shared.listChat()) ?? []
+            await MainActor.run { chatHistory = records }
+        }
+    }
+
+    private func clearChatHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .chat)
+            await MainActor.run { chatHistory = [] }
+        }
     }
 }
 

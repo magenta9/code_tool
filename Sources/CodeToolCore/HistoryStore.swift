@@ -83,7 +83,91 @@ public enum HistoryCategory: String, CaseIterable {
     case speech
     case image
     case music
+    // Dev tools
+    case jsonTool
+    case imageConverter
+    case jsonDiff
+    case timestampConverter
+    case jwtTool
+    case wordCloud
 }
+
+// MARK: - Dev Tool History Records
+
+/// History record for JSON Tool operations.
+public struct JSONToolHistoryRecord: Codable, Identifiable {
+    public let id: UUID
+    public let createdAt: Date
+    public let operation: String
+    public let inputText: String
+    public let outputText: String
+    public let stats: String
+}
+
+/// History record for Image Converter operations.
+public struct ImageConverterHistoryRecord: Codable, Identifiable {
+    public let id: UUID
+    public let createdAt: Date
+    public let mode: String
+    public let base64Text: String
+    public let base64Preview: String
+    public let imageInfo: String
+    public let imageFileName: String?
+}
+
+/// History record for JSON Diff operations.
+public struct JSONDiffHistoryRecord: Codable, Identifiable {
+    public let id: UUID
+    public let createdAt: Date
+    public let leftText: String
+    public let rightText: String
+    public let totalDiffs: Int
+    public let addedCount: Int
+    public let removedCount: Int
+    public let modifiedCount: Int
+}
+
+/// History record for Timestamp Converter operations.
+public struct TimestampHistoryRecord: Codable, Identifiable {
+    public let id: UUID
+    public let createdAt: Date
+    public let inputValue: String
+    public let direction: String
+    public let selectedDateISO8601: String?
+    public let resultISO8601: String
+    public let resultLocal: String
+    public let resultTimestamp: String
+}
+
+/// History record for JWT Tool operations.
+public struct JWTHistoryRecord: Codable, Identifiable {
+    public let id: UUID
+    public let createdAt: Date
+    public let mode: String
+    public let jwtInput: String
+    public let headerJSON: String
+    public let payloadJSON: String
+    public let expirationInfo: String
+}
+
+/// History record for Word Cloud operations.
+public struct WordCloudHistoryRecord: Codable, Identifiable {
+    public let id: UUID
+    public let createdAt: Date
+    public let inputText: String
+    public let inputPreview: String
+    public let topWords: String
+    public let minWordLength: Int
+    public let maxWords: Int
+    public let ignoreStopWords: Bool
+}
+
+extension JSONToolHistoryRecord: HistoryRecord {}
+extension ImageConverterHistoryRecord: HistoryRecord {}
+extension JSONDiffHistoryRecord: HistoryRecord {}
+extension TimestampHistoryRecord: HistoryRecord {}
+extension JWTHistoryRecord: HistoryRecord {}
+extension WordCloudHistoryRecord: HistoryRecord {}
 
 // MARK: - HistoryStore
 
@@ -181,6 +265,47 @@ public actor HistoryStore {
         }
     }
 
+    // MARK: - Dev Tool Save
+
+    public func save(_ record: JSONToolHistoryRecord) throws {
+        let dir = try categoryURL(.jsonTool)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+    }
+
+    public func save(_ record: ImageConverterHistoryRecord, imageData: Data?) throws {
+        let dir = try categoryURL(.imageConverter)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+        if let imageData, let imageFileName = record.imageFileName {
+            try imageData.write(to: dir.appendingPathComponent(imageFileName))
+        }
+    }
+
+    public func save(_ record: JSONDiffHistoryRecord) throws {
+        let dir = try categoryURL(.jsonDiff)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+    }
+
+    public func save(_ record: TimestampHistoryRecord) throws {
+        let dir = try categoryURL(.timestampConverter)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+    }
+
+    public func save(_ record: JWTHistoryRecord) throws {
+        let dir = try categoryURL(.jwtTool)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+    }
+
+    public func save(_ record: WordCloudHistoryRecord) throws {
+        let dir = try categoryURL(.wordCloud)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+    }
+
     // MARK: - Query
 
     /// List all records for a category, newest first.
@@ -200,6 +325,32 @@ public actor HistoryStore {
         try loadRecords(category: .music)
     }
 
+    // MARK: - Dev Tool List
+
+    public func listJSONTool() throws -> [JSONToolHistoryRecord] {
+        try loadRecords(category: .jsonTool)
+    }
+
+    public func listImageConverter() throws -> [ImageConverterHistoryRecord] {
+        try loadRecords(category: .imageConverter)
+    }
+
+    public func listJSONDiff() throws -> [JSONDiffHistoryRecord] {
+        try loadRecords(category: .jsonDiff)
+    }
+
+    public func listTimestamp() throws -> [TimestampHistoryRecord] {
+        try loadRecords(category: .timestampConverter)
+    }
+
+    public func listJWT() throws -> [JWTHistoryRecord] {
+        try loadRecords(category: .jwtTool)
+    }
+
+    public func listWordCloud() throws -> [WordCloudHistoryRecord] {
+        try loadRecords(category: .wordCloud)
+    }
+
     private func loadRecords<T: HistoryRecord>(category: HistoryCategory) throws -> [T] {
         let dir = try categoryURL(category)
         let urls = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
@@ -207,9 +358,14 @@ public actor HistoryStore {
 
         var records: [T] = []
         for url in urls {
-            let data = try Data(contentsOf: url)
-            let record = try decoder.decode(T.self, from: data)
-            records.append(record)
+            do {
+                let data = try Data(contentsOf: url)
+                let record = try decoder.decode(T.self, from: data)
+                records.append(record)
+            } catch {
+                // Skip corrupted records — don't let one bad file block the whole list
+                continue
+            }
         }
 
         return records.sorted { $0.createdAt > $1.createdAt }
@@ -243,6 +399,44 @@ public actor HistoryStore {
     public func deleteMusic(id: UUID) throws {
         let dir = try categoryURL(.music)
         removeFiles(in: dir, prefix: id.uuidString)
+    }
+
+    // MARK: - Dev Tool Delete
+
+    public func deleteJSONTool(id: UUID) throws {
+        let dir = try categoryURL(.jsonTool)
+        try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
+    }
+
+    public func deleteImageConverter(id: UUID) throws {
+        let dir = try categoryURL(.imageConverter)
+        let jsonURL = dir.appendingPathComponent("\(id.uuidString).json")
+        if let data = try? Data(contentsOf: jsonURL),
+           let record = try? decoder.decode(ImageConverterHistoryRecord.self, from: data),
+           let imageFileName = record.imageFileName {
+            try? fileManager.removeItem(at: dir.appendingPathComponent(imageFileName))
+        }
+        try? fileManager.removeItem(at: jsonURL)
+    }
+
+    public func deleteJSONDiff(id: UUID) throws {
+        let dir = try categoryURL(.jsonDiff)
+        try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
+    }
+
+    public func deleteTimestamp(id: UUID) throws {
+        let dir = try categoryURL(.timestampConverter)
+        try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
+    }
+
+    public func deleteJWT(id: UUID) throws {
+        let dir = try categoryURL(.jwtTool)
+        try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
+    }
+
+    public func deleteWordCloud(id: UUID) throws {
+        let dir = try categoryURL(.wordCloud)
+        try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
     }
 
     private func removeFiles(in directory: URL, prefix: String) {

@@ -14,6 +14,8 @@ public struct ImageConverterView: View {
     @State private var imageInfo = ""
     @State private var errorMessage = ""
     @State private var sourceFilePath: String?
+    @State private var showHistory = false
+    @State private var converterHistory: [ImageConverterHistoryRecord] = []
 
     public init() {}
 
@@ -36,6 +38,10 @@ public struct ImageConverterView: View {
                     clearState()
                 }
             }
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
         } content: {
             HSplitView {
                 switch selectedMode {
@@ -51,6 +57,18 @@ public struct ImageConverterView: View {
         }
         .preferredColorScheme(.dark)
         .onChange(of: selectedMode) { clearState() }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "Image Converter History",
+                    items: converterHistory,
+                    onSelect: { record in restoreConverter(record) },
+                    onDelete: { record in deleteConverterRecord(record) },
+                    onClearAll: { clearConverterHistory() }
+                )
+            }
+        }
     }
 
     private var statusItems: [ToolStatusItem] {
@@ -297,6 +315,7 @@ public struct ImageConverterView: View {
             sourceFilePath = url.path
             base64Text = data.base64EncodedString()
             imageInfo = buildImageInfo(image: image, data: data, url: url)
+            saveConverterHistory(mode: "imageToBase64", imageData: data)
         } catch {
             errorMessage = "Failed to read file: \(error.localizedDescription)"
         }
@@ -332,6 +351,7 @@ public struct ImageConverterView: View {
 
         selectedImage = image
         imageInfo = buildImageInfo(image: image, data: data, url: nil)
+        saveConverterHistory(mode: "base64ToImage", imageData: data)
     }
 
     private func saveImageToFile() {
@@ -414,6 +434,71 @@ public struct ImageConverterView: View {
 
     private var supportedImageTypes: [UTType] {
         [.png, .jpeg, .gif, .webP]
+    }
+
+    // MARK: - History
+
+    private func saveConverterHistory(mode: String, imageData: Data?) {
+        let recordID = UUID()
+        let imageFileName: String? = imageData != nil ? "\(recordID.uuidString)-image.png" : nil
+        let record = ImageConverterHistoryRecord(
+            id: recordID,
+            createdAt: Date(),
+            mode: mode,
+            base64Text: mode == "base64ToImage" ? base64Text : "",
+            base64Preview: String(base64Text.prefix(500)),
+            imageInfo: imageInfo,
+            imageFileName: imageFileName
+        )
+        Task { try? await HistoryStore.shared.save(record, imageData: imageData) }
+    }
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listImageConverter()) ?? []
+            await MainActor.run { converterHistory = records }
+        }
+    }
+
+    private func restoreConverter(_ record: ImageConverterHistoryRecord) {
+        let mode: Mode = record.mode == "imageToBase64" ? .imageToBase64 : .base64ToImage
+        selectedMode = mode
+        base64Text = record.base64Text
+        imageInfo = record.imageInfo
+        errorMessage = ""
+
+        if let imageFileName = record.imageFileName {
+            Task {
+                if let data = try? await HistoryStore.shared.loadData(category: .imageConverter, fileName: imageFileName),
+                   let image = NSImage(data: data) {
+                    await MainActor.run { selectedImage = image }
+                } else {
+                    await MainActor.run {
+                        selectedImage = nil
+                        if record.base64Text.isEmpty {
+                            errorMessage = "Image file missing — parameters restored."
+                        }
+                    }
+                }
+            }
+        } else {
+            selectedImage = nil
+        }
+    }
+
+    private func deleteConverterRecord(_ record: ImageConverterHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteImageConverter(id: record.id)
+            let records = (try? await HistoryStore.shared.listImageConverter()) ?? []
+            await MainActor.run { converterHistory = records }
+        }
+    }
+
+    private func clearConverterHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .imageConverter)
+            await MainActor.run { converterHistory = [] }
+        }
     }
 }
 

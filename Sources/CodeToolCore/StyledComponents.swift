@@ -2,6 +2,47 @@ import SwiftUI
 
 #if canImport(AppKit)
     import AppKit
+
+    // A plain NSTextView wrapper that disables macOS smart-quote / smart-dash substitution.
+    private struct PlainNSTextEditor: NSViewRepresentable {
+        @Binding var text: String
+
+        func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+        func makeNSView(context: Context) -> NSScrollView {
+            let scrollView = NSTextView.scrollableTextView()
+            guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
+            textView.isAutomaticQuoteSubstitutionEnabled = false
+            textView.isAutomaticDashSubstitutionEnabled = false
+            textView.isAutomaticTextReplacementEnabled = false
+            textView.isRichText = false
+            textView.isVerticallyResizable = true
+            textView.isHorizontallyResizable = false
+            textView.textContainer?.widthTracksTextView = true
+            textView.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            textView.textColor = NSColor.labelColor
+            textView.backgroundColor = .clear
+            textView.drawsBackground = false
+            textView.delegate = context.coordinator
+            return scrollView
+        }
+
+        func updateNSView(_ nsView: NSScrollView, context: Context) {
+            guard let textView = nsView.documentView as? NSTextView else { return }
+            if textView.string != text {
+                textView.string = text
+            }
+        }
+
+        class Coordinator: NSObject, NSTextViewDelegate {
+            var parent: PlainNSTextEditor
+            init(_ parent: PlainNSTextEditor) { self.parent = parent }
+            func textDidChange(_ notification: Notification) {
+                guard let tv = notification.object as? NSTextView else { return }
+                parent.text = tv.string
+            }
+        }
+    }
 #endif
 
 public struct StyledToolbar<Content: View>: View {
@@ -243,11 +284,16 @@ public struct StyledTextEditor: View {
     public var body: some View {
         ZStack(alignment: .topLeading) {
             if isEditable {
+                #if canImport(AppKit)
+                PlainNSTextEditor(text: $text)
+                    .padding(AppTheme.Spacing.md)
+                #else
                 TextEditor(text: $text)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
                     .scrollContentBackground(.hidden)
                     .padding(AppTheme.Spacing.md)
+                #endif
             } else {
                 ScrollView {
                     Text(text)

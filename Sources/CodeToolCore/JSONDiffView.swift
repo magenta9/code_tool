@@ -136,6 +136,8 @@ public struct JSONDiffView: View {
     @State private var diffs: [DiffItem] = []
     @State private var errorMessage: String?
     @State private var hasCompared: Bool = false
+    @State private var showHistory = false
+    @State private var diffHistory: [JSONDiffHistoryRecord] = []
 
     public init() {}
 
@@ -167,6 +169,10 @@ public struct JSONDiffView: View {
                 errorMessage = nil
                 hasCompared = false
             }
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
         } content: {
             VStack(spacing: AppTheme.Spacing.lg) {
                 HSplitView {
@@ -185,6 +191,18 @@ public struct JSONDiffView: View {
             .padding(.horizontal, AppTheme.Spacing.xxl)
             .padding(.top, AppTheme.Spacing.xl)
             .padding(.bottom, AppTheme.Spacing.xxl)
+        }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "JSON Diff History",
+                    items: diffHistory,
+                    onSelect: { record in restoreDiff(record) },
+                    onDelete: { record in deleteDiffRecord(record) },
+                    onClearAll: { clearDiffHistory() }
+                )
+            }
         }
     }
 
@@ -334,6 +352,51 @@ public struct JSONDiffView: View {
         }
 
         diffs = compareJSON(leftObj, rightObj)
+        saveToHistory()
+    }
+
+    private func saveToHistory() {
+        let record = JSONDiffHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            leftText: leftText,
+            rightText: rightText,
+            totalDiffs: diffs.count,
+            addedCount: diffs.filter { $0.type == .added }.count,
+            removedCount: diffs.filter { $0.type == .removed }.count,
+            modifiedCount: diffs.filter { $0.type == .modified }.count
+        )
+        Task { try? await HistoryStore.shared.save(record) }
+    }
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listJSONDiff()) ?? []
+            await MainActor.run { diffHistory = records }
+        }
+    }
+
+    private func restoreDiff(_ record: JSONDiffHistoryRecord) {
+        leftText = record.leftText
+        rightText = record.rightText
+        diffs = []
+        errorMessage = nil
+        hasCompared = false
+    }
+
+    private func deleteDiffRecord(_ record: JSONDiffHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteJSONDiff(id: record.id)
+            let records = (try? await HistoryStore.shared.listJSONDiff()) ?? []
+            await MainActor.run { diffHistory = records }
+        }
+    }
+
+    private func clearDiffHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .jsonDiff)
+            await MainActor.run { diffHistory = [] }
+        }
     }
 
     private func loadSampleData() {

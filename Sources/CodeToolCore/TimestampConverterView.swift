@@ -5,6 +5,8 @@ public struct TimestampConverterView: View {
     @State private var timestampInput = ""
     @State private var selectedDate = Date()
     @State private var currentTimestamp: TimeInterval = Date().timeIntervalSince1970
+    @State private var showHistory = false
+    @State private var timestampHistory: [TimestampHistoryRecord] = []
 
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -21,6 +23,11 @@ public struct TimestampConverterView: View {
             StyledButton("Capture Now", systemImage: "clock.badge", variant: .primary) {
                 timestampInput = "\(Int(currentTimestamp))"
                 selectedDate = Date()
+                saveTimestampHistory(direction: "timestampToDate", inputValue: "\(Int(currentTimestamp))")
+            }
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
             }
         } content: {
             ScrollView {
@@ -37,6 +44,18 @@ public struct TimestampConverterView: View {
         .onReceive(timer) { _ in
             currentTimestamp = Date().timeIntervalSince1970
         }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "Timestamp History",
+                    items: timestampHistory,
+                    onSelect: { record in restoreTimestamp(record) },
+                    onDelete: { record in deleteTimestampRecord(record) },
+                    onClearAll: { clearTimestampHistory() }
+                )
+            }
+        }
     }
 
     private var statusItems: [ToolStatusItem] {
@@ -44,6 +63,88 @@ public struct TimestampConverterView: View {
             ToolStatusItem(title: "\(Int(currentTimestamp)) s", systemImage: "clock.arrow.circlepath", tint: AppTheme.accent),
             ToolStatusItem(title: TimeZone.current.identifier, systemImage: "globe", tint: AppTheme.accentWarm)
         ]
+    }
+
+    // MARK: - History Helpers
+
+    private func saveTimestampHistory(direction: String, inputValue: String) {
+        let date: Date
+        let iso8601: String
+        let local: String
+        let timestamp: String
+
+        if direction == "timestampToDate", let parsed = Self.parseTimestampStatic(inputValue) {
+            date = parsed.date
+        } else {
+            date = selectedDate
+        }
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        iso8601 = isoFormatter.string(from: date)
+
+        let localFormatter = DateFormatter()
+        localFormatter.dateStyle = .full
+        localFormatter.timeStyle = .long
+        localFormatter.timeZone = .current
+        local = localFormatter.string(from: date)
+
+        timestamp = "\(Int(date.timeIntervalSince1970))"
+
+        let record = TimestampHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            inputValue: inputValue,
+            direction: direction,
+            selectedDateISO8601: direction == "dateToTimestamp" ? iso8601 : nil,
+            resultISO8601: iso8601,
+            resultLocal: local,
+            resultTimestamp: timestamp
+        )
+        Task { try? await HistoryStore.shared.save(record) }
+    }
+
+    private static func parseTimestampStatic(_ input: String) -> (date: Date, isMilliseconds: Bool)? {
+        let trimmed = input.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, let value = Double(trimmed), value.isFinite else { return nil }
+        let threshold: Double = 9_999_999_999
+        let isMilliseconds = abs(value) > threshold
+        let seconds = isMilliseconds ? value / 1000.0 : value
+        return (Date(timeIntervalSince1970: seconds), isMilliseconds)
+    }
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listTimestamp()) ?? []
+            await MainActor.run { timestampHistory = records }
+        }
+    }
+
+    private func restoreTimestamp(_ record: TimestampHistoryRecord) {
+        if record.direction == "timestampToDate" {
+            timestampInput = record.inputValue
+        } else if let iso = record.selectedDateISO8601 {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: iso) {
+                selectedDate = date
+            }
+        }
+    }
+
+    private func deleteTimestampRecord(_ record: TimestampHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteTimestamp(id: record.id)
+            let records = (try? await HistoryStore.shared.listTimestamp()) ?? []
+            await MainActor.run { timestampHistory = records }
+        }
+    }
+
+    private func clearTimestampHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .timestampConverter)
+            await MainActor.run { timestampHistory = [] }
+        }
     }
 }
 

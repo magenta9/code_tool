@@ -19,6 +19,8 @@ public struct AIMusicView: View {
     @State private var bitrate: Int = 256000
     @State private var isInstrumental: Bool = false
     @State private var latestReferenceID: String = ""
+    @State private var showHistory = false
+    @State private var musicHistory: [MusicHistoryRecord] = []
 
     public init() {}
 
@@ -68,6 +70,11 @@ public struct AIMusicView: View {
             StyledButton("Clear", systemImage: "trash", variant: .ghost) {
                 clearAll()
             }
+
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
         } content: {
             HSplitView {
                 leftPanel
@@ -78,6 +85,18 @@ public struct AIMusicView: View {
             .padding(.horizontal, AppTheme.Spacing.xxl)
             .padding(.top, AppTheme.Spacing.xl)
             .padding(.bottom, AppTheme.Spacing.xxl)
+        }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "Music History",
+                    items: musicHistory,
+                    onSelect: { record in restoreMusic(record) },
+                    onDelete: { record in deleteMusicRecord(record) },
+                    onClearAll: { clearMusicHistory() }
+                )
+            }
         }
     }
 
@@ -466,6 +485,61 @@ public struct AIMusicView: View {
         errorMessage = ""
         latestReferenceID = ""
         isInstrumental = false
+    }
+
+    // MARK: - History
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listMusic()) ?? []
+            await MainActor.run { musicHistory = records }
+        }
+    }
+
+    private func restoreMusic(_ record: MusicHistoryRecord) {
+        promptText = record.prompt
+        lyricsText = record.lyrics
+        isInstrumental = record.isInstrumental
+        outputFormat = record.outputFormat
+        sampleRate = record.sampleRate
+        bitrate = record.bitrate
+        errorMessage = ""
+
+        // Try to load audio
+        if let audioFileName = record.audioFileName {
+            Task {
+                if let data = try? await HistoryStore.shared.loadData(category: .music, fileName: audioFileName) {
+                    await MainActor.run {
+                        audioData = data
+                        preparePlayer()
+                    }
+                } else {
+                    await MainActor.run {
+                        audioData = nil
+                        audioPlayer = nil
+                        errorMessage = "Audio file missing — text and parameters restored. Regenerate to create audio."
+                    }
+                }
+            }
+        } else {
+            audioData = nil
+            audioPlayer = nil
+        }
+    }
+
+    private func deleteMusicRecord(_ record: MusicHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteMusic(id: record.id)
+            let records = (try? await HistoryStore.shared.listMusic()) ?? []
+            await MainActor.run { musicHistory = records }
+        }
+    }
+
+    private func clearMusicHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .music)
+            await MainActor.run { musicHistory = [] }
+        }
     }
 }
 

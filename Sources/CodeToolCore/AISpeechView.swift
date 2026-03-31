@@ -18,6 +18,8 @@ public struct AISpeechView: View {
     @State private var pitch: Double = 0
     @State private var outputFormat: String = "mp3"
     @State private var latestReferenceID: String = ""
+    @State private var showHistory = false
+    @State private var speechHistory: [SpeechHistoryRecord] = []
 
     private let voices: [(id: String, name: String)] = [
         ("male-qn-qingse", "青涩青年"),
@@ -57,6 +59,11 @@ public struct AISpeechView: View {
                 }
             }
 
+            StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                loadHistory()
+                showHistory = true
+            }
+
             StyledButton("Clear", systemImage: "trash", variant: .ghost) {
                 clearAll()
             }
@@ -77,6 +84,18 @@ public struct AISpeechView: View {
             .padding(.bottom, AppTheme.Spacing.xxl)
         }
         .frame(minHeight: 500)
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "Speech History",
+                    items: speechHistory,
+                    onSelect: { record in restoreSpeech(record) },
+                    onDelete: { record in deleteSpeechRecord(record) },
+                    onClearAll: { clearSpeechHistory() }
+                )
+            }
+        }
     }
 
     // MARK: - Status Items
@@ -442,6 +461,52 @@ public struct AISpeechView: View {
 
     private func formattedSize(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+
+    // MARK: - History
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listSpeech()) ?? []
+            await MainActor.run { speechHistory = records }
+        }
+    }
+
+    private func restoreSpeech(_ record: SpeechHistoryRecord) {
+        inputText = record.inputText
+        selectedVoice = record.voice
+        speed = record.speed
+        volume = record.volume
+        pitch = record.pitch
+        outputFormat = record.outputFormat
+        errorMessage = ""
+
+        // Try to load audio
+        Task {
+            if let data = try? await HistoryStore.shared.loadData(category: .speech, fileName: record.audioFileName) {
+                await MainActor.run { audioData = data }
+            } else {
+                await MainActor.run {
+                    audioData = nil
+                    errorMessage = "Audio file missing — text and parameters restored. Regenerate to create audio."
+                }
+            }
+        }
+    }
+
+    private func deleteSpeechRecord(_ record: SpeechHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteSpeech(id: record.id)
+            let records = (try? await HistoryStore.shared.listSpeech()) ?? []
+            await MainActor.run { speechHistory = records }
+        }
+    }
+
+    private func clearSpeechHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .speech)
+            await MainActor.run { speechHistory = [] }
+        }
     }
 }
 

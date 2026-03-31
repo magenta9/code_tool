@@ -12,6 +12,8 @@ public struct AIImageView: View {
     @State private var aspectRatio: String = "1:1"
     @State private var imageCount: Int = 1
     @State private var latestReferenceID: String = ""
+    @State private var showHistory = false
+    @State private var imageHistory: [ImageHistoryRecord] = []
 
     private let aspectRatios = ["1:1", "16:9", "9:16", "4:3", "3:4"]
 
@@ -100,6 +102,11 @@ public struct AIImageView: View {
                     clearAll()
                 }
                 .disabled(promptText.isEmpty && generatedImages.isEmpty && errorMessage.isEmpty)
+
+                StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
+                    loadHistory()
+                    showHistory = true
+                }
             }
         } content: {
             VStack(spacing: 0) {
@@ -131,6 +138,18 @@ public struct AIImageView: View {
             .padding(.horizontal, AppTheme.Spacing.xxl)
             .padding(.top, AppTheme.Spacing.xl)
             .padding(.bottom, AppTheme.Spacing.xxl)
+        }
+        .overlay {
+            if showHistory {
+                HistoryDrawer(
+                    isPresented: $showHistory,
+                    title: "Image History",
+                    items: imageHistory,
+                    onSelect: { record in restoreImage(record) },
+                    onDelete: { record in deleteImageRecord(record) },
+                    onClearAll: { clearImageHistory() }
+                )
+            }
         }
     }
 
@@ -423,6 +442,53 @@ public struct AIImageView: View {
         generatedImages = []
         errorMessage = ""
         latestReferenceID = ""
+    }
+
+    // MARK: - History
+
+    private func loadHistory() {
+        Task {
+            let records = (try? await HistoryStore.shared.listImage()) ?? []
+            await MainActor.run { imageHistory = records }
+        }
+    }
+
+    private func restoreImage(_ record: ImageHistoryRecord) {
+        promptText = record.prompt
+        aspectRatio = record.aspectRatio
+        imageCount = record.imageCount
+        errorMessage = ""
+
+        Task {
+            var images: [NSImage] = []
+            for fileName in record.imageFileNames {
+                if let data = try? await HistoryStore.shared.loadData(category: .image, fileName: fileName),
+                   let image = NSImage(data: data) {
+                    images.append(image)
+                }
+            }
+            await MainActor.run {
+                generatedImages = images
+                if images.isEmpty && !record.imageFileNames.isEmpty {
+                    errorMessage = "Image files missing — prompt and parameters restored. Regenerate to create images."
+                }
+            }
+        }
+    }
+
+    private func deleteImageRecord(_ record: ImageHistoryRecord) {
+        Task {
+            try? await HistoryStore.shared.deleteImage(id: record.id)
+            let records = (try? await HistoryStore.shared.listImage()) ?? []
+            await MainActor.run { imageHistory = records }
+        }
+    }
+
+    private func clearImageHistory() {
+        Task {
+            try? await HistoryStore.shared.clear(category: .image)
+            await MainActor.run { imageHistory = [] }
+        }
     }
 }
 

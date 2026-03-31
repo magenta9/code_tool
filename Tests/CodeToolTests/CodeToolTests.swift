@@ -60,28 +60,18 @@ final class CodeToolTests: XCTestCase {
     // MARK: - ToolRegistry tests
 
     private var savedDefaults: [Tool] = []
-    private var savedAPIKey = ""
-    private var savedBaseURL = ""
-    private var savedChatModel = ""
-    private var savedSpeechModel = ""
-    private var savedImageModel = ""
-    private var savedMusicModel = ""
+    private var savedConfig: MiniMaxConfig = .defaults
     private var temporaryLogDirectoryURL: URL?
 
     override func setUp() {
         super.setUp()
         savedDefaults = ToolRegistry.defaults
 
-        let provider = MiniMaxProvider.shared
-        savedAPIKey = provider.apiKey
-        savedBaseURL = provider.baseURL
-        savedChatModel = provider.chatModel
-        savedSpeechModel = provider.speechModel
-        savedImageModel = provider.imageModel
-        savedMusicModel = provider.musicModel
+        let store = MiniMaxSettingsStore.shared
+        savedConfig = store.currentConfig
 
-        provider.apiKey = "test-api-key"
-        provider.baseURL = "https://example.com/v1"
+        store.apiKey = "test-api-key"
+        store.baseURL = "https://example.com/v1"
 
         URLProtocol.registerClass(MockURLProtocol.self)
         MockURLProtocol.requestHandler = nil
@@ -103,13 +93,13 @@ final class CodeToolTests: XCTestCase {
     override func tearDown() {
         ToolRegistry.defaults = savedDefaults
 
-        let provider = MiniMaxProvider.shared
-        provider.apiKey = savedAPIKey
-        provider.baseURL = savedBaseURL
-        provider.chatModel = savedChatModel
-        provider.speechModel = savedSpeechModel
-        provider.imageModel = savedImageModel
-        provider.musicModel = savedMusicModel
+        let store = MiniMaxSettingsStore.shared
+        store.apiKey = savedConfig.apiKey
+        store.baseURL = savedConfig.baseURL
+        store.chatModel = savedConfig.chatModel
+        store.speechModel = savedConfig.speechModel
+        store.imageModel = savedConfig.imageModel
+        store.musicModel = savedConfig.musicModel
 
         MockURLProtocol.requestHandler = nil
         URLProtocol.unregisterClass(MockURLProtocol.self)
@@ -480,7 +470,7 @@ final class CodeToolTests: XCTestCase {
             let bodyObject = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
 
-            XCTAssertEqual(bodyObject["model"] as? String, MiniMaxProvider.shared.musicModel)
+            XCTAssertEqual(bodyObject["model"] as? String, MiniMaxSettingsStore.shared.musicModel)
             XCTAssertEqual(bodyObject["output_format"] as? String, "url")
             XCTAssertEqual(bodyObject["lyrics_optimizer"] as? Bool, true)
             XCTAssertNil(bodyObject["lyrics"])

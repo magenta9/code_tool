@@ -1,8 +1,49 @@
 import Foundation
+import Observation
 
-/// Manages MiniMax API provider configuration with UserDefaults persistence.
-public final class MiniMaxProvider: ObservableObject {
-    public static let shared = MiniMaxProvider()
+/// Immutable snapshot of MiniMax provider configuration.
+public struct MiniMaxConfig: Sendable, Equatable {
+    public var apiKey: String
+    public var baseURL: String
+    public var chatModel: String
+    public var speechModel: String
+    public var imageModel: String
+    public var musicModel: String
+
+    public var isConfigured: Bool {
+        !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    public static let defaults = MiniMaxConfig(
+        apiKey: "",
+        baseURL: "https://api.minimaxi.com/v1",
+        chatModel: "MiniMax-M2.7",
+        speechModel: "speech-2.8-hd",
+        imageModel: "image-01",
+        musicModel: "music-2.5+"
+    )
+
+    public init(
+        apiKey: String = "",
+        baseURL: String = "https://api.minimaxi.com/v1",
+        chatModel: String = "MiniMax-M2.7",
+        speechModel: String = "speech-2.8-hd",
+        imageModel: String = "image-01",
+        musicModel: String = "music-2.5+"
+    ) {
+        self.apiKey = apiKey
+        self.baseURL = baseURL
+        self.chatModel = chatModel
+        self.speechModel = speechModel
+        self.imageModel = imageModel
+        self.musicModel = musicModel
+    }
+}
+
+/// Manages MiniMax API provider configuration with optional UserDefaults persistence.
+@Observable
+public final class MiniMaxSettingsStore {
+    public static let shared = MiniMaxSettingsStore()
 
     private enum Keys {
         static let apiKey = "minimax_api_key"
@@ -13,57 +54,80 @@ public final class MiniMaxProvider: ObservableObject {
         static let musicModel = "minimax_music_model"
     }
 
-    public struct Defaults {
-        public static let baseURL = "https://api.minimaxi.com/v1"
-        public static let chatModel = "MiniMax-M2.7"
-        public static let speechModel = "speech-2.8-hd"
-        public static let imageModel = "image-01"
-        public static let musicModel = "music-2.5+"
+    private let persisting: Bool
+
+    public var apiKey: String {
+        didSet { if persisting { UserDefaults.standard.set(apiKey, forKey: Keys.apiKey) } }
     }
 
-    @Published public var apiKey: String {
-        didSet { UserDefaults.standard.set(apiKey, forKey: Keys.apiKey) }
+    public var baseURL: String {
+        didSet { if persisting { UserDefaults.standard.set(baseURL, forKey: Keys.baseURL) } }
     }
 
-    @Published public var baseURL: String {
-        didSet { UserDefaults.standard.set(baseURL, forKey: Keys.baseURL) }
+    public var chatModel: String {
+        didSet { if persisting { UserDefaults.standard.set(chatModel, forKey: Keys.chatModel) } }
     }
 
-    @Published public var chatModel: String {
-        didSet { UserDefaults.standard.set(chatModel, forKey: Keys.chatModel) }
+    public var speechModel: String {
+        didSet { if persisting { UserDefaults.standard.set(speechModel, forKey: Keys.speechModel) } }
     }
 
-    @Published public var speechModel: String {
-        didSet { UserDefaults.standard.set(speechModel, forKey: Keys.speechModel) }
+    public var imageModel: String {
+        didSet { if persisting { UserDefaults.standard.set(imageModel, forKey: Keys.imageModel) } }
     }
 
-    @Published public var imageModel: String {
-        didSet { UserDefaults.standard.set(imageModel, forKey: Keys.imageModel) }
-    }
-
-    @Published public var musicModel: String {
-        didSet { UserDefaults.standard.set(musicModel, forKey: Keys.musicModel) }
+    public var musicModel: String {
+        didSet { if persisting { UserDefaults.standard.set(musicModel, forKey: Keys.musicModel) } }
     }
 
     public var isConfigured: Bool {
         !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private init() {
-        let defaults = UserDefaults.standard
-        self.apiKey = defaults.string(forKey: Keys.apiKey) ?? ""
-        self.baseURL = defaults.string(forKey: Keys.baseURL) ?? Defaults.baseURL
-        self.chatModel = defaults.string(forKey: Keys.chatModel) ?? Defaults.chatModel
-        self.speechModel = defaults.string(forKey: Keys.speechModel) ?? Defaults.speechModel
-        self.imageModel = defaults.string(forKey: Keys.imageModel) ?? Defaults.imageModel
-        self.musicModel = defaults.string(forKey: Keys.musicModel) ?? Defaults.musicModel
+    /// Returns an immutable snapshot of the current configuration.
+    public var currentConfig: MiniMaxConfig {
+        MiniMaxConfig(
+            apiKey: apiKey,
+            baseURL: baseURL,
+            chatModel: chatModel,
+            speechModel: speechModel,
+            imageModel: imageModel,
+            musicModel: musicModel
+        )
+    }
+
+    /// Creates a settings store.
+    /// - Parameter persisting: When `true` (default), values are read from and written to `UserDefaults`.
+    ///   Pass `false` for test isolation so no shared state leaks between runs.
+    public init(persisting: Bool = true) {
+        self.persisting = persisting
+        if persisting {
+            let ud = UserDefaults.standard
+            self.apiKey = ud.string(forKey: Keys.apiKey) ?? MiniMaxConfig.defaults.apiKey
+            self.baseURL = ud.string(forKey: Keys.baseURL) ?? MiniMaxConfig.defaults.baseURL
+            self.chatModel = ud.string(forKey: Keys.chatModel) ?? MiniMaxConfig.defaults.chatModel
+            self.speechModel = ud.string(forKey: Keys.speechModel) ?? MiniMaxConfig.defaults.speechModel
+            self.imageModel = ud.string(forKey: Keys.imageModel) ?? MiniMaxConfig.defaults.imageModel
+            self.musicModel = ud.string(forKey: Keys.musicModel) ?? MiniMaxConfig.defaults.musicModel
+        } else {
+            self.apiKey = MiniMaxConfig.defaults.apiKey
+            self.baseURL = MiniMaxConfig.defaults.baseURL
+            self.chatModel = MiniMaxConfig.defaults.chatModel
+            self.speechModel = MiniMaxConfig.defaults.speechModel
+            self.imageModel = MiniMaxConfig.defaults.imageModel
+            self.musicModel = MiniMaxConfig.defaults.musicModel
+        }
     }
 
     public func resetToDefaults() {
-        baseURL = Defaults.baseURL
-        chatModel = Defaults.chatModel
-        speechModel = Defaults.speechModel
-        imageModel = Defaults.imageModel
-        musicModel = Defaults.musicModel
+        baseURL = MiniMaxConfig.defaults.baseURL
+        chatModel = MiniMaxConfig.defaults.chatModel
+        speechModel = MiniMaxConfig.defaults.speechModel
+        imageModel = MiniMaxConfig.defaults.imageModel
+        musicModel = MiniMaxConfig.defaults.musicModel
     }
 }
+
+/// Backward-compatibility alias.
+@available(*, deprecated, renamed: "MiniMaxSettingsStore")
+public typealias MiniMaxProvider = MiniMaxSettingsStore

@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Settings view for configuring MiniMax API provider.
+/// Settings view for configuring MiniMax API settings.
 public struct MiniMaxSettingsView: View {
-    @ObservedObject private var provider = MiniMaxProvider.shared
+    @Bindable private var settings = MiniMaxSettingsStore.shared
     @State private var showAPIKey = false
     @State private var testStatus: TestStatus = .idle
 
@@ -24,7 +24,7 @@ public struct MiniMaxSettingsView: View {
             statusItems: statusItems
         ) {
             StyledButton("Reset Defaults", systemImage: "arrow.counterclockwise", variant: .ghost) {
-                provider.resetToDefaults()
+                settings.resetToDefaults()
             }
             StyledButton(
                 "Test Connection", systemImage: "antenna.radiowaves.left.and.right",
@@ -32,7 +32,7 @@ public struct MiniMaxSettingsView: View {
             ) {
                 testConnection()
             }
-            .disabled(!provider.isConfigured || testStatus == .testing)
+            .disabled(!settings.isConfigured || testStatus == .testing)
         } content: {
             ScrollView {
                 VStack(spacing: AppTheme.Spacing.xl) {
@@ -60,9 +60,9 @@ public struct MiniMaxSettingsView: View {
                 HStack(spacing: AppTheme.Spacing.sm) {
                     Group {
                         if showAPIKey {
-                            TextField("sk-...", text: $provider.apiKey)
+                            TextField("sk-...", text: $settings.apiKey)
                         } else {
-                            SecureField("sk-...", text: $provider.apiKey)
+                            SecureField("sk-...", text: $settings.apiKey)
                         }
                     }
                     .textFieldStyle(.plain)
@@ -92,7 +92,7 @@ public struct MiniMaxSettingsView: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
 
-                TextField("https://api.minimaxi.com/v1", text: $provider.baseURL)
+                TextField("https://api.minimaxi.com/v1", text: $settings.baseURL)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -111,18 +111,18 @@ public struct MiniMaxSettingsView: View {
         StyledPanel(title: "Models") {
             VStack(spacing: AppTheme.Spacing.lg) {
                 modelField(
-                    label: "Chat Model", value: $provider.chatModel,
-                    placeholder: MiniMaxProvider.Defaults.chatModel,
+                    label: "Chat Model", value: $settings.chatModel,
+                    placeholder: MiniMaxConfig.defaults.chatModel,
                     icon: "bubble.left.and.bubble.right")
                 modelField(
-                    label: "Speech Model", value: $provider.speechModel,
-                    placeholder: MiniMaxProvider.Defaults.speechModel, icon: "waveform")
+                    label: "Speech Model", value: $settings.speechModel,
+                    placeholder: MiniMaxConfig.defaults.speechModel, icon: "waveform")
                 modelField(
-                    label: "Image Model", value: $provider.imageModel,
-                    placeholder: MiniMaxProvider.Defaults.imageModel, icon: "photo.artframe")
+                    label: "Image Model", value: $settings.imageModel,
+                    placeholder: MiniMaxConfig.defaults.imageModel, icon: "photo.artframe")
                 modelField(
-                    label: "Music Model", value: $provider.musicModel,
-                    placeholder: MiniMaxProvider.Defaults.musicModel, icon: "music.note")
+                    label: "Music Model", value: $settings.musicModel,
+                    placeholder: MiniMaxConfig.defaults.musicModel, icon: "music.note")
             }
         }
     }
@@ -159,7 +159,7 @@ public struct MiniMaxSettingsView: View {
     // MARK: - Status
 
     private var statusItems: [ToolStatusItem] {
-        if provider.isConfigured {
+        if settings.isConfigured {
             return [
                 ToolStatusItem(
                     title: "API Key configured", systemImage: "checkmark.circle.fill",
@@ -177,7 +177,7 @@ public struct MiniMaxSettingsView: View {
     private var statusBanner: some View {
         switch testStatus {
         case .idle:
-            if !provider.isConfigured {
+            if !settings.isConfigured {
                 ToolMessageBanner(
                     systemImage: "key.fill",
                     message:

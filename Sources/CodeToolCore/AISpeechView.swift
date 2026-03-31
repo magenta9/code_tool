@@ -4,7 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AISpeechView: View {
-    @ObservedObject private var provider = MiniMaxProvider.shared
+    private var settings = MiniMaxSettingsStore.shared
 
     @State private var inputText: String = ""
     @State private var isGenerating: Bool = false
@@ -49,7 +49,7 @@ public struct AISpeechView: View {
             }
             .disabled(
                 inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating
-                    || !provider.isConfigured)
+                    || !settings.isConfigured)
 
             if audioData != nil {
                 StyledButton("Save Audio", systemImage: "square.and.arrow.down") {
@@ -109,7 +109,7 @@ public struct AISpeechView: View {
                 ))
         }
 
-        if !provider.isConfigured {
+        if !settings.isConfigured {
             items.append(
                 ToolStatusItem(
                     title: "Not configured",
@@ -269,7 +269,7 @@ public struct AISpeechView: View {
 
     @ViewBuilder
     private var statusBanner: some View {
-        if !provider.isConfigured {
+        if !settings.isConfigured {
             ToolMessageBanner(
                 systemImage: "key.fill",
                 message: "MiniMax API key is required. Configure it in MiniMax Settings.",
@@ -341,7 +341,7 @@ public struct AISpeechView: View {
                     volume: volume,
                     pitch: pitch,
                     outputFormat: outputFormat,
-                    model: MiniMaxProvider.shared.speechModel,
+                    model: MiniMaxSettingsStore.shared.speechModel,
                     durationMs: response.durationMs,
                     audioFileName: audioFileName,
                     referenceID: response.referenceID

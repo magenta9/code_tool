@@ -6,7 +6,7 @@ public final class MiniMaxAPIClient {
 
     private let session: URLSession
     private let musicSession: URLSession
-    private var provider: MiniMaxProvider { MiniMaxProvider.shared }
+    private var settings: MiniMaxSettingsStore { MiniMaxSettingsStore.shared }
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -87,25 +87,25 @@ public final class MiniMaxAPIClient {
     // MARK: - Common
 
     private func makeRequest(path: String, body: [String: Any]) throws -> URLRequest {
-        guard provider.isConfigured else {
+        guard settings.isConfigured else {
             throw MiniMaxError.notConfigured
         }
-        guard let url = URL(string: provider.baseURL + path) else {
+        guard let url = URL(string: settings.baseURL + path) else {
             throw MiniMaxError.invalidURL
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(provider.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
     }
 
     private func makeGetRequest(path: String, queryItems: [URLQueryItem]) throws -> URLRequest {
-        guard provider.isConfigured else {
+        guard settings.isConfigured else {
             throw MiniMaxError.notConfigured
         }
-        guard var components = URLComponents(string: provider.baseURL + path) else {
+        guard var components = URLComponents(string: settings.baseURL + path) else {
             throw MiniMaxError.invalidURL
         }
         components.queryItems = queryItems
@@ -114,7 +114,7 @@ public final class MiniMaxAPIClient {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(provider.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
         return request
     }
 
@@ -171,7 +171,7 @@ public final class MiniMaxAPIClient {
             category: .aichat,
             featureName: "AI Chat",
             referenceID: AppLogger.makeReferenceID(),
-            model: provider.chatModel,
+            model: settings.chatModel,
             requestSummary: Self.chatRequestSummary(messages: messages, temperature: temperature, maxTokens: maxTokens),
             metadataFields: [
                 "temperature": Self.decimalString(temperature),
@@ -180,7 +180,7 @@ public final class MiniMaxAPIClient {
             ]
         )
         let body: [String: Any] = [
-            "model": provider.chatModel,
+            "model": settings.chatModel,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "temperature": temperature,
             "max_tokens": maxTokens,
@@ -252,7 +252,7 @@ public final class MiniMaxAPIClient {
             category: .aichat,
             featureName: "AI Chat",
             referenceID: resolvedReferenceID,
-            model: provider.chatModel,
+            model: settings.chatModel,
             requestSummary: Self.chatRequestSummary(messages: messages, temperature: temperature, maxTokens: maxTokens),
             metadataFields: [
                 "temperature": Self.decimalString(temperature),
@@ -261,7 +261,7 @@ public final class MiniMaxAPIClient {
             ]
         )
         let body: [String: Any] = [
-            "model": provider.chatModel,
+            "model": settings.chatModel,
             "messages": messages.map { ["role": $0.role, "content": $0.content] },
             "temperature": temperature,
             "max_tokens": maxTokens,
@@ -383,7 +383,7 @@ public final class MiniMaxAPIClient {
             category: .aispeech,
             featureName: "AI Speech",
             referenceID: AppLogger.makeReferenceID(),
-            model: provider.speechModel,
+            model: settings.speechModel,
             requestSummary: Self.speechRequestSummary(
                 text: text,
                 voiceId: voiceId,
@@ -403,7 +403,7 @@ public final class MiniMaxAPIClient {
             ]
         )
         let body: [String: Any] = [
-            "model": provider.speechModel,
+            "model": settings.speechModel,
             "text": text,
             "voice_setting": [
                 "voice_id": voiceId,
@@ -520,7 +520,7 @@ public final class MiniMaxAPIClient {
             category: .aiimage,
             featureName: "AI Image",
             referenceID: AppLogger.makeReferenceID(),
-            model: provider.imageModel,
+            model: settings.imageModel,
             requestSummary: Self.imageRequestSummary(prompt: prompt, aspectRatio: aspectRatio, n: n),
             metadataFields: [
                 "aspectRatio": aspectRatio,
@@ -528,7 +528,7 @@ public final class MiniMaxAPIClient {
             ]
         )
         let body: [String: Any] = [
-            "model": provider.imageModel,
+            "model": settings.imageModel,
             "prompt": prompt,
             "aspect_ratio": aspectRatio,
             "n": n,
@@ -610,7 +610,7 @@ public final class MiniMaxAPIClient {
     ) async throws -> MusicResponse {
         let context = MusicDiagnosticsContext(
             referenceID: AppLogger.makeReferenceID(),
-            model: provider.musicModel,
+            model: settings.musicModel,
             promptSummary: Self.redactedPromptSummary(prompt),
             lyricsSummary: Self.redactedLyricsSummary(lyrics),
             format: format,
@@ -620,7 +620,7 @@ public final class MiniMaxAPIClient {
         )
 
         var body: [String: Any] = [
-            "model": provider.musicModel,
+            "model": settings.musicModel,
             "prompt": prompt,
             "audio_setting": [
                 "sample_rate": sampleRate,

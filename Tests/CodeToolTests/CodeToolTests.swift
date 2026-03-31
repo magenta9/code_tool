@@ -653,4 +653,133 @@ final class CodeToolTests: XCTestCase {
             XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
         }
     }
+
+    // MARK: - Claude CLI Optimization Tests
+
+    func testClaudeChatConversationRecordReusesStableID() async throws {
+        let stableID = UUID()
+        let stableCreatedAt = Date()
+
+        let record1 = ClaudeChatHistoryRecord(
+            id: stableID,
+            createdAt: stableCreatedAt,
+            messages: [
+                ClaudeChatMessageRecord(role: "user", content: "Hello")
+            ],
+            model: "claude-sonnet-4-20250514",
+            referenceID: "ref-1"
+        )
+
+        let record2 = ClaudeChatHistoryRecord(
+            id: stableID,
+            createdAt: stableCreatedAt,
+            messages: [
+                ClaudeChatMessageRecord(role: "user", content: "Hello"),
+                ClaudeChatMessageRecord(role: "assistant", content: "Hi there"),
+                ClaudeChatMessageRecord(role: "user", content: "How are you?"),
+            ],
+            model: "claude-sonnet-4-20250514",
+            totalCostUSD: 0.01,
+            referenceID: "ref-2"
+        )
+
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HistoryStoreTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer {
+            Task { await HistoryStore.shared.setBaseURLForTesting(nil) }
+        }
+
+        // Save first version
+        try await HistoryStore.shared.save(record1)
+        var records: [ClaudeChatHistoryRecord] = try await HistoryStore.shared.listClaudeChat()
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.messages.count, 1)
+
+        // Save updated version with same ID — should overwrite, not create second file
+        try await HistoryStore.shared.save(record2)
+        records = try await HistoryStore.shared.listClaudeChat()
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.messages.count, 3)
+        XCTAssertEqual(records.first?.id, stableID)
+        XCTAssertEqual(records.first?.totalCostUSD, 0.01)
+    }
+
+    func testClaudeChatAttachmentRecordCodable() throws {
+        let attachment = ClaudeChatAttachmentRecord(
+            type: "image",
+            fileName: "abc-photo.png",
+            mimeType: "image/png",
+            sizeBytes: 12345
+        )
+
+        let message = ClaudeChatMessageRecord(
+            role: "user",
+            content: "Check this image",
+            attachments: [attachment]
+        )
+
+        let record = ClaudeChatHistoryRecord(
+            messages: [message],
+            model: "claude-sonnet-4-20250514",
+            referenceID: "test-attachment-ref"
+        )
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(record)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(ClaudeChatHistoryRecord.self, from: data)
+
+        XCTAssertEqual(decoded.messages.count, 1)
+        let decodedAttachments = try XCTUnwrap(decoded.messages.first?.attachments)
+        XCTAssertEqual(decodedAttachments.count, 1)
+        XCTAssertEqual(decodedAttachments.first?.fileName, "abc-photo.png")
+        XCTAssertEqual(decodedAttachments.first?.mimeType, "image/png")
+        XCTAssertEqual(decodedAttachments.first?.sizeBytes, 12345)
+        XCTAssertEqual(decodedAttachments.first?.type, "image")
+    }
+
+    func testClaudeChatAttachmentRecordCodableBackwardCompatibility() throws {
+        // Ensure records without attachments still decode (backward compat)
+        let json = """
+        {
+            "role": "user",
+            "content": "Hello"
+        }
+        """
+        let data = Data(json.utf8)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(ClaudeChatMessageRecord.self, from: data)
+
+        XCTAssertEqual(decoded.role, "user")
+        XCTAssertEqual(decoded.content, "Hello")
+        XCTAssertNil(decoded.attachments)
+    }
+
+    func testBuildOutgoingPromptIncludesImagePaths() {
+        let paths = ["/tmp/image1.png", "/tmp/image2.jpg"]
+        let prompt = ClaudeChatView.buildOutgoingPrompt(text: "Describe these", imagePaths: paths)
+
+        XCTAssertTrue(prompt.contains("Attached images:"))
+        XCTAssertTrue(prompt.contains("- /tmp/image1.png"))
+        XCTAssertTrue(prompt.contains("- /tmp/image2.jpg"))
+        XCTAssertTrue(prompt.contains("User request:"))
+        XCTAssertTrue(prompt.contains("Describe these"))
+    }
+
+    func testBuildOutgoingPromptWithoutImages() {
+        let prompt = ClaudeChatView.buildOutgoingPrompt(text: "Just a question", imagePaths: [])
+        XCTAssertEqual(prompt, "Just a question")
+        XCTAssertFalse(prompt.contains("Attached images:"))
+    }
+
+    func testBuildOutgoingPromptImageOnlyUsesBootstrapText() {
+        let prompt = ClaudeChatView.buildOutgoingPrompt(text: "", imagePaths: ["/tmp/img.png"])
+        XCTAssertTrue(prompt.contains("Attached images:"))
+        XCTAssertTrue(prompt.contains("- /tmp/img.png"))
+        XCTAssertTrue(prompt.contains("Please describe and analyze the attached image(s)."))
+    }
 }

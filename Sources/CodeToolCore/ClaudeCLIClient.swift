@@ -31,6 +31,17 @@ public enum ClaudeCLIEvent: Sendable {
     case error(message: String)
 }
 
+/// Request model for a single Claude CLI turn.
+public struct ClaudeCLITurnRequest {
+    public let prompt: String
+    public let sessionID: String?
+
+    public init(prompt: String, sessionID: String?) {
+        self.prompt = prompt
+        self.sessionID = sessionID
+    }
+}
+
 public final class ClaudeCLIClient: @unchecked Sendable {
     private var process: Process?
     private var isCancelled = false
@@ -39,6 +50,20 @@ public final class ClaudeCLIClient: @unchecked Sendable {
     public init() {}
 
     /// Send a message to Claude CLI and receive streaming events via callback.
+    public func send(
+        request: ClaudeCLITurnRequest,
+        settings: ClaudeCLISettingsStore,
+        onEvent: @escaping @Sendable (ClaudeCLIEvent) -> Void
+    ) async {
+        await send(
+            message: request.prompt,
+            settings: settings,
+            sessionId: request.sessionID,
+            onEvent: onEvent
+        )
+    }
+
+    /// Send a message to Claude CLI and receive streaming events via callback (legacy signature).
     public func send(
         message: String,
         settings: ClaudeCLISettingsStore,

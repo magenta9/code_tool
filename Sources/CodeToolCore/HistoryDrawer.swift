@@ -34,7 +34,9 @@ extension ClaudeChatHistoryRecord: HistoryDrawerItem {
         let costStr = totalCostUSD.map { String(format: "$%.4f", $0) } ?? ""
         let tokStr = [inputTokens.map { "↑\($0)" }, outputTokens.map { "↓\($0)" }]
             .compactMap { $0 }.joined(separator: " ")
-        return ["\(messages.count) msgs", costStr, tokStr]
+        let attachmentCount = messages.reduce(0) { $0 + ($1.attachments?.count ?? 0) }
+        let attachStr = attachmentCount > 0 ? "\(attachmentCount) 📎" : ""
+        return ["\(messages.count) msgs", attachStr, costStr, tokStr]
             .filter { !$0.isEmpty }.joined(separator: " · ")
     }
     public var drawerTimestamp: Date { createdAt }

@@ -15,7 +15,8 @@ let package = Package(
         .executableTarget(
             name: "CodeToolApp",
             dependencies: ["CodeToolCore"],
-            path: "Sources/CodeToolApp"
+            path: "Sources/CodeToolApp",
+            resources: [.process("Resources")]
         ),
         .target(
             name: "CodeToolCore",

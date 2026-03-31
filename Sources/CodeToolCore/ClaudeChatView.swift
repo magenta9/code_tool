@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 public struct ClaudeChatView: View {
     @Bindable private var settings = ClaudeCLISettingsStore.shared
@@ -21,6 +23,14 @@ public struct ClaudeChatView: View {
     @State private var showHistory = false
     @State private var chatHistory: [ClaudeChatHistoryRecord] = []
     @State private var cancellationRequested = false
+
+    // Conversation-scoped history identity
+    @State private var activeConversationRecordID: UUID?
+    @State private var activeConversationCreatedAt: Date?
+
+    // Image attachment state
+    @State private var composerImages: [ClaudeComposerImage] = []
+    @State private var attachmentWarning: String = ""
 
     public init() {}
 
@@ -91,6 +101,17 @@ public struct ClaudeChatView: View {
             if currentModel.isEmpty {
                 currentModel = settings.model
             }
+        }
+        .background {
+            // Cmd+Shift+O: New chat
+            Button("") { clearChat() }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .hidden()
+
+            // Cmd+L: Clear current chat
+            Button("") { clearChat() }
+                .keyboardShortcut("l", modifiers: .command)
+                .hidden()
         }
     }
 
@@ -223,20 +244,64 @@ public struct ClaudeChatView: View {
                     .fontWeight(.semibold)
                     .textCase(.uppercase)
                     .foregroundColor(AppTheme.accent)
-                Text(message.content)
-                    .font(.body)
-                    .foregroundColor(AppTheme.textPrimary)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, AppTheme.Spacing.md)
-                    .padding(.vertical, AppTheme.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .fill(AppTheme.accent.opacity(0.12))
-                    )
+
+                VStack(alignment: .trailing, spacing: AppTheme.Spacing.xs) {
+                    // Attachment previews
+                    if !message.attachments.isEmpty {
+                        HStack(spacing: AppTheme.Spacing.xs) {
+                            ForEach(message.attachments) { attachment in
+                                attachmentChip(attachment)
+                            }
+                        }
+                    }
+
+                    Text(message.content)
+                        .font(.body)
+                        .foregroundColor(AppTheme.textPrimary)
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                        .fill(AppTheme.accent.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                        .strokeBorder(AppTheme.accent.opacity(0.22), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func attachmentChip(_ attachment: ClaudeChatAttachmentRecord) -> some View {
+        Group {
+            if let url = try? HistoryStore.syncClaudeChatAttachmentURL(fileName: attachment.fileName),
+               let image = NSImage(contentsOf: url) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
                     .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .strokeBorder(AppTheme.accent.opacity(0.22), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                            .strokeBorder(AppTheme.accent.opacity(0.3), lineWidth: 1)
                     )
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 10))
+                    Text(attachment.fileName.split(separator: "-").last.map(String.init) ?? attachment.fileName)
+                        .font(.system(size: 10, design: .monospaced))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(AppTheme.textMuted)
+                .padding(.horizontal, AppTheme.Spacing.xs)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule().fill(AppTheme.surface)
+                )
             }
         }
     }
@@ -428,54 +493,117 @@ public struct ClaudeChatView: View {
     }
 
     private var inputArea: some View {
-        HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
-            ZStack(alignment: .topLeading) {
-                if inputText.isEmpty {
-                    Text("Type a message…")
-                        .font(.body)
-                        .foregroundColor(AppTheme.textMuted)
-                        .padding(.horizontal, AppTheme.Spacing.sm)
-                        .padding(.vertical, AppTheme.Spacing.sm)
+        VStack(spacing: AppTheme.Spacing.xs) {
+            // Attachment warning
+            if !attachmentWarning.isEmpty {
+                Text(attachmentWarning)
+                    .font(.caption)
+                    .foregroundColor(AppTheme.warning)
+            }
+
+            // Composer image thumbnails
+            if !composerImages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        ForEach(composerImages) { img in
+                            ZStack(alignment: .topTrailing) {
+                                Image(nsImage: img.image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 56, height: 56)
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                                            .strokeBorder(AppTheme.border, lineWidth: 1)
+                                    )
+
+                                Button {
+                                    composerImages.removeAll { $0.id == img.id }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(AppTheme.textMuted)
+                                        .background(Circle().fill(AppTheme.surface))
+                                }
+                                .buttonStyle(.plain)
+                                .offset(x: 4, y: -4)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.Spacing.xs)
+                }
+                .frame(height: 64)
+            }
+
+            HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
+                // Image picker button
+                if !isStreaming {
+                    Button {
+                        pickImageFile()
+                    } label: {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(width: 28, height: 28)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Attach image")
                 }
 
-                TextEditor(text: $inputText)
-                    .font(.body)
-                    .foregroundColor(AppTheme.textPrimary)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, AppTheme.Spacing.xs)
-                    .padding(.vertical, AppTheme.Spacing.xs)
-                    .onSubmit {
+                ZStack(alignment: .topLeading) {
+                    if inputText.isEmpty && composerImages.isEmpty {
+                        Text("Type a message… (Enter to send, Shift+Enter for newline)")
+                            .font(.body)
+                            .foregroundColor(AppTheme.textMuted)
+                            .padding(.horizontal, AppTheme.Spacing.sm)
+                            .padding(.vertical, AppTheme.Spacing.sm)
+                            .allowsHitTesting(false)
+                    }
+
+                    ClaudeChatComposer(
+                        text: $inputText,
+                        isStreaming: isStreaming,
+                        onSubmit: { sendMessage() },
+                        onPasteImages: { images in handlePastedImages(images) },
+                        onEscape: {
+                            if isStreaming {
+                                cancellationRequested = true
+                                client.cancel()
+                            }
+                        }
+                    )
+                }
+                .frame(minHeight: 36, maxHeight: 120)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                        .fill(AppTheme.background.opacity(0.82))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                        .strokeBorder(AppTheme.border, lineWidth: 1)
+                )
+
+                if isStreaming {
+                    StyledButton("Stop", systemImage: "stop.fill", variant: .destructive) {
+                        cancellationRequested = true
+                        client.cancel()
+                    }
+                } else {
+                    StyledIconButton("paperplane.fill", help: "Send message") {
                         sendMessage()
                     }
-            }
-            .frame(minHeight: 36, maxHeight: 120)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                    .fill(AppTheme.background.opacity(0.82))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                    .strokeBorder(AppTheme.border, lineWidth: 1)
-            )
-
-            if isStreaming {
-                StyledButton("Stop", systemImage: "stop.fill", variant: .destructive) {
-                    cancellationRequested = true
-                    client.cancel()
+                    .disabled(sendDisabled)
+                    .opacity(sendDisabled ? 0.5 : 1.0)
                 }
-            } else {
-                StyledIconButton("paperplane.fill", help: "Send message") {
-                    sendMessage()
-                }
-                .disabled(sendDisabled)
-                .opacity(sendDisabled ? 0.5 : 1.0)
             }
         }
     }
 
     private var sendDisabled: Bool {
-        inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !settings.isAvailable
+        let hasText = !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasImages = !composerImages.isEmpty
+        return (!hasText && !hasImages) || !settings.isAvailable
     }
 
     private var streamingMessage: ClaudeChatMessage? {
@@ -495,23 +623,55 @@ public struct ClaudeChatView: View {
 
     private func sendMessage() {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isStreaming else { return }
+        let currentImages = composerImages
+        guard (!trimmed.isEmpty || !currentImages.isEmpty), !isStreaming else { return }
 
         if !settings.isAvailable {
             errorMessage = "Claude CLI not found. Configure it in Settings first."
             return
         }
 
+        // Persist attachment files and build attachment records
+        var attachmentRecords: [ClaudeChatAttachmentRecord] = []
+        var persistedPaths: [String] = []
+
+        for img in currentImages {
+            let recordID = activeConversationRecordID ?? UUID()
+            let storedFileName = "\(recordID.uuidString)-\(img.fileName)"
+            do {
+                _ = try HistoryStore.syncSaveClaudeChatAttachment(data: img.data, fileName: storedFileName)
+                let record = ClaudeChatAttachmentRecord(
+                    type: "image",
+                    fileName: storedFileName,
+                    mimeType: img.mimeType,
+                    sizeBytes: img.data.count
+                )
+                attachmentRecords.append(record)
+
+                if let url = try? HistoryStore.syncClaudeChatAttachmentURL(fileName: storedFileName) {
+                    persistedPaths.append(url.path)
+                }
+            } catch {
+                attachmentWarning = "Failed to save attachment: \(error.localizedDescription)"
+            }
+        }
+
+        let prompt = ClaudeChatView.buildOutgoingPrompt(
+            text: trimmed, imagePaths: persistedPaths)
+
         messages.append(
             ClaudeChatMessage(
                 role: .user,
-                content: trimmed,
+                content: trimmed.isEmpty ? "(image attached)" : trimmed,
                 thinkingContent: nil,
                 toolName: nil,
                 toolInput: nil,
-                isStreaming: false
+                isStreaming: false,
+                attachments: attachmentRecords
             ))
         inputText = ""
+        composerImages = []
+        attachmentWarning = ""
         errorMessage = ""
         isStreaming = true
         streamingText = ""
@@ -522,15 +682,29 @@ public struct ClaudeChatView: View {
 
         Task {
             await client.send(
-                message: trimmed,
-                settings: settings,
-                sessionId: outgoingSessionId
+                request: ClaudeCLITurnRequest(prompt: prompt, sessionID: outgoingSessionId),
+                settings: settings
             ) { event in
                 Task { @MainActor in
                     handleEvent(event)
                 }
             }
         }
+    }
+
+    /// Build the prompt string sent to Claude CLI, injecting image paths when present.
+    static func buildOutgoingPrompt(text: String, imagePaths: [String]) -> String {
+        guard !imagePaths.isEmpty else { return text }
+
+        var parts: [String] = []
+        parts.append("Attached images:")
+        for path in imagePaths {
+            parts.append("- \(path)")
+        }
+        parts.append("")
+        parts.append("User request:")
+        parts.append(text.isEmpty ? "Please describe and analyze the attached image(s)." : text)
+        return parts.joined(separator: "\n")
     }
 
     @MainActor
@@ -653,8 +827,18 @@ public struct ClaudeChatView: View {
         streamingThinking = ""
     }
 
-    private func saveHistory() {
-        let record = ClaudeChatHistoryRecord(
+    private func ensureConversationRecordIdentity() {
+        if activeConversationRecordID == nil {
+            activeConversationRecordID = UUID()
+            activeConversationCreatedAt = Date()
+        }
+    }
+
+    private func makeConversationRecord() -> ClaudeChatHistoryRecord {
+        ensureConversationRecordIdentity()
+        return ClaudeChatHistoryRecord(
+            id: activeConversationRecordID!,
+            createdAt: activeConversationCreatedAt!,
             systemPrompt: normalizedSystemPrompt,
             messages: messages.map { message in
                 ClaudeChatMessageRecord(
@@ -662,7 +846,8 @@ public struct ClaudeChatView: View {
                     content: message.content,
                     thinkingContent: message.thinkingContent,
                     toolName: message.toolName,
-                    toolInput: message.toolInput
+                    toolInput: message.toolInput,
+                    attachments: message.attachments.isEmpty ? nil : message.attachments
                 )
             },
             model: currentModel.isEmpty ? settings.model : currentModel,
@@ -673,7 +858,10 @@ public struct ClaudeChatView: View {
             sessionId: sessionId.isEmpty ? nil : sessionId,
             referenceID: AppLogger.makeReferenceID()
         )
+    }
 
+    private func saveHistory() {
+        let record = makeConversationRecord()
         Task {
             try? await HistoryStore.shared.save(record)
         }
@@ -701,10 +889,60 @@ public struct ClaudeChatView: View {
         totalDurationMs = 0
         showThinking = []
         showToolDetails = []
+        activeConversationRecordID = nil
+        activeConversationCreatedAt = nil
+        composerImages = []
+        attachmentWarning = ""
     }
 
     private var lastAssistantReply: String {
         messages.last(where: { $0.role == .assistant })?.content ?? ""
+    }
+
+    private func pickImageFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .gif, .tiff, .bmp, .webP]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.message = "Select images to attach"
+
+        guard panel.runModal() == .OK else { return }
+
+        for url in panel.urls {
+            guard let data = try? Data(contentsOf: url),
+                  let image = NSImage(data: data) else { continue }
+
+            let ext = url.pathExtension.lowercased()
+            let mimeType: String
+            switch ext {
+            case "png": mimeType = "image/png"
+            case "jpg", "jpeg": mimeType = "image/jpeg"
+            case "gif": mimeType = "image/gif"
+            case "webp": mimeType = "image/webp"
+            case "tiff", "tif": mimeType = "image/tiff"
+            case "bmp": mimeType = "image/bmp"
+            default: mimeType = "image/png"
+            }
+
+            let fileName = "\(UUID().uuidString).\(ext)"
+            composerImages.append(
+                ClaudeComposerImage(
+                    image: image, fileName: fileName, data: data, mimeType: mimeType))
+        }
+    }
+
+    private func handlePastedImages(_ images: [NSImage]) {
+        for image in images {
+            guard let tiffData = image.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiffData),
+                  let pngData = bitmap.representation(using: .png, properties: [:])
+            else { continue }
+
+            let fileName = "\(UUID().uuidString).png"
+            composerImages.append(
+                ClaudeComposerImage(
+                    image: image, fileName: fileName, data: pngData, mimeType: "image/png"))
+        }
     }
 
     private func loadHistory() {
@@ -724,7 +962,8 @@ public struct ClaudeChatView: View {
                 thinkingContent: item.thinkingContent,
                 toolName: item.toolName,
                 toolInput: item.toolInput,
-                isStreaming: false
+                isStreaming: false,
+                attachments: item.attachments ?? []
             )
         }
 
@@ -740,6 +979,10 @@ public struct ClaudeChatView: View {
         outputTokens = record.outputTokens ?? 0
         totalDurationMs = record.durationMs ?? 0
         errorMessage = ""
+
+        // Restore conversation identity so continued chat overwrites the same record
+        activeConversationRecordID = record.id
+        activeConversationCreatedAt = record.createdAt
     }
 
     private func deleteChat(_ record: ClaudeChatHistoryRecord) {
@@ -785,6 +1028,7 @@ private struct ClaudeChatMessage: Identifiable {
     var toolName: String?
     var toolInput: String?
     var isStreaming: Bool
+    var attachments: [ClaudeChatAttachmentRecord]
 
     init(
         id: UUID = UUID(),
@@ -793,7 +1037,8 @@ private struct ClaudeChatMessage: Identifiable {
         thinkingContent: String?,
         toolName: String?,
         toolInput: String?,
-        isStreaming: Bool
+        isStreaming: Bool,
+        attachments: [ClaudeChatAttachmentRecord] = []
     ) {
         self.id = id
         self.role = role
@@ -802,7 +1047,17 @@ private struct ClaudeChatMessage: Identifiable {
         self.toolName = toolName
         self.toolInput = toolInput
         self.isStreaming = isStreaming
+        self.attachments = attachments
     }
+}
+
+/// An image staged in the composer, not yet sent.
+struct ClaudeComposerImage: Identifiable {
+    let id = UUID()
+    let image: NSImage
+    let fileName: String
+    let data: Data
+    let mimeType: String
 }
 
 private struct PulseModifier: ViewModifier {

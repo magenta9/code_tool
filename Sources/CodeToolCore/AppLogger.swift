@@ -10,6 +10,7 @@ public enum AppLogCategory: String, Codable {
     case aispeech
     case aiimage
     case aichat
+    case claudechat
 }
 
 public struct LoggedDiagnosticError: LocalizedError {

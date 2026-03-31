@@ -76,10 +76,79 @@ extension SpeechHistoryRecord: HistoryRecord {}
 extension ImageHistoryRecord: HistoryRecord {}
 extension MusicHistoryRecord: HistoryRecord {}
 
+// MARK: - Claude Chat History Models
+
+/// A single message in a Claude chat conversation.
+public struct ClaudeChatMessageRecord: Codable {
+    public let role: String
+    public let content: String
+    public let thinkingContent: String?
+    public let toolName: String?
+    public let toolInput: String?
+
+    public init(
+        role: String,
+        content: String,
+        thinkingContent: String? = nil,
+        toolName: String? = nil,
+        toolInput: String? = nil
+    ) {
+        self.role = role
+        self.content = content
+        self.thinkingContent = thinkingContent
+        self.toolName = toolName
+        self.toolInput = toolInput
+    }
+}
+
+/// History record for a Claude CLI chat session.
+public struct ClaudeChatHistoryRecord: Codable, Identifiable {
+    public let id: UUID
+    public let createdAt: Date
+    public let systemPrompt: String?
+    public let messages: [ClaudeChatMessageRecord]
+    public let model: String
+    public let totalCostUSD: Double?
+    public let inputTokens: Int?
+    public let outputTokens: Int?
+    public let durationMs: Int?
+    public let sessionId: String?
+    public let referenceID: String
+
+    public init(
+        id: UUID = UUID(),
+        createdAt: Date = Date(),
+        systemPrompt: String? = nil,
+        messages: [ClaudeChatMessageRecord],
+        model: String,
+        totalCostUSD: Double? = nil,
+        inputTokens: Int? = nil,
+        outputTokens: Int? = nil,
+        durationMs: Int? = nil,
+        sessionId: String? = nil,
+        referenceID: String
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.systemPrompt = systemPrompt
+        self.messages = messages
+        self.model = model
+        self.totalCostUSD = totalCostUSD
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.durationMs = durationMs
+        self.sessionId = sessionId
+        self.referenceID = referenceID
+    }
+}
+
+extension ClaudeChatHistoryRecord: HistoryRecord {}
+
 // MARK: - HistoryCategory
 
 public enum HistoryCategory: String, CaseIterable {
     case chat
+    case claudeChat = "claude-chat"
     case speech
     case image
     case music
@@ -267,6 +336,12 @@ public actor HistoryStore {
 
     // MARK: - Dev Tool Save
 
+    public func save(_ record: ClaudeChatHistoryRecord) throws {
+        let dir = try categoryURL(.claudeChat)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+    }
+
     public func save(_ record: JSONToolHistoryRecord) throws {
         let dir = try categoryURL(.jsonTool)
         let data = try encoder.encode(record)
@@ -326,6 +401,10 @@ public actor HistoryStore {
     }
 
     // MARK: - Dev Tool List
+
+    public func listClaudeChat() throws -> [ClaudeChatHistoryRecord] {
+        try loadRecords(category: .claudeChat)
+    }
 
     public func listJSONTool() throws -> [JSONToolHistoryRecord] {
         try loadRecords(category: .jsonTool)
@@ -402,6 +481,11 @@ public actor HistoryStore {
     }
 
     // MARK: - Dev Tool Delete
+
+    public func deleteClaudeChat(id: UUID) throws {
+        let dir = try categoryURL(.claudeChat)
+        try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
+    }
 
     public func deleteJSONTool(id: UUID) throws {
         let dir = try categoryURL(.jsonTool)

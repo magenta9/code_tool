@@ -60,7 +60,7 @@ public enum ToolRegistry {
             name: "Word Cloud", description: "Generate word cloud visualizations from text.",
             systemImage: "cloud", category: .devTools),
         Tool(
-            name: "AI Chat", description: "Chat with MiniMax M2.7-highspeed AI model.",
+            name: "AI Chat", description: "Chat with Claude — full agentic capabilities via CLI.",
             systemImage: "bubble.left.and.bubble.right", category: .aiTools),
         Tool(
             name: "AI Speech", description: "Convert text to speech with MiniMax Speech 2.8.",

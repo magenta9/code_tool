@@ -25,6 +25,22 @@ extension ChatHistoryRecord: HistoryDrawerItem {
     public var drawerIcon: String { "bubble.left.and.bubble.right" }
 }
 
+extension ClaudeChatHistoryRecord: HistoryDrawerItem {
+    public var drawerTitle: String {
+        let lastUserMsg = messages.last(where: { $0.role == "user" })?.content ?? "Chat session"
+        return String(lastUserMsg.prefix(60))
+    }
+    public var drawerSubtitle: String {
+        let costStr = totalCostUSD.map { String(format: "$%.4f", $0) } ?? ""
+        let tokStr = [inputTokens.map { "↑\($0)" }, outputTokens.map { "↓\($0)" }]
+            .compactMap { $0 }.joined(separator: " ")
+        return ["\(messages.count) msgs", costStr, tokStr]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+    public var drawerTimestamp: Date { createdAt }
+    public var drawerIcon: String { "bubble.left.and.bubble.right" }
+}
+
 extension SpeechHistoryRecord: HistoryDrawerItem {
     public var drawerTitle: String {
         String(inputText.prefix(60))

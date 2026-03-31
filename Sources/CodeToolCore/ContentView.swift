@@ -44,6 +44,7 @@ public struct ContentView: View {
             .allowsHitTesting(false)
         }
         .onAppear {
+            ClaudeCLISettingsStore.shared.discoverCLI()
             retainedToolNames = ToolViewCache.retainedToolNames(
                 current: retainedToolNames,
                 selectedToolName: selectedTool?.name
@@ -298,7 +299,7 @@ private struct SidebarView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .help("MiniMax Settings")
+                .help("Provider Settings")
                 .padding(.bottom, AppTheme.Spacing.lg)
             } else {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
@@ -315,7 +316,7 @@ private struct SidebarView: View {
                                 .foregroundStyle(AppTheme.textSecondary)
                         }
                         .buttonStyle(.plain)
-                        .help("MiniMax Settings")
+                        .help("Provider Settings")
                     }
                     Text(
                         "Consistent actions, panels, status chips, and editor treatments across every tool."
@@ -338,7 +339,7 @@ private struct SidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AppTheme.sidebarBackground)
         .sheet(isPresented: $showSettings) {
-            MiniMaxSettingsSheet()
+            SettingsSheet()
         }
     }
 }
@@ -492,7 +493,7 @@ private struct ToolDetailView: View {
             case "Word Cloud":
                 WordCloudView()
             case "AI Chat":
-                AIChatView()
+                ClaudeChatView()
             case "AI Speech":
                 AISpeechView()
             case "AI Image":
@@ -561,7 +562,7 @@ private struct WelcomeView: View {
                 toolGroupSection(
                     eyebrow: "Intelligence",
                     title: "AI Tools",
-                    subtitle: "Chat, speech, image, and music powered by MiniMax.",
+                    subtitle: "Claude chat plus MiniMax speech, image, and music in one deck.",
                     icon: "cpu",
                     accentColor: AppTheme.accentWarm,
                     tools: aiTools,
@@ -751,7 +752,7 @@ private struct WelcomeView: View {
                     .foregroundStyle(AppTheme.textMuted)
                     .tracking(0.8)
                 Spacer()
-                Text("Powered by MiniMax")
+                Text("Powered by Claude CLI + MiniMax")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundStyle(AppTheme.textMuted)
                     .tracking(0.8)
@@ -891,14 +892,22 @@ extension Tool {
     }
 }
 
-// MARK: - MiniMax Settings Sheet
+// MARK: - Settings Sheet
 
-private struct MiniMaxSettingsSheet: View {
+private struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab = "minimax"
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                Picker("", selection: $selectedTab) {
+                    Text("MiniMax").tag("minimax")
+                    Text("Claude CLI").tag("claude")
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+
                 Spacer()
                 Button {
                     dismiss()
@@ -911,7 +920,11 @@ private struct MiniMaxSettingsSheet: View {
                 .padding(AppTheme.Spacing.md)
             }
 
-            MiniMaxSettingsView()
+            if selectedTab == "minimax" {
+                MiniMaxSettingsView()
+            } else {
+                ClaudeCLISettingsView()
+            }
         }
         .frame(minWidth: 600, minHeight: 500)
         .background(AppTheme.background)

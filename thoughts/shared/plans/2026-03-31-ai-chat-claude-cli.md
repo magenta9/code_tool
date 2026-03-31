@@ -475,7 +475,7 @@ public final class ClaudeCLIClient {
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `swift build` 编译通过（新增 2 个文件不破坏现有代码）
+- [x] `swift build` 编译通过（新增 2 个文件不破坏现有代码）
 - [ ] `swift test --filter CodeToolTests/testRegistryContainsTenTools` 仍然通过（尚未改动 registry）
 
 #### Manual Verification:
@@ -624,7 +624,7 @@ public enum AppLogCategory: String, Codable {
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `swift build` 编译通过
+- [x] `swift build` 编译通过
 - [ ] 现有测试全部通过（`ChatHistoryRecord` 不受影响）
 
 #### Manual Verification:
@@ -1171,7 +1171,7 @@ public struct ClaudeCLISettingsView: View {
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `swift build` 编译通过
+- [x] `swift build` 编译通过
 
 #### Manual Verification:
 - [ ] ClaudeChatView 独立渲染正常（可在 Preview 中验证空状态）
@@ -1317,7 +1317,7 @@ func testClaudeChatHistoryRecordCodable() throws {
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] `swift build` 编译通过
+- [x] `swift build` 编译通过
 - [ ] `swift test --filter CodeToolTests/testRegistryContainsTenTools` 通过
 - [ ] `swift test --filter CodeToolTests/testRegistryContainsExpectedTools` 通过
 - [ ] `swift test --filter CodeToolTests/testClaudeCLISettingsStoreDefaults` 通过

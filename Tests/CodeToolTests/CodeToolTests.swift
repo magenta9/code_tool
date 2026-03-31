@@ -61,6 +61,14 @@ final class CodeToolTests: XCTestCase {
 
     private var savedDefaults: [Tool] = []
     private var savedConfig: MiniMaxConfig = .defaults
+    private var savedClaudePath = ""
+    private var savedClaudeAPIKey = ""
+    private var savedClaudeModel = ""
+    private var savedClaudeSystemPrompt = ""
+    private var savedClaudeMaxTurns = 10
+    private var savedClaudeMaxBudgetUSD = 5.0
+    private var savedClaudeUseBare = true
+    private var savedClaudeWorkingDirectory = ""
     private var temporaryLogDirectoryURL: URL?
 
     override func setUp() {
@@ -69,6 +77,16 @@ final class CodeToolTests: XCTestCase {
 
         let store = MiniMaxSettingsStore.shared
         savedConfig = store.currentConfig
+
+        let claudeStore = ClaudeCLISettingsStore.shared
+        savedClaudePath = claudeStore.claudePath
+        savedClaudeAPIKey = claudeStore.apiKey
+        savedClaudeModel = claudeStore.model
+        savedClaudeSystemPrompt = claudeStore.systemPrompt
+        savedClaudeMaxTurns = claudeStore.maxTurns
+        savedClaudeMaxBudgetUSD = claudeStore.maxBudgetUSD
+        savedClaudeUseBare = claudeStore.useBare
+        savedClaudeWorkingDirectory = claudeStore.workingDirectory
 
         store.apiKey = "test-api-key"
         store.baseURL = "https://example.com/v1"
@@ -100,6 +118,17 @@ final class CodeToolTests: XCTestCase {
         store.speechModel = savedConfig.speechModel
         store.imageModel = savedConfig.imageModel
         store.musicModel = savedConfig.musicModel
+
+        let claudeStore = ClaudeCLISettingsStore.shared
+        claudeStore.claudePath = savedClaudePath
+        claudeStore.apiKey = savedClaudeAPIKey
+        claudeStore.model = savedClaudeModel
+        claudeStore.systemPrompt = savedClaudeSystemPrompt
+        claudeStore.maxTurns = savedClaudeMaxTurns
+        claudeStore.maxBudgetUSD = savedClaudeMaxBudgetUSD
+        claudeStore.useBare = savedClaudeUseBare
+        claudeStore.workingDirectory = savedClaudeWorkingDirectory
+        claudeStore.discoverCLI()
 
         MockURLProtocol.requestHandler = nil
         URLProtocol.unregisterClass(MockURLProtocol.self)
@@ -155,6 +184,87 @@ final class CodeToolTests: XCTestCase {
         let extra = Tool(name: "Extra Tool", description: "Extra.", systemImage: "star")
         ToolRegistry.defaults.append(extra)
         XCTAssertEqual(ToolRegistry.defaults.count, originalCount + 1)
+    }
+
+    func testClaudeCLISettingsStoreDefaults() {
+        let store = ClaudeCLISettingsStore.shared
+        store.resetToDefaults()
+
+        XCTAssertEqual(store.model, "claude-sonnet-4-20250514")
+        XCTAssertEqual(store.maxTurns, 10)
+        XCTAssertEqual(store.maxBudgetUSD, 5.0)
+        XCTAssertTrue(store.useBare)
+    }
+
+    func testClaudeChatHistoryRecordCodable() throws {
+        let record = ClaudeChatHistoryRecord(
+            messages: [
+                ClaudeChatMessageRecord(role: "user", content: "Hello"),
+                ClaudeChatMessageRecord(
+                    role: "assistant",
+                    content: "Hi",
+                    thinkingContent: "User says hello"
+                ),
+            ],
+            model: "claude-sonnet-4-20250514",
+            totalCostUSD: 0.05,
+            inputTokens: 100,
+            outputTokens: 10,
+            referenceID: "test-ref"
+        )
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(record)
+        let decoder = JSONDecoder()
+        let decoded = try decoder.decode(ClaudeChatHistoryRecord.self, from: data)
+
+        XCTAssertEqual(decoded.id, record.id)
+        XCTAssertEqual(decoded.messages.count, 2)
+        XCTAssertEqual(decoded.messages[1].thinkingContent, "User says hello")
+        XCTAssertEqual(decoded.totalCostUSD, 0.05)
+    }
+
+    func testClaudeCLIClientUsesResumeForExistingSession() async throws {
+        let tempDirectory = try XCTUnwrap(temporaryLogDirectoryURL)
+        let scriptURL = tempDirectory.appendingPathComponent("fake-claude.sh")
+        let argsLogURL = tempDirectory.appendingPathComponent("claude-args.log")
+
+        let script = """
+        #!/bin/zsh
+        print -rl -- \"$@\" > \"$CODETOOL_CLAUDE_ARGS_LOG\"
+        print '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"8f600fbd-4226-4700-8a30-6988f438c595\",\"model\":\"claude-sonnet-4-20250514\"}'
+        print '{\"type\":\"result\",\"is_error\":false,\"total_cost_usd\":0,\"duration_ms\":1,\"usage\":{\"input_tokens\":1,\"output_tokens\":1},\"session_id\":\"8f600fbd-4226-4700-8a30-6988f438c595\"}'
+        """
+
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: scriptURL.path
+        )
+
+        setenv("CODETOOL_CLAUDE_ARGS_LOG", argsLogURL.path, 1)
+        defer { unsetenv("CODETOOL_CLAUDE_ARGS_LOG") }
+
+        let store = ClaudeCLISettingsStore.shared
+        store.claudePath = scriptURL.path
+        store.discoverCLI()
+
+        let client = ClaudeCLIClient()
+        await client.send(
+            message: "你好",
+            settings: store,
+            sessionId: "4cde10f7-cc71-4d25-8472-f9737d911dc8"
+        ) { _ in }
+
+        let argsText = try String(contentsOf: argsLogURL, encoding: .utf8)
+        let args = argsText
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+
+        XCTAssertTrue(args.contains("--resume"))
+        XCTAssertFalse(args.contains("--session-id"))
+        let resumeIndex = try XCTUnwrap(args.firstIndex(of: "--resume"))
+        XCTAssertEqual(args[resumeIndex + 1], "4cde10f7-cc71-4d25-8472-f9737d911dc8")
     }
 
     func testToolViewCacheRetainsVisitedToolsInSelectionOrder() {

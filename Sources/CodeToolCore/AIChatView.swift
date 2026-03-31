@@ -5,7 +5,7 @@ import SwiftUI
 #endif
 
 public struct AIChatView: View {
-    @ObservedObject private var provider = MiniMaxProvider.shared
+    private var settings = MiniMaxSettingsStore.shared
 
     @State private var messages: [(role: String, content: String)] = []
     @State private var inputText: String = ""
@@ -34,7 +34,7 @@ public struct AIChatView: View {
             CopyButton("Copy Last", text: lastAssistantReply)
         } content: {
             VStack(spacing: 0) {
-                if !provider.isConfigured {
+                if !settings.isConfigured {
                     ToolMessageBanner(
                         systemImage: "exclamationmark.triangle",
                         message:
@@ -347,7 +347,7 @@ public struct AIChatView: View {
                     messages: snapshotMessages.map {
                         ChatMessageRecord(role: $0.role, content: $0.content)
                     },
-                    model: MiniMaxProvider.shared.chatModel,
+                    model: MiniMaxSettingsStore.shared.chatModel,
                     promptTokens: promptTk,
                     completionTokens: completionTk,
                     totalTokens: totalTk,

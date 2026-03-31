@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AIImageView: View {
-    @ObservedObject private var provider = MiniMaxProvider.shared
+    private var settings = MiniMaxSettingsStore.shared
 
     @State private var promptText: String = ""
     @State private var isGenerating: Bool = false
@@ -89,7 +89,7 @@ public struct AIImageView: View {
                 }
                 .disabled(
                     promptText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || isGenerating || !provider.isConfigured)
+                        || isGenerating || !settings.isConfigured)
 
                 StyledButton("Save Image", systemImage: "square.and.arrow.down") {
                     saveImage()
@@ -103,7 +103,7 @@ public struct AIImageView: View {
             }
         } content: {
             VStack(spacing: 0) {
-                if !provider.isConfigured {
+                if !settings.isConfigured {
                     ToolMessageBanner(
                         systemImage: "exclamationmark.triangle.fill",
                         message:
@@ -194,7 +194,7 @@ public struct AIImageView: View {
                 )
 
                 HStack {
-                    Text("Model: \(provider.imageModel)")
+                    Text("Model: \(settings.imageModel)")
                         .font(.caption)
                         .foregroundStyle(AppTheme.textMuted)
 
@@ -374,7 +374,7 @@ public struct AIImageView: View {
                     prompt: promptText,
                     aspectRatio: aspectRatio,
                     imageCount: response.images.count,
-                    model: MiniMaxProvider.shared.imageModel,
+                    model: MiniMaxSettingsStore.shared.imageModel,
                     imageFileNames: imageFileNames,
                     referenceID: response.referenceID
                 )

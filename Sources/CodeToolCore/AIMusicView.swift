@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 public struct AIMusicView: View {
 
-    @ObservedObject private var provider = MiniMaxProvider.shared
+    private var settings = MiniMaxSettingsStore.shared
 
     @State private var promptText: String = ""
     @State private var lyricsText: String = ""
@@ -37,9 +37,9 @@ public struct AIMusicView: View {
         }
         items.append(
             ToolStatusItem(
-                title: provider.musicModel,
+                title: settings.musicModel,
                 systemImage: "cpu",
-                tint: provider.isConfigured ? AppTheme.success : AppTheme.error
+                tint: settings.isConfigured ? AppTheme.success : AppTheme.error
             ))
         return items
     }
@@ -166,7 +166,7 @@ public struct AIMusicView: View {
 
     private var rightPanel: some View {
         VStack(spacing: AppTheme.Spacing.lg) {
-            if !provider.isConfigured {
+            if !settings.isConfigured {
                 ToolMessageBanner(
                     systemImage: "exclamationmark.triangle.fill",
                     message: "MiniMax API is not configured. Add your API key in Settings.",
@@ -312,7 +312,7 @@ public struct AIMusicView: View {
             errorMessage = "Please enter a prompt describing the music style."
             return
         }
-        guard provider.isConfigured else {
+        guard settings.isConfigured else {
             errorMessage = "MiniMax API is not configured. Add your API key in Settings."
             return
         }
@@ -368,7 +368,7 @@ public struct AIMusicView: View {
                     outputFormat: outputFormat,
                     sampleRate: sampleRate,
                     bitrate: bitrate,
-                    model: MiniMaxProvider.shared.musicModel,
+                    model: MiniMaxSettingsStore.shared.musicModel,
                     audioFileName: audioFileName,
                     referenceID: response.referenceID
                 )

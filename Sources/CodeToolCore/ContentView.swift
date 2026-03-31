@@ -3,10 +3,12 @@ import SwiftUI
 public struct ContentView: View {
     @State private var selectedTool: Tool?
     @State private var retainedToolNames: [String] = []
+    @State private var sidebarCollapsed = false
     private let tools = ToolRegistry.defaults
 
     private enum Layout {
         static let sidebarWidth: CGFloat = 240
+        static let sidebarCollapsedWidth: CGFloat = 64
         static let dividerWidth: CGFloat = 10
     }
 
@@ -14,10 +16,10 @@ public struct ContentView: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            SidebarView(tools: tools, selectedTool: $selectedTool)
-                .frame(width: Layout.sidebarWidth)
+            SidebarView(tools: tools, selectedTool: $selectedTool, collapsed: $sidebarCollapsed)
+                .frame(width: sidebarCollapsed ? Layout.sidebarCollapsedWidth : Layout.sidebarWidth)
 
-            SidebarDivider()
+            SidebarDivider(collapsed: $sidebarCollapsed)
                 .frame(width: Layout.dividerWidth)
 
             ToolDetailCacheView(
@@ -30,13 +32,24 @@ public struct ContentView: View {
         }
         .frame(minWidth: 800, minHeight: 600)
         .background(AppTheme.background)
+        .background {
+            // Invisible button to capture ⌘\ keyboard shortcut
+            Button("") {
+                withAnimation(AppTheme.Anim.normal) {
+                    sidebarCollapsed.toggle()
+                }
+            }
+            .keyboardShortcut("\\", modifiers: .command)
+            .opacity(0)
+            .allowsHitTesting(false)
+        }
         .onAppear {
             retainedToolNames = ToolViewCache.retainedToolNames(
                 current: retainedToolNames,
                 selectedToolName: selectedTool?.name
             )
         }
-        .onChange(of: selectedTool?.name) { selectedToolName in
+        .onChange(of: selectedTool?.name) { _, selectedToolName in
             retainedToolNames = ToolViewCache.retainedToolNames(
                 current: retainedToolNames,
                 selectedToolName: selectedToolName
@@ -60,6 +73,9 @@ enum ToolViewCache {
 }
 
 private struct SidebarDivider: View {
+    @Binding var collapsed: Bool
+    @State private var isHovered = false
+
     var body: some View {
         ZStack {
             AppTheme.sidebarBackground.opacity(0.92)
@@ -70,6 +86,33 @@ private struct SidebarDivider: View {
             AppTheme.accent.opacity(0.08)
                 .frame(width: 1)
                 .blur(radius: 3)
+
+            // Toggle button overlay
+            if isHovered {
+                Button {
+                    withAnimation(AppTheme.Anim.normal) {
+                        collapsed.toggle()
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.surfaceRaised)
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(AppTheme.borderHover, lineWidth: 1)
+                            )
+                        Image(systemName: collapsed ? "chevron.right" : "chevron.left")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(AppTheme.Anim.fast) { isHovered = hovering }
         }
     }
 }
@@ -79,6 +122,7 @@ private struct SidebarDivider: View {
 private struct SidebarView: View {
     let tools: [Tool]
     @Binding var selectedTool: Tool?
+    @Binding var collapsed: Bool
 
     @State private var logoHovered = false
     @State private var showSettings = false
@@ -90,103 +134,205 @@ private struct SidebarView: View {
         }
     }
 
+    @State private var toggleHovered = false
+
     var body: some View {
         VStack(spacing: 0) {
-            // Logo / Home button
-            Button {
-                selectedTool = nil
-            } label: {
-                HStack(spacing: AppTheme.Spacing.md) {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .fill(AppTheme.accentGradient)
-                        .frame(width: 40, height: 40)
-                        .overlay {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(AppTheme.background)
-                        }
-                        .scaleEffect(logoHovered ? 1.06 : 1.0)
+            // Logo / Home button + toggle
+            HStack(spacing: 0) {
+                Button {
+                    selectedTool = nil
+                } label: {
+                    if collapsed {
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                            .fill(AppTheme.accentGradient)
+                            .frame(width: 36, height: 36)
+                            .overlay {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(AppTheme.background)
+                            }
+                            .scaleEffect(logoHovered ? 1.06 : 1.0)
+                    } else {
+                        HStack(spacing: AppTheme.Spacing.md) {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                                .fill(AppTheme.accentGradient)
+                                .frame(width: 40, height: 40)
+                                .overlay {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(AppTheme.background)
+                                }
+                                .scaleEffect(logoHovered ? 1.06 : 1.0)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("CodeTool")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
-                        Text("Developer utility deck")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(AppTheme.textSecondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("CodeTool")
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                Text("Developer utility deck")
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                            }
+                        }
                     }
                 }
+                .buttonStyle(.plain)
+                .onHover { logoHovered = $0 }
+                .animation(AppTheme.Anim.fast, value: logoHovered)
+
+                if !collapsed {
+                    Spacer(minLength: 0)
+                }
+
+                // Sidebar toggle button
+                if !collapsed {
+                    Button {
+                        withAnimation(AppTheme.Anim.normal) {
+                            collapsed.toggle()
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(toggleHovered ? AppTheme.accent : AppTheme.textMuted)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                                    .fill(toggleHovered ? AppTheme.surface.opacity(0.72) : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                                    .strokeBorder(toggleHovered ? AppTheme.borderHover : Color.clear, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { h in withAnimation(AppTheme.Anim.fast) { toggleHovered = h } }
+                    .help("收起侧边栏 (⌘\\)")
+                    .transition(.opacity)
+                }
             }
-            .buttonStyle(.plain)
-            .onHover { logoHovered = $0 }
-            .animation(AppTheme.Anim.fast, value: logoHovered)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, AppTheme.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: collapsed ? .center : .leading)
+            .padding(.horizontal, collapsed ? AppTheme.Spacing.sm : AppTheme.Spacing.lg)
             .padding(.top, AppTheme.Spacing.xxl)
             .padding(.bottom, AppTheme.Spacing.lg)
+
+            // Collapsed: show expand button
+            if collapsed {
+                Button {
+                    withAnimation(AppTheme.Anim.normal) {
+                        collapsed.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(toggleHovered ? AppTheme.accent : AppTheme.textMuted)
+                        .frame(width: 36, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                                .fill(toggleHovered ? AppTheme.surface.opacity(0.72) : AppTheme.surface.opacity(0.32))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                                .strokeBorder(toggleHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .onHover { h in withAnimation(AppTheme.Anim.fast) { toggleHovered = h } }
+                .help("展开侧边栏 (⌘\\)")
+                .padding(.bottom, AppTheme.Spacing.sm)
+            }
 
             ScrollView {
                 VStack(spacing: AppTheme.Spacing.lg) {
                     ForEach(groupedTools, id: \.category) { group in
-                        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                            HStack(spacing: AppTheme.Spacing.sm) {
-                                Image(systemName: group.category.systemImage)
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(AppTheme.textMuted)
-                                Text(group.category.displayName)
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                                    .foregroundStyle(AppTheme.textMuted)
-                                    .textCase(.uppercase)
-                                    .tracking(1.2)
+                        VStack(alignment: collapsed ? .center : .leading, spacing: AppTheme.Spacing.sm) {
+                            if collapsed {
+                                Divider()
+                                    .background(AppTheme.border)
+                                    .padding(.horizontal, AppTheme.Spacing.sm)
+                            } else {
+                                HStack(spacing: AppTheme.Spacing.sm) {
+                                    Image(systemName: group.category.systemImage)
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(AppTheme.textMuted)
+                                    Text(group.category.displayName)
+                                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                                        .foregroundStyle(AppTheme.textMuted)
+                                        .textCase(.uppercase)
+                                        .tracking(1.2)
+                                }
+                                .padding(.horizontal, AppTheme.Spacing.md + 4)
                             }
-                            .padding(.horizontal, AppTheme.Spacing.md + 4)
 
                             ForEach(group.tools) { tool in
                                 SidebarRow(
                                     tool: tool,
                                     isSelected: selectedTool == tool,
+                                    collapsed: collapsed,
                                     action: { selectedTool = tool }
                                 )
                             }
                         }
                     }
                 }
-                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.horizontal, collapsed ? AppTheme.Spacing.xs : AppTheme.Spacing.md)
                 .padding(.bottom, AppTheme.Spacing.lg)
             }
 
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                HStack {
-                    Text("Unified surfaces")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Spacer()
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("MiniMax Settings")
+            if collapsed {
+                // Collapsed: show only settings gear
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 36, height: 36)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                                .fill(AppTheme.surface.opacity(0.62))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                                .strokeBorder(AppTheme.border, lineWidth: 1)
+                        )
                 }
-                Text(
-                    "Consistent actions, panels, status chips, and editor treatments across every tool."
+                .buttonStyle(.plain)
+                .help("MiniMax Settings")
+                .padding(.bottom, AppTheme.Spacing.lg)
+            } else {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    HStack {
+                        Text("Unified surfaces")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Spacer()
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("MiniMax Settings")
+                    }
+                    Text(
+                        "Consistent actions, panels, status chips, and editor treatments across every tool."
+                    )
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(AppTheme.Spacing.lg)
+                .background(AppTheme.surface.opacity(0.62))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
+                        .strokeBorder(AppTheme.border, lineWidth: 1)
                 )
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.bottom, AppTheme.Spacing.lg)
             }
-            .padding(AppTheme.Spacing.lg)
-            .background(AppTheme.surface.opacity(0.62))
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                    .strokeBorder(AppTheme.border, lineWidth: 1)
-            )
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.bottom, AppTheme.Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AppTheme.sidebarBackground)
@@ -201,72 +347,97 @@ private struct SidebarView: View {
 private struct SidebarRow: View {
     let tool: Tool
     let isSelected: Bool
+    var collapsed: Bool = false
     let action: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: AppTheme.Spacing.md) {
+            if collapsed {
+                // Collapsed: icon only
                 Image(systemName: tool.systemImage)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(isSelected ? AppTheme.background : AppTheme.textSecondary)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 40, height: 40)
                     .background(
                         RoundedRectangle(cornerRadius: AppTheme.Radius.md)
                             .fill(
                                 isSelected
                                     ? AnyShapeStyle(AppTheme.accentGradient)
-                                    : AnyShapeStyle(AppTheme.surfaceRaised))
+                                    : AnyShapeStyle(
+                                        isHovered ? AppTheme.surface.opacity(0.72) : AppTheme.surfaceRaised))
                     )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                            .strokeBorder(
+                                isSelected
+                                    ? AppTheme.borderHover : AppTheme.border.opacity(isHovered ? 1 : 0),
+                                lineWidth: 1)
+                    )
+            } else {
+                HStack(spacing: AppTheme.Spacing.md) {
+                    Image(systemName: tool.systemImage)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? AppTheme.background : AppTheme.textSecondary)
+                        .frame(width: 34, height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                                .fill(
+                                    isSelected
+                                        ? AnyShapeStyle(AppTheme.accentGradient)
+                                        : AnyShapeStyle(AppTheme.surfaceRaised))
+                        )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tool.name)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .lineLimit(1)
-                    Text(tool.navigationTag)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(isSelected ? AppTheme.accentWarm : AppTheme.textMuted)
-                        .textCase(.uppercase)
-                        .tracking(0.9)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tool.name)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(1)
+                        Text(tool.navigationTag)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(isSelected ? AppTheme.accentWarm : AppTheme.textMuted)
+                            .textCase(.uppercase)
+                            .tracking(0.9)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(
+                            isSelected ? AppTheme.accentWarm : AppTheme.textMuted.opacity(0.7))
                 }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(
-                        isSelected ? AppTheme.accentWarm : AppTheme.textMuted.opacity(0.7))
-            }
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, AppTheme.Spacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                    .fill(
-                        isSelected
-                            ? AnyShapeStyle(AppTheme.selectionGradient)
-                            : AnyShapeStyle(
-                                isHovered ? AppTheme.surface.opacity(0.72) : Color.clear))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                    .strokeBorder(
-                        isSelected
-                            ? AppTheme.borderHover : AppTheme.border.opacity(isHovered ? 1 : 0),
-                        lineWidth: 1)
-            )
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Capsule()
-                        .fill(AppTheme.accentGradient)
-                        .frame(width: 4, height: 28)
-                        .offset(x: -6)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.md)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
+                        .fill(
+                            isSelected
+                                ? AnyShapeStyle(AppTheme.selectionGradient)
+                                : AnyShapeStyle(
+                                    isHovered ? AppTheme.surface.opacity(0.72) : Color.clear))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
+                        .strokeBorder(
+                            isSelected
+                                ? AppTheme.borderHover : AppTheme.border.opacity(isHovered ? 1 : 0),
+                            lineWidth: 1)
+                )
+                .overlay(alignment: .leading) {
+                    if isSelected {
+                        Capsule()
+                            .fill(AppTheme.accentGradient)
+                            .frame(width: 4, height: 28)
+                            .offset(x: -6)
+                    }
                 }
             }
         }
         .buttonStyle(.plain)
+        .help(collapsed ? tool.name : "")
         .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
         .animation(AppTheme.Anim.fast, value: isSelected)
     }

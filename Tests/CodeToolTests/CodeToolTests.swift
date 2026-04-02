@@ -783,6 +783,111 @@ final class CodeToolTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Please describe and analyze the attached image(s)."))
     }
 
+    func testClaudeMarkdownDocumentParsesTablesTaskListsAndStrikethrough() {
+        let markdown = """
+        ## Summary
+
+        - [x] shipped
+        - [ ] pending
+        - ~~deprecated~~
+
+        | Name | Value |
+        | :--- | ---: |
+        | Alpha | 1 |
+        """
+
+        let document = ClaudeMarkdownDocumentModel(markdown: markdown)
+
+        XCTAssertEqual(document.blocks.count, 3)
+
+        guard case let .heading(level, text) = document.blocks[0] else {
+            return XCTFail("Expected a heading block")
+        }
+        XCTAssertEqual(level, 2)
+        XCTAssertEqual(text, "Summary")
+
+        guard case let .unorderedList(items) = document.blocks[1] else {
+            return XCTFail("Expected an unordered list block")
+        }
+        XCTAssertEqual(items.count, 3)
+        XCTAssertEqual(items[0].checkbox, .checked)
+        XCTAssertEqual(items[1].checkbox, .unchecked)
+        XCTAssertNil(items[2].checkbox)
+
+        guard case let .paragraph(firstItemMarkdown) = items[0].blocks[0] else {
+            return XCTFail("Expected list item paragraph")
+        }
+        XCTAssertEqual(firstItemMarkdown, "shipped")
+
+        guard case let .paragraph(strikethroughMarkdown) = items[2].blocks[0] else {
+            return XCTFail("Expected strikethrough paragraph")
+        }
+        XCTAssertEqual(strikethroughMarkdown, "~~deprecated~~")
+
+        guard case let .table(header, rows) = document.blocks[2] else {
+            return XCTFail("Expected a table block")
+        }
+        XCTAssertEqual(header.count, 2)
+        XCTAssertEqual(header[0].markdown, "Name")
+        XCTAssertEqual(header[0].alignment, .left)
+        XCTAssertEqual(header[1].markdown, "Value")
+        XCTAssertEqual(header[1].alignment, .right)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].map(\.markdown), ["Alpha", "1"])
+    }
+
+    func testClaudeMarkdownDocumentParsesQuotesAndCodeBlocks() {
+        let markdown = """
+        > Keep this note handy.
+
+        ```swift
+        let value = 42
+        ```
+        """
+
+        let document = ClaudeMarkdownDocumentModel(markdown: markdown)
+
+        XCTAssertEqual(document.blocks.count, 2)
+
+        guard case let .quote(quoteBlocks) = document.blocks[0] else {
+            return XCTFail("Expected a quote block")
+        }
+        XCTAssertEqual(quoteBlocks.count, 1)
+        guard case let .paragraph(quoteMarkdown) = quoteBlocks[0] else {
+            return XCTFail("Expected quote paragraph content")
+        }
+        XCTAssertEqual(quoteMarkdown, "Keep this note handy.")
+
+        guard case let .codeBlock(language, code) = document.blocks[1] else {
+            return XCTFail("Expected a code block")
+        }
+        XCTAssertEqual(language, "swift")
+        XCTAssertEqual(code, "let value = 42")
+    }
+
+    func testClaudeChatHistoryRecordPreservesRawMarkdownContent() throws {
+        let markdown = """
+        Use ~~old~~ **new**
+
+        | A | B |
+        | - | - |
+        | 1 | 2 |
+        """
+
+        let record = ClaudeChatHistoryRecord(
+            messages: [
+                ClaudeChatMessageRecord(role: "assistant", content: markdown)
+            ],
+            model: "claude-sonnet-4-20250514",
+            referenceID: "markdown-history-ref"
+        )
+
+        let data = try JSONEncoder().encode(record)
+        let decoded = try JSONDecoder().decode(ClaudeChatHistoryRecord.self, from: data)
+
+        XCTAssertEqual(decoded.messages.first?.content, markdown)
+    }
+
     #if canImport(AppKit)
         func testClaudeChatComposerConfiguresBothDelegates() {
             var text = ""

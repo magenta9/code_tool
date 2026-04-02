@@ -255,10 +255,7 @@ public struct ClaudeChatView: View {
                         }
                     }
 
-                    Text(message.content)
-                        .font(.body)
-                        .foregroundColor(AppTheme.textPrimary)
-                        .textSelection(.enabled)
+                    ClaudeMarkdownView(markdown: message.content)
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)
                 .padding(.vertical, AppTheme.Spacing.sm)
@@ -326,10 +323,7 @@ public struct ClaudeChatView: View {
                     }
 
                     if !message.content.isEmpty {
-                        Text(message.content)
-                            .font(.body)
-                            .foregroundColor(AppTheme.textPrimary)
-                            .textSelection(.enabled)
+                        ClaudeMarkdownView(markdown: message.content)
                     }
                 }
                 .padding(.horizontal, AppTheme.Spacing.md)

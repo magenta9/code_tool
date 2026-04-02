@@ -10,7 +10,9 @@ let package = Package(
         .executable(name: "CodeTool", targets: ["CodeToolApp"]),
         .library(name: "CodeToolCore", targets: ["CodeToolCore"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.7.3")
+    ],
     targets: [
         .executableTarget(
             name: "CodeToolApp",
@@ -20,6 +22,9 @@ let package = Package(
         ),
         .target(
             name: "CodeToolCore",
+            dependencies: [
+                .product(name: "Markdown", package: "swift-markdown")
+            ],
             path: "Sources/CodeToolCore"
         ),
         .testTarget(

@@ -15,15 +15,9 @@ public struct ClaudeChatComposer: NSViewRepresentable {
     let onPasteImages: ([NSImage]) -> Void
     let onEscape: () -> Void
 
-    public func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = false
-        scrollView.hasHorizontalScroller = false
-        scrollView.borderType = .noBorder
-        scrollView.drawsBackground = false
-
-        let textView = ComposerTextView()
-        textView.composerDelegate = context.coordinator
+    static func configureTextView(_ textView: ComposerTextView, coordinator: Coordinator) {
+        textView.composerDelegate = coordinator
+        textView.delegate = coordinator
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isEditable = true
@@ -36,6 +30,17 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.textContainerInset = NSSize(width: 4, height: 6)
         textView.textContainer?.widthTracksTextView = true
+    }
+
+    public func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+
+        let textView = ComposerTextView()
+        Self.configureTextView(textView, coordinator: context.coordinator)
 
         scrollView.documentView = textView
         context.coordinator.textView = textView

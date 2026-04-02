@@ -782,4 +782,27 @@ final class CodeToolTests: XCTestCase {
         XCTAssertTrue(prompt.contains("- /tmp/img.png"))
         XCTAssertTrue(prompt.contains("Please describe and analyze the attached image(s)."))
     }
+
+    #if canImport(AppKit)
+        func testClaudeChatComposerConfiguresBothDelegates() {
+            var text = ""
+            let composer = ClaudeChatComposer(
+                text: Binding(
+                    get: { text },
+                    set: { text = $0 }
+                ),
+                isStreaming: false,
+                onSubmit: {},
+                onPasteImages: { _ in },
+                onEscape: {}
+            )
+            let coordinator = composer.makeCoordinator()
+            let textView = ComposerTextView()
+
+            ClaudeChatComposer.configureTextView(textView, coordinator: coordinator)
+
+            XCTAssertTrue(textView.delegate === coordinator)
+            XCTAssertTrue(textView.composerDelegate === coordinator)
+        }
+    #endif
 }

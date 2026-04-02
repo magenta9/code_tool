@@ -9,18 +9,48 @@ public final class MiniMaxAPIClient {
     private var settings: MiniMaxSettingsStore { MiniMaxSettingsStore.shared }
 
     private init() {
+        self.session = Self.makeDefaultSession()
+        self.musicSession = Self.makeMusicSession()
+    }
+
+    private init(session: URLSession, musicSession: URLSession) {
+        self.session = session
+        self.musicSession = musicSession
+    }
+
+    private static func makeDefaultSession() -> URLSession {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120
         config.timeoutIntervalForResource = 300
-        self.session = URLSession(configuration: config)
+        return URLSession(configuration: config)
+    }
 
+    private static func makeMusicSession() -> URLSession {
         let musicConfig = URLSessionConfiguration.default
         musicConfig.timeoutIntervalForRequest = 600
         musicConfig.timeoutIntervalForResource = 900
         // Bypass HTTP proxy for music generation — local proxies often drop
         // idle connections after ~60 s, well before music generation completes.
         musicConfig.connectionProxyDictionary = [:]
-        self.musicSession = URLSession(configuration: musicConfig)
+        return URLSession(configuration: musicConfig)
+    }
+
+    static func makeTestingClient(urlProtocolType: URLProtocol.Type) -> MiniMaxAPIClient {
+        let sessionConfig = URLSessionConfiguration.ephemeral
+        sessionConfig.protocolClasses = [urlProtocolType]
+        sessionConfig.timeoutIntervalForRequest = 120
+        sessionConfig.timeoutIntervalForResource = 300
+
+        let musicConfig = URLSessionConfiguration.ephemeral
+        musicConfig.protocolClasses = [urlProtocolType]
+        musicConfig.timeoutIntervalForRequest = 600
+        musicConfig.timeoutIntervalForResource = 900
+        musicConfig.connectionProxyDictionary = [:]
+
+        return MiniMaxAPIClient(
+            session: URLSession(configuration: sessionConfig),
+            musicSession: URLSession(configuration: musicConfig)
+        )
     }
 
     private struct MusicDiagnosticsContext {
@@ -633,6 +663,8 @@ public final class MiniMaxAPIClient {
             body["lyrics"] = lyrics
         } else if isInstrumental {
             body["is_instrumental"] = true
+        } else {
+            body["lyrics_optimizer"] = true
         }
 
         let requestSummary = Self.musicRequestSummary(prompt: prompt, lyrics: lyrics, format: format, sampleRate: sampleRate, bitrate: bitrate)

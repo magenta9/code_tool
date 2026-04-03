@@ -1,3 +1,4 @@
+import CodeToolUI
 import SwiftUI
 
 #if canImport(AppKit)
@@ -224,6 +225,12 @@ public struct ClaudeCLISettingsView: View {
                 Text("AI Chat uses Claude CLI print mode, so it cannot show interactive approval prompts. Choose how tool calls should be handled.")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
+
+                ToolMessageBanner(
+                    systemImage: "checkmark.shield",
+                    message: "Bypass Permissions is the default for AI Chat so MCP tools can run without getting stuck behind interactive approval.",
+                    tint: AppTheme.success
+                )
 
                 Picker("Permission Mode", selection: $settings.permissionMode) {
                     ForEach(ClaudeCLIPermissionMode.allCases) { mode in

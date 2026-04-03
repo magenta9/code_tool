@@ -1,3 +1,4 @@
+import CodeToolFoundation
 import Foundation
 
 /// HTTP client for MiniMax API endpoints.
@@ -1252,6 +1253,18 @@ public enum MiniMaxError: LocalizedError {
             return "Received an invalid response from MiniMax API."
         case .apiError(let code, let message):
             return "API Error (\(code)): \(message)"
+        }
+    }
+}
+
+extension MiniMaxError: UserFacingError {
+    public var userFacingDescription: String? {
+        switch self {
+        case .apiError(let code, let message)
+            where code == 2061 && message.localizedCaseInsensitiveContains("not support model"):
+            return "Current MiniMax token plan does not support the configured music model. Update the Music Model in MiniMax Settings or use a token plan with access."
+        default:
+            return localizedDescription
         }
     }
 }

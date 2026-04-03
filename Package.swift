@@ -8,7 +8,9 @@ let package = Package(
     ],
     products: [
         .executable(name: "CodeTool", targets: ["CodeToolApp"]),
-        .library(name: "CodeToolCore", targets: ["CodeToolCore"])
+        .library(name: "CodeToolCore", targets: ["CodeToolCore"]),
+        .library(name: "CodeToolFoundation", targets: ["CodeToolFoundation"]),
+        .library(name: "CodeToolUI", targets: ["CodeToolUI"])
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.7.3")
@@ -16,20 +18,31 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "CodeToolApp",
-            dependencies: ["CodeToolCore"],
+            dependencies: ["CodeToolCore", "CodeToolUI"],
             path: "Sources/CodeToolApp",
             resources: [.process("Resources")]
         ),
         .target(
+            name: "CodeToolFoundation",
+            path: "Sources/CodeToolFoundation"
+        ),
+        .target(
+            name: "CodeToolUI",
+            dependencies: ["CodeToolFoundation"],
+            path: "Sources/CodeToolUI"
+        ),
+        .target(
             name: "CodeToolCore",
             dependencies: [
+                "CodeToolFoundation",
+                "CodeToolUI",
                 .product(name: "Markdown", package: "swift-markdown")
             ],
             path: "Sources/CodeToolCore"
         ),
         .testTarget(
             name: "CodeToolTests",
-            dependencies: ["CodeToolCore"],
+            dependencies: ["CodeToolCore", "CodeToolFoundation"],
             path: "Tests/CodeToolTests"
         )
     ]

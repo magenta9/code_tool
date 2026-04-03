@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 
 @testable import CodeToolCore
+@testable import CodeToolFoundation
 
 #if canImport(SwiftUI)
     import SwiftUI
@@ -257,7 +258,7 @@ final class CodeToolTests: XCTestCase {
         XCTAssertEqual(store.maxTurns, 10)
         XCTAssertEqual(store.maxBudgetUSD, 5.0)
         XCTAssertTrue(store.useBare)
-        XCTAssertEqual(store.permissionMode, .auto)
+        XCTAssertEqual(store.permissionMode, .bypassPermissions)
     }
 
     func testClaudeChatHistoryRecordCodable() throws {

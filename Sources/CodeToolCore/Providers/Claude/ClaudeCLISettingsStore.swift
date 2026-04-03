@@ -1,3 +1,4 @@
+import CodeToolFoundation
 import Foundation
 import Observation
 
@@ -9,6 +10,7 @@ public final class ClaudeCLISettingsStore: UserDefaultsStorage {
         "claude-opus-4-20250514",
         "claude-haiku-3-5-20241022",
     ]
+    public static let defaultPermissionMode: ClaudeCLIPermissionMode = .bypassPermissions
 
     public enum Keys: UserDefaultsStorageKeys {
         static let claudePath = "claudeCLI_path"
@@ -74,7 +76,7 @@ public final class ClaudeCLISettingsStore: UserDefaultsStorage {
         self.permissionMode =
             ClaudeCLIPermissionMode(
                 rawValue: defaults.string(forKey: Keys.permissionMode) ?? ""
-            ) ?? .auto
+            ) ?? Self.defaultPermissionMode
         self.discoveredModels = []
         self.availableModels = Self.fallbackModels
         self.isUsingFallbackModels = true
@@ -134,7 +136,7 @@ public final class ClaudeCLISettingsStore: UserDefaultsStorage {
         maxTurns = 10
         maxBudgetUSD = 5.0
         useBare = true
-        permissionMode = .auto
+        permissionMode = Self.defaultPermissionMode
         discoverCLI()
         refreshAvailableModels()
     }
@@ -194,7 +196,7 @@ public enum ClaudeCLIPermissionMode: String, CaseIterable, Identifiable {
     var summary: String {
         switch self {
         case .auto:
-            return "Auto-approve low-risk tools in print mode."
+            return "Auto-approve only low-risk tools. MCP calls may still be blocked in print mode."
         case .default:
             return "Use Claude's default permission checks."
         case .acceptEdits:
@@ -202,7 +204,7 @@ public enum ClaudeCLIPermissionMode: String, CaseIterable, Identifiable {
         case .dontAsk:
             return "Deny anything that is not already pre-approved."
         case .bypassPermissions:
-            return "Run tools without approval prompts. Use only in trusted workspaces."
+            return "Recommended for AI Chat. Run tools without approval prompts in this trusted workspace."
         case .plan:
             return "Planning-oriented mode that avoids executing tools."
         }

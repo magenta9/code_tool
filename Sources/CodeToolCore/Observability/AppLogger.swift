@@ -1,21 +1,5 @@
+import CodeToolFoundation
 import Foundation
-
-public enum AppLogLevel: String, Codable, Sendable {
-    case fault
-    case error
-    case info
-    case debug
-    case trace
-}
-
-public enum AppLogCategory: String, Codable, Sendable {
-    case aimusic
-    case aispeech
-    case aiimage
-    case aichat
-    case claudechat
-    case observability
-}
 
 public struct LoggedDiagnosticError: LocalizedError {
     public let referenceID: String
@@ -36,19 +20,9 @@ public struct LoggedDiagnosticError: LocalizedError {
     }
 
     private var userFacingDetail: String? {
-        if let miniMaxError = underlyingError as? MiniMaxError {
-            switch miniMaxError {
-            case .apiError(let code, let message):
-                if category == .aimusic,
-                   code == 2061,
-                   message.localizedCaseInsensitiveContains("not support model") {
-                    return "Current MiniMax token plan does not support the configured music model. Update the Music Model in MiniMax Settings or use a token plan with access."
-                }
-
-                return miniMaxError.localizedDescription
-            default:
-                return miniMaxError.localizedDescription
-            }
+        if let userFacingError = underlyingError as? UserFacingError,
+           let description = userFacingError.userFacingDescription {
+            return description
         }
 
         if category == .aimusic,

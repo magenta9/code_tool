@@ -1,5 +1,6 @@
 import Foundation
 import Markdown
+import CodeToolUI
 import SwiftUI
 
 struct ClaudeMarkdownDocumentModel: Equatable {

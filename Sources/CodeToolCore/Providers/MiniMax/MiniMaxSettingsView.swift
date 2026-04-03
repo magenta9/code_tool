@@ -1,3 +1,4 @@
+import CodeToolUI
 import SwiftUI
 
 /// Settings view for configuring MiniMax API settings.

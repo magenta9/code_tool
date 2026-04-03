@@ -177,7 +177,7 @@ final class CodeToolTests: XCTestCase {
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
         defer { buffer.deallocate() }
 
-        while stream.hasBytesAvailable {
+        while true {
             let readCount = stream.read(buffer, maxLength: bufferSize)
             if readCount < 0 {
                 throw stream.streamError ?? URLError(.cannotDecodeRawData)
@@ -647,6 +647,46 @@ final class CodeToolTests: XCTestCase {
         XCTAssertEqual(requestCount, 1)
         XCTAssertNil(response.audioData)
         XCTAssertEqual(response.audioURL, "https://example.com/generated.mp3")
+        XCTAssertFalse(response.referenceID.isEmpty)
+    }
+
+    func testGenerateMusicWithEmptyLyricsUsesLyricsOptimizer() async throws {
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/music_generation")
+
+            let bodyData = try Self.requestBodyData(for: request)
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+
+            XCTAssertEqual(bodyObject["lyrics_optimizer"] as? Bool, true)
+            XCTAssertNil(bodyObject["lyrics"])
+            XCTAssertNil(bodyObject["is_instrumental"])
+
+            let responseBody: [String: Any] = [
+                "data": [
+                    "audio": "https://example.com/generated-no-lyrics.mp3",
+                    "status": 2,
+                ],
+                "trace_id": "trace-789",
+                "base_resp": [
+                    "status_code": 0,
+                    "status_msg": "success",
+                ],
+            ]
+
+            let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
+            return (response, responseData)
+        }
+
+        let response = try await miniMaxClient.generateMusic(
+            prompt: "ambient track", lyrics: "")
+
+        XCTAssertNil(response.audioData)
+        XCTAssertEqual(response.audioURL, "https://example.com/generated-no-lyrics.mp3")
         XCTAssertFalse(response.referenceID.isEmpty)
     }
 

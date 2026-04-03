@@ -72,6 +72,7 @@ final class CodeToolTests: XCTestCase {
     private var savedClaudeUseBare = true
     private var savedClaudeWorkingDirectory = ""
     private var temporaryLogDirectoryURL: URL?
+    private var temporaryDiagnosticsDirectoryURL: URL?
 
     override func setUp() {
         super.setUp()
@@ -103,9 +104,16 @@ final class CodeToolTests: XCTestCase {
         try? FileManager.default.createDirectory(
             at: tempDirectoryURL, withIntermediateDirectories: true)
 
+        let tempDiagnosticsDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeToolDiagnosticsTests-\(UUID().uuidString)", isDirectory: true)
+        temporaryDiagnosticsDirectoryURL = tempDiagnosticsDirectoryURL
+        try? FileManager.default.createDirectory(
+            at: tempDiagnosticsDirectoryURL, withIntermediateDirectories: true)
+
         let setupExpectation = expectation(description: "configure log directory")
         Task {
             await AppLogger.shared.setDirectoryURLForTesting(tempDirectoryURL)
+            await DiagnosticsStore.shared.setBaseURLForTesting(tempDiagnosticsDirectoryURL)
             setupExpectation.fulfill()
         }
         wait(for: [setupExpectation], timeout: 2.0)
@@ -140,12 +148,16 @@ final class CodeToolTests: XCTestCase {
         let resetExpectation = expectation(description: "reset log directory")
         Task {
             await AppLogger.shared.setDirectoryURLForTesting(nil)
+            await DiagnosticsStore.shared.setBaseURLForTesting(nil)
             resetExpectation.fulfill()
         }
         wait(for: [resetExpectation], timeout: 2.0)
 
         if let temporaryLogDirectoryURL {
             try? FileManager.default.removeItem(at: temporaryLogDirectoryURL)
+        }
+        if let temporaryDiagnosticsDirectoryURL {
+            try? FileManager.default.removeItem(at: temporaryDiagnosticsDirectoryURL)
         }
 
         super.tearDown()
@@ -157,6 +169,19 @@ final class CodeToolTests: XCTestCase {
 
         let logData = try Data(contentsOf: try XCTUnwrap(logFiles.first))
         return try XCTUnwrap(String(data: logData, encoding: .utf8))
+    }
+
+    private func logEntries(for category: AppLogCategory) async throws -> [AppLogEntry] {
+        let logFiles = await AppLogger.shared.logFileURLs(for: category)
+        XCTAssertEqual(logFiles.count, 1)
+
+        let logData = try Data(contentsOf: try XCTUnwrap(logFiles.first))
+        let lines = try XCTUnwrap(String(data: logData, encoding: .utf8))
+            .split(whereSeparator: \.isNewline)
+
+        return try lines.map { line in
+            try JSONDecoder().decode(AppLogEntry.self, from: Data(line.utf8))
+        }
     }
 
     private static func requestBodyData(for request: URLRequest) throws -> Data {
@@ -377,6 +402,196 @@ final class CodeToolTests: XCTestCase {
         XCTAssertEqual(response.format, "mp3")
         XCTAssertEqual(response.durationMs, 321)
         XCTAssertFalse(response.referenceID.isEmpty)
+    }
+
+    func testRedactionPolicyHashesTextWithoutPreviewByDefault() {
+        let result = AppRedactionPolicy.standard.redact(text: "secret prompt")
+
+        XCTAssertEqual(result?.length, 13)
+        XCTAssertEqual(
+            result?.sha256,
+            "d6051e73b4e9a50e6a735ffba9494dd514acb71df325045501b0cbc8d206e20f"
+        )
+        XCTAssertNil(result?.preview)
+        XCTAssertEqual(result?.summary, "len=13, sha256=d6051e73b4e9")
+    }
+
+    func testRedactionPolicyCanIncludePreviewWhenExplicitlyEnabled() {
+        let policy = AppRedactionPolicy(
+            includeSensitivePreview: true,
+            previewLimit: 6
+        )
+
+        let result = policy.redact(text: "secret prompt")
+
+        XCTAssertEqual(result?.preview, "secret…")
+        XCTAssertEqual(result?.summary, "len=13, sha256=d6051e73b4e9, preview=secret…")
+    }
+
+    func testInfoLoggingAddsObservabilityEnvelopeWithoutBreakingLegacyFields() async throws {
+        await AppLogger.shared.info(
+            category: .aichat,
+            event: "request_started",
+            referenceID: "phase1-ref",
+            message: "Started request.",
+            metadata: ["stage": "request_chat_completion"]
+        )
+
+        let entries = try await logEntries(for: .aichat)
+        let entry = try XCTUnwrap(entries.first)
+
+        XCTAssertEqual(entry.level, .info)
+        XCTAssertEqual(entry.subsystem, AppLogger.subsystem)
+        XCTAssertEqual(entry.category, .aichat)
+        XCTAssertEqual(entry.event, "request_started")
+        XCTAssertEqual(entry.referenceID, "phase1-ref")
+        XCTAssertEqual(entry.message, "Started request.")
+        XCTAssertEqual(entry.metadata["stage"], "request_chat_completion")
+        XCTAssertNil(entry.durationMs)
+    }
+
+    func testRetentionExecutorPrunesExpiredAndOversizedFiles() async throws {
+        let tempDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ObservabilityRetention-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectoryURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectoryURL) }
+
+        let expiredURL = tempDirectoryURL.appendingPathComponent("aichat-expired.log")
+        let olderRecentURL = tempDirectoryURL.appendingPathComponent("aichat-older.log")
+        let newestURL = tempDirectoryURL.appendingPathComponent("aichat-newest.log")
+
+        try Data(repeating: 0x61, count: 10).write(to: expiredURL)
+        try Data(repeating: 0x62, count: 10).write(to: olderRecentURL)
+        try Data(repeating: 0x63, count: 10).write(to: newestURL)
+
+        let now = Date(timeIntervalSince1970: 1_710_000_000)
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-10 * 24 * 60 * 60)],
+            ofItemAtPath: expiredURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-2 * 60 * 60)],
+            ofItemAtPath: olderRecentURL.path
+        )
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-60)],
+            ofItemAtPath: newestURL.path
+        )
+
+        let executor = AppLogRetentionExecutor()
+        try await executor.prune(
+            directoryURL: tempDirectoryURL,
+            policy: AppLogRetentionPolicy(
+                maxFileAge: 7 * 24 * 60 * 60,
+                maxDirectorySizeBytes: 15
+            ),
+            now: now
+        )
+
+        let remainingNames = try FileManager.default.contentsOfDirectory(
+            atPath: tempDirectoryURL.path
+        ).sorted()
+
+        XCTAssertEqual(remainingNames, ["aichat-newest.log"])
+    }
+
+    func testDiagnosticsStoreAggregatesReferenceIDAcrossLogsAndHistory() async throws {
+        let referenceID = "diag-ref-001"
+        let historyTempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HistoryDiagnostics-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: historyTempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: historyTempDirectory) }
+
+        await HistoryStore.shared.setBaseURLForTesting(historyTempDirectory)
+        defer {
+            Task { await HistoryStore.shared.setBaseURLForTesting(nil) }
+        }
+
+        await AppLogger.shared.info(
+            category: .claudechat,
+            event: "claude_process_started",
+            referenceID: referenceID,
+            message: "Started Claude CLI subprocess.",
+            metadata: ["stage": "launch_process"]
+        )
+        _ = await AppLogger.shared.error(
+            category: .claudechat,
+            event: "claude_process_failed",
+            referenceID: referenceID,
+            message: "Claude CLI subprocess exited with a non-zero status.",
+            metadata: ["stage": "process_exit", "exitCode": "1"],
+            error: NSError(domain: "ClaudeCLIClient.exit", code: 1)
+        )
+
+        let record = ClaudeChatHistoryRecord(
+            messages: [ClaudeChatMessageRecord(role: "user", content: "hi")],
+            model: "claude-sonnet-4-20250514",
+            sessionId: "session-001",
+            referenceID: referenceID
+        )
+        try await HistoryStore.shared.save(record)
+
+        let recentIssues = try await DiagnosticsStore.shared.recentIssues(limit: 10)
+        let traceSummary = try await DiagnosticsStore.shared.traceSummary(referenceID: referenceID)
+        let matches = try await HistoryStore.shared.diagnosticsMatches(referenceID: referenceID)
+
+        XCTAssertTrue(recentIssues.contains { $0.referenceID == referenceID })
+        XCTAssertEqual(traceSummary?.referenceID, referenceID)
+        XCTAssertEqual(traceSummary?.eventCount, 2)
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches.first?.sessionID, "session-001")
+    }
+
+    func testDiagnosticsExportPackageIncludesHistoryAndMetrics() async throws {
+        let referenceID = "diag-export-001"
+        let historyTempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HistoryExport-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: historyTempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: historyTempDirectory) }
+
+        await HistoryStore.shared.setBaseURLForTesting(historyTempDirectory)
+        defer {
+            Task { await HistoryStore.shared.setBaseURLForTesting(nil) }
+        }
+
+        await AppLogger.shared.info(
+            category: .aichat,
+            event: "request_started",
+            referenceID: referenceID,
+            message: "Started AI Chat request.",
+            metadata: ["stage": "request_chat_completion"]
+        )
+        try await DiagnosticsStore.shared.recordMetricSummary(
+            DiagnosticsMetricSummary(
+                kind: "metrickit_payload",
+                metadata: ["payloadCount": "1"]
+            )
+        )
+        try await HistoryStore.shared.save(
+            ChatHistoryRecord(
+                id: UUID(),
+                createdAt: Date(),
+                systemPrompt: "",
+                messages: [ChatMessageRecord(role: "user", content: "Hello")],
+                model: "MiniMax-Text-01",
+                promptTokens: 1,
+                completionTokens: 1,
+                totalTokens: 2,
+                referenceID: referenceID
+            )
+        )
+
+        let exportURL = try await DiagnosticsStore.shared.exportPackage(referenceID: referenceID)
+        let data = try Data(contentsOf: exportURL)
+        let payload = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        XCTAssertEqual(payload["focusReferenceID"] as? String, referenceID)
+        XCTAssertNotNil(payload["recentIssues"])
+        XCTAssertNotNil(payload["relatedEvents"])
+        XCTAssertNotNil(payload["historyMatches"])
+        XCTAssertNotNil(payload["metricSummaries"])
     }
 
     func testTextToSpeechTimeoutWritesStructuredErrorLog() async throws {

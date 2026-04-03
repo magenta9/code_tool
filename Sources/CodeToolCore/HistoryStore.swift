@@ -549,6 +549,74 @@ public actor HistoryStore {
         return try Data(contentsOf: dir.appendingPathComponent(fileName))
     }
 
+    public func diagnosticsMatches(referenceID: String) throws -> [DiagnosticsHistoryMatch] {
+        var matches: [DiagnosticsHistoryMatch] = []
+
+        for record in try listChat() where record.referenceID == referenceID {
+            matches.append(
+                DiagnosticsHistoryMatch(
+                    category: HistoryCategory.chat.rawValue,
+                    createdAt: record.createdAt,
+                    referenceID: record.referenceID,
+                    title: "AI Chat",
+                    detail: "model=\(record.model), messages=\(record.messages.count)"
+                )
+            )
+        }
+
+        for record in try listSpeech() where record.referenceID == referenceID {
+            matches.append(
+                DiagnosticsHistoryMatch(
+                    category: HistoryCategory.speech.rawValue,
+                    createdAt: record.createdAt,
+                    referenceID: record.referenceID,
+                    title: "AI Speech",
+                    detail: "voice=\(record.voice), durationMs=\(record.durationMs), format=\(record.outputFormat)"
+                )
+            )
+        }
+
+        for record in try listImage() where record.referenceID == referenceID {
+            matches.append(
+                DiagnosticsHistoryMatch(
+                    category: HistoryCategory.image.rawValue,
+                    createdAt: record.createdAt,
+                    referenceID: record.referenceID,
+                    title: "AI Image",
+                    detail: "model=\(record.model), images=\(record.imageCount), aspectRatio=\(record.aspectRatio)"
+                )
+            )
+        }
+
+        for record in try listMusic() where record.referenceID == referenceID {
+            matches.append(
+                DiagnosticsHistoryMatch(
+                    category: HistoryCategory.music.rawValue,
+                    createdAt: record.createdAt,
+                    referenceID: record.referenceID,
+                    title: "AI Music",
+                    detail: "model=\(record.model), format=\(record.outputFormat), sampleRate=\(record.sampleRate)"
+                )
+            )
+        }
+
+        for record in try listClaudeChat() where record.referenceID == referenceID {
+            let detail = "model=\(record.model), messages=\(record.messages.count)"
+            matches.append(
+                DiagnosticsHistoryMatch(
+                    category: HistoryCategory.claudeChat.rawValue,
+                    createdAt: record.createdAt,
+                    referenceID: record.referenceID,
+                    title: "Claude Chat",
+                    detail: detail,
+                    sessionID: record.sessionId
+                )
+            )
+        }
+
+        return matches.sorted { $0.createdAt > $1.createdAt }
+    }
+
     // MARK: - Delete
 
     /// Delete a single record and its associated binary files.

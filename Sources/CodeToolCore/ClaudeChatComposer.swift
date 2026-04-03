@@ -14,6 +14,23 @@ public struct ClaudeChatComposer: NSViewRepresentable {
     let onSubmit: () -> Void
     let onPasteImages: ([NSImage]) -> Void
     let onEscape: () -> Void
+    let onVisibleTextChange: (Bool) -> Void
+
+    init(
+        text: Binding<String>,
+        isStreaming: Bool,
+        onSubmit: @escaping () -> Void,
+        onPasteImages: @escaping ([NSImage]) -> Void,
+        onEscape: @escaping () -> Void,
+        onVisibleTextChange: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self._text = text
+        self.isStreaming = isStreaming
+        self.onSubmit = onSubmit
+        self.onPasteImages = onPasteImages
+        self.onEscape = onEscape
+        self.onVisibleTextChange = onVisibleTextChange
+    }
 
     static func configureTextView(_ textView: ComposerTextView, coordinator: Coordinator) {
         textView.composerDelegate = coordinator
@@ -44,14 +61,16 @@ public struct ClaudeChatComposer: NSViewRepresentable {
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
+        context.coordinator.updateVisibleTextState(for: textView)
 
         return scrollView
     }
 
     public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? ComposerTextView else { return }
-        let hasMarkedText = textView.markedRange().location != NSNotFound
+        let hasMarkedText = textView.hasMarkedText()
 
+        context.coordinator.parent = self
         context.coordinator.isUpdating = true
         if textView.string != text && !hasMarkedText {
             textView.string = text
@@ -60,6 +79,7 @@ public struct ClaudeChatComposer: NSViewRepresentable {
             context.coordinator.lastCommittedText = textView.string
         }
         context.coordinator.isUpdating = false
+        context.coordinator.updateVisibleTextState(for: textView)
     }
 
     public func makeCoordinator() -> Coordinator {
@@ -73,6 +93,7 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         weak var textView: NSTextView?
         var isUpdating = false
         var lastCommittedText: String
+        var lastReportedHasVisibleText: Bool?
 
         init(_ parent: ClaudeChatComposer) {
             self.parent = parent
@@ -80,14 +101,36 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         }
 
         public func textDidChange(_ notification: Notification) {
-            guard !isUpdating, let textView else { return }
-            guard textView.markedRange().location == NSNotFound else { return }
+            guard !isUpdating else { return }
+            guard let textView = (notification.object as? NSTextView) ?? textView else { return }
+            updateVisibleTextState(for: textView)
+            guard !textView.hasMarkedText() else { return }
 
             let committedText = textView.string
             guard committedText != lastCommittedText else { return }
 
             lastCommittedText = committedText
             parent.text = committedText
+        }
+
+        func updateVisibleTextState(for textView: NSTextView) {
+            let hasVisibleText = !textView.string.isEmpty
+            guard hasVisibleText != lastReportedHasVisibleText else { return }
+            lastReportedHasVisibleText = hasVisibleText
+            parent.onVisibleTextChange(hasVisibleText)
+        }
+
+        public func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            guard !textView.hasMarkedText() else { return false }
+
+            if commandSelector == #selector(NSText.insertNewline(_:))
+                || commandSelector == #selector(NSText.insertNewlineIgnoringFieldEditor(_:))
+            {
+                parent.onSubmit()
+                return true
+            }
+
+            return false
         }
 
         // MARK: - ComposerTextViewDelegate
@@ -120,17 +163,20 @@ final class ComposerTextView: NSTextView {
     weak var composerDelegate: ComposerTextViewDelegate?
 
     override func keyDown(with event: NSEvent) {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-        // Enter (without Shift) → send
-        if event.keyCode == 36 && !flags.contains(.shift) {
-            composerDelegate?.composerDidPressEnter()
+        // During IME composition (marked text), let the input method handle all keys
+        if hasMarkedText() {
+            super.keyDown(with: event)
             return
         }
 
-        // Shift+Enter → insert newline (default behavior)
-        if event.keyCode == 36 && flags.contains(.shift) {
-            super.keyDown(with: event)
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        if isSubmitKeyEvent(event) {
+            if flags.contains(.shift) {
+                insertText("\n", replacementRange: selectedRange())
+            } else {
+                composerDelegate?.composerDidPressEnter()
+            }
             return
         }
 
@@ -141,6 +187,24 @@ final class ComposerTextView: NSTextView {
         }
 
         super.keyDown(with: event)
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        if hasMarkedText() {
+            super.insertNewline(sender)
+            return
+        }
+
+        composerDelegate?.composerDidPressEnter()
+    }
+
+    override func insertNewlineIgnoringFieldEditor(_ sender: Any?) {
+        if hasMarkedText() {
+            super.insertNewlineIgnoringFieldEditor(sender)
+            return
+        }
+
+        composerDelegate?.composerDidPressEnter()
     }
 
     override func paste(_ sender: Any?) {
@@ -179,5 +243,14 @@ final class ComposerTextView: NSTextView {
 
         // Fallback to default text paste
         super.paste(sender)
+    }
+
+    private func isSubmitKeyEvent(_ event: NSEvent) -> Bool {
+        if event.keyCode == 36 || event.keyCode == 76 {
+            return true
+        }
+
+        guard let characters = event.charactersIgnoringModifiers else { return false }
+        return characters == "\r" || characters == "\u{3}"
     }
 }

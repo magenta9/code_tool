@@ -70,6 +70,7 @@ final class CodeToolTests: XCTestCase {
     private var savedClaudeMaxTurns = 10
     private var savedClaudeMaxBudgetUSD = 5.0
     private var savedClaudeUseBare = true
+    private var savedClaudePermissionMode = ""
     private var temporaryLogDirectoryURL: URL?
     private var temporaryDiagnosticsDirectoryURL: URL?
     private let asyncLogPropagationDelay: UInt64 = 300_000_000 // 300 ms: async Tasks writing to actors may take a few event-loop turns
@@ -89,6 +90,7 @@ final class CodeToolTests: XCTestCase {
         savedClaudeMaxTurns = claudeStore.maxTurns
         savedClaudeMaxBudgetUSD = claudeStore.maxBudgetUSD
         savedClaudeUseBare = claudeStore.useBare
+        savedClaudePermissionMode = claudeStore.permissionMode.rawValue
 
         store.apiKey = "test-api-key"
         store.baseURL = "https://example.com/v1"
@@ -137,6 +139,8 @@ final class CodeToolTests: XCTestCase {
         claudeStore.maxTurns = savedClaudeMaxTurns
         claudeStore.maxBudgetUSD = savedClaudeMaxBudgetUSD
         claudeStore.useBare = savedClaudeUseBare
+        claudeStore.permissionMode =
+            ClaudeCLIPermissionMode(rawValue: savedClaudePermissionMode) ?? .auto
         claudeStore.discoverCLI()
 
         MockURLProtocol.requestHandler = nil
@@ -253,6 +257,7 @@ final class CodeToolTests: XCTestCase {
         XCTAssertEqual(store.maxTurns, 10)
         XCTAssertEqual(store.maxBudgetUSD, 5.0)
         XCTAssertTrue(store.useBare)
+        XCTAssertEqual(store.permissionMode, .auto)
     }
 
     func testClaudeChatHistoryRecordCodable() throws {
@@ -352,6 +357,105 @@ final class CodeToolTests: XCTestCase {
         XCTAssertFalse(args.contains("--session-id"))
         let resumeIndex = try XCTUnwrap(args.firstIndex(of: "--resume"))
         XCTAssertEqual(args[resumeIndex + 1], "4cde10f7-cc71-4d25-8472-f9737d911dc8")
+    }
+
+    func testClaudeCLIClientUsesConfiguredPermissionMode() async throws {
+        let tempDirectory = try XCTUnwrap(temporaryLogDirectoryURL)
+        let scriptURL = tempDirectory.appendingPathComponent("fake-claude-permissions.sh")
+        let argsLogURL = tempDirectory.appendingPathComponent("claude-permissions-args.log")
+
+        let script = """
+        #!/bin/zsh
+        print -rl -- \"$@\" > \"$CODETOOL_CLAUDE_ARGS_LOG\"
+        print '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"permission-session\",\"model\":\"claude-sonnet-4-20250514\"}'
+        print '{\"type\":\"result\",\"is_error\":false,\"total_cost_usd\":0,\"duration_ms\":1,\"usage\":{\"input_tokens\":1,\"output_tokens\":1},\"session_id\":\"permission-session\"}'
+        """
+
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: scriptURL.path
+        )
+
+        setenv("CODETOOL_CLAUDE_ARGS_LOG", argsLogURL.path, 1)
+        defer { unsetenv("CODETOOL_CLAUDE_ARGS_LOG") }
+
+        let store = ClaudeCLISettingsStore.shared
+        store.claudePath = scriptURL.path
+        store.permissionMode = .auto
+        store.discoverCLI()
+
+        let client = ClaudeCLIClient()
+        await client.send(
+            message: "search the web",
+            settings: store,
+            sessionId: nil,
+            workingDirectory: tempDirectory.path
+        ) { _ in }
+
+        let argsText = try String(contentsOf: argsLogURL, encoding: .utf8)
+        let args = argsText
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+
+        let permissionModeIndex = try XCTUnwrap(args.firstIndex(of: "--permission-mode"))
+        XCTAssertEqual(args[permissionModeIndex + 1], "auto")
+    }
+
+    func testClaudeCLIClientEmitsToolResultFromStreamEvent() async throws {
+        let tempDirectory = try XCTUnwrap(temporaryLogDirectoryURL)
+        let scriptURL = tempDirectory.appendingPathComponent("fake-claude-tool-result.sh")
+
+        let script = """
+        #!/bin/zsh
+        print '{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"tool-session\",\"model\":\"claude-sonnet-4-20250514\"}'
+        print '{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_123\",\"name\":\"mcp_jina_search_web\",\"input\":{}}}}'
+        print '{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\\\":\\\"latest chapter\\\"}\"}}}'
+        print '{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\",\"index\":0}}'
+        print '{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_123\",\"content\":\"search results\"}}}'
+        print '{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\",\"index\":1}}'
+        print '{\"type\":\"result\",\"is_error\":false,\"total_cost_usd\":0,\"duration_ms\":1,\"usage\":{\"input_tokens\":1,\"output_tokens\":1},\"session_id\":\"tool-session\"}'
+        """
+
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: scriptURL.path
+        )
+
+        let store = ClaudeCLISettingsStore.shared
+        store.claudePath = scriptURL.path
+        store.discoverCLI()
+
+        let client = ClaudeCLIClient()
+        var receivedEvents: [ClaudeCLIEvent] = []
+
+        await client.send(
+            message: "find something",
+            settings: store,
+            sessionId: nil,
+            workingDirectory: tempDirectory.path
+        ) { event in
+            receivedEvents.append(event)
+        }
+
+        guard case .toolUseStart(let toolUseId, let toolName) = receivedEvents.first(where: {
+            if case .toolUseStart = $0 { return true }
+            return false
+        }) else {
+            return XCTFail("Expected tool use start event")
+        }
+        XCTAssertEqual(toolUseId, "toolu_123")
+        XCTAssertEqual(toolName, "mcp_jina_search_web")
+
+        guard case .toolResult(let resultToolUseId, let content) = receivedEvents.first(where: {
+            if case .toolResult = $0 { return true }
+            return false
+        }) else {
+            return XCTFail("Expected tool result event")
+        }
+        XCTAssertEqual(resultToolUseId, "toolu_123")
+        XCTAssertEqual(content, "search results")
     }
 
     func testClaudeCLIClientUsesExplicitWorkingDirectory() async throws {
@@ -1274,7 +1378,133 @@ final class CodeToolTests: XCTestCase {
             XCTAssertTrue(textView.delegate === coordinator)
             XCTAssertTrue(textView.composerDelegate === coordinator)
         }
+
+        func testClaudeChatComposerReportsVisibleTextForMarkedText() {
+            var text = ""
+            var hasVisibleText: Bool?
+            let composer = ClaudeChatComposer(
+                text: Binding(
+                    get: { text },
+                    set: { text = $0 }
+                ),
+                isStreaming: false,
+                onSubmit: {},
+                onPasteImages: { _ in },
+                onEscape: {},
+                onVisibleTextChange: { hasVisibleText = $0 }
+            )
+            let coordinator = composer.makeCoordinator()
+            let textView = ComposerTextView()
+
+            ClaudeChatComposer.configureTextView(textView, coordinator: coordinator)
+            textView.setMarkedText(
+                "ni",
+                selectedRange: NSRange(location: 2, length: 0),
+                replacementRange: NSRange(location: NSNotFound, length: 0)
+            )
+            coordinator.textDidChange(
+                Notification(name: NSText.didChangeNotification, object: textView)
+            )
+
+            XCTAssertEqual(text, "")
+            XCTAssertEqual(hasVisibleText, true)
+        }
+
+        func testClaudeChatComposerPressingEnterInvokesSubmitHandler() {
+            var text = "Hello"
+            var submitCount = 0
+            let composer = ClaudeChatComposer(
+                text: Binding(
+                    get: { text },
+                    set: { text = $0 }
+                ),
+                isStreaming: false,
+                onSubmit: { submitCount += 1 },
+                onPasteImages: { _ in },
+                onEscape: {}
+            )
+            let coordinator = composer.makeCoordinator()
+            let textView = ComposerTextView()
+
+            ClaudeChatComposer.configureTextView(textView, coordinator: coordinator)
+            textView.string = text
+
+            let event = NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                characters: "\r",
+                charactersIgnoringModifiers: "\r",
+                isARepeat: false,
+                keyCode: 36
+            )
+
+            guard let event = event else { return }
+            textView.keyDown(with: event)
+
+            XCTAssertEqual(submitCount, 1)
+            XCTAssertEqual(textView.string, "Hello")
+        }
+
+        func testClaudeChatComposerPressingShiftEnterInsertsNewline() {
+            var text = "Hello"
+            var submitCount = 0
+            let composer = ClaudeChatComposer(
+                text: Binding(
+                    get: { text },
+                    set: { text = $0 }
+                ),
+                isStreaming: false,
+                onSubmit: { submitCount += 1 },
+                onPasteImages: { _ in },
+                onEscape: {}
+            )
+            let coordinator = composer.makeCoordinator()
+            let textView = ComposerTextView()
+
+            ClaudeChatComposer.configureTextView(textView, coordinator: coordinator)
+            textView.string = text
+
+            let event = NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: [.shift],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                characters: "\r",
+                charactersIgnoringModifiers: "\r",
+                isARepeat: false,
+                keyCode: 36
+            )
+
+            guard let event = event else { return }
+            textView.keyDown(with: event)
+
+            XCTAssertEqual(submitCount, 0)
+            XCTAssertEqual(textView.string, "Hello\n")
+        }
     #endif
+
+    func testClaudeChatViewPlaceholderStaysHiddenWhileDraftTextIsVisible() {
+        XCTAssertFalse(
+            ClaudeChatView.shouldShowComposerPlaceholder(
+                inputText: "",
+                hasVisibleDraftText: true,
+                hasImages: false
+            )
+        )
+        XCTAssertTrue(
+            ClaudeChatView.shouldShowComposerPlaceholder(
+                inputText: "",
+                hasVisibleDraftText: false,
+                hasImages: false
+            )
+        )
+    }
 
     // MARK: - AppUnifiedLogSink formatting tests
 

@@ -42,10 +42,10 @@ public struct MiniMaxConfig: Sendable, Equatable {
 
 /// Manages MiniMax API provider configuration with optional UserDefaults persistence.
 @Observable
-public final class MiniMaxSettingsStore {
+public final class MiniMaxSettingsStore: UserDefaultsStorage {
     public static let shared = MiniMaxSettingsStore()
 
-    private enum Keys {
+    public enum Keys: UserDefaultsStorageKeys {
         static let apiKey = "minimax_api_key"
         static let baseURL = "minimax_base_url"
         static let chatModel = "minimax_chat_model"
@@ -54,30 +54,30 @@ public final class MiniMaxSettingsStore {
         static let musicModel = "minimax_music_model"
     }
 
-    private let persisting: Bool
+    public let persisting: Bool
 
     public var apiKey: String {
-        didSet { if persisting { UserDefaults.standard.set(apiKey, forKey: Keys.apiKey) } }
+        didSet { setValue(apiKey, forKey: Keys.apiKey) }
     }
 
     public var baseURL: String {
-        didSet { if persisting { UserDefaults.standard.set(baseURL, forKey: Keys.baseURL) } }
+        didSet { setValue(baseURL, forKey: Keys.baseURL) }
     }
 
     public var chatModel: String {
-        didSet { if persisting { UserDefaults.standard.set(chatModel, forKey: Keys.chatModel) } }
+        didSet { setValue(chatModel, forKey: Keys.chatModel) }
     }
 
     public var speechModel: String {
-        didSet { if persisting { UserDefaults.standard.set(speechModel, forKey: Keys.speechModel) } }
+        didSet { setValue(speechModel, forKey: Keys.speechModel) }
     }
 
     public var imageModel: String {
-        didSet { if persisting { UserDefaults.standard.set(imageModel, forKey: Keys.imageModel) } }
+        didSet { setValue(imageModel, forKey: Keys.imageModel) }
     }
 
     public var musicModel: String {
-        didSet { if persisting { UserDefaults.standard.set(musicModel, forKey: Keys.musicModel) } }
+        didSet { setValue(musicModel, forKey: Keys.musicModel) }
     }
 
     public var isConfigured: Bool {
@@ -101,22 +101,13 @@ public final class MiniMaxSettingsStore {
     ///   Pass `false` for test isolation so no shared state leaks between runs.
     public init(persisting: Bool = true) {
         self.persisting = persisting
-        if persisting {
-            let ud = UserDefaults.standard
-            self.apiKey = ud.string(forKey: Keys.apiKey) ?? MiniMaxConfig.defaults.apiKey
-            self.baseURL = ud.string(forKey: Keys.baseURL) ?? MiniMaxConfig.defaults.baseURL
-            self.chatModel = ud.string(forKey: Keys.chatModel) ?? MiniMaxConfig.defaults.chatModel
-            self.speechModel = ud.string(forKey: Keys.speechModel) ?? MiniMaxConfig.defaults.speechModel
-            self.imageModel = ud.string(forKey: Keys.imageModel) ?? MiniMaxConfig.defaults.imageModel
-            self.musicModel = ud.string(forKey: Keys.musicModel) ?? MiniMaxConfig.defaults.musicModel
-        } else {
-            self.apiKey = MiniMaxConfig.defaults.apiKey
-            self.baseURL = MiniMaxConfig.defaults.baseURL
-            self.chatModel = MiniMaxConfig.defaults.chatModel
-            self.speechModel = MiniMaxConfig.defaults.speechModel
-            self.imageModel = MiniMaxConfig.defaults.imageModel
-            self.musicModel = MiniMaxConfig.defaults.musicModel
-        }
+        let defaults = persisting ? UserDefaults.standard : UserDefaults(suiteName: UUID().uuidString)!
+        self.apiKey = defaults.string(forKey: Keys.apiKey) ?? MiniMaxConfig.defaults.apiKey
+        self.baseURL = defaults.string(forKey: Keys.baseURL) ?? MiniMaxConfig.defaults.baseURL
+        self.chatModel = defaults.string(forKey: Keys.chatModel) ?? MiniMaxConfig.defaults.chatModel
+        self.speechModel = defaults.string(forKey: Keys.speechModel) ?? MiniMaxConfig.defaults.speechModel
+        self.imageModel = defaults.string(forKey: Keys.imageModel) ?? MiniMaxConfig.defaults.imageModel
+        self.musicModel = defaults.string(forKey: Keys.musicModel) ?? MiniMaxConfig.defaults.musicModel
     }
 
     public func resetToDefaults() {

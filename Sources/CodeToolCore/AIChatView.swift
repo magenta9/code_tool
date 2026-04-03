@@ -180,7 +180,7 @@ public struct AIChatView: View {
 
                         // Streaming bubble
                         if isStreaming && !streamingContent.isEmpty {
-                            messageBubble(role: "assistant", content: streamingContent, id: -1)
+                            messageBubble(role: "assistant", content: streamingContent, id: 0)
                         }
 
                         Color.clear
@@ -232,23 +232,29 @@ public struct AIChatView: View {
                     .textCase(.uppercase)
                     .foregroundColor(isUser ? AppTheme.accent : AppTheme.accentWarm)
 
-                Text(content)
-                    .font(.body)
-                    .foregroundColor(AppTheme.textPrimary)
-                    .textSelection(.enabled)
-                    .padding(.horizontal, AppTheme.Spacing.md)
-                    .padding(.vertical, AppTheme.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .fill(isUser ? AppTheme.accent.opacity(0.12) : AppTheme.surface)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .strokeBorder(
-                                isUser ? AppTheme.accent.opacity(0.22) : AppTheme.border,
-                                lineWidth: 1
-                            )
-                    )
+                Group {
+                    if isUser {
+                        Text(content)
+                            .font(.body)
+                            .foregroundColor(AppTheme.textPrimary)
+                    } else {
+                        ClaudeMarkdownView(markdown: content)
+                    }
+                }
+                .textSelection(.enabled)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                        .fill(isUser ? AppTheme.accent.opacity(0.12) : AppTheme.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                        .strokeBorder(
+                            isUser ? AppTheme.accent.opacity(0.22) : AppTheme.border,
+                            lineWidth: 1
+                        )
+                )
             }
 
             if !isUser { Spacer(minLength: 60) }
@@ -260,24 +266,23 @@ public struct AIChatView: View {
 
     private var inputArea: some View {
         HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
-            ZStack(alignment: .topLeading) {
-                if inputText.isEmpty {
-                    Text("Type a message…")
+             ZStack(alignment: .topLeading) {
+                 if inputText.isEmpty {
+                    Text("Type a message… (Enter to send, Shift+Enter for newline)")
                         .font(.body)
                         .foregroundColor(AppTheme.textMuted)
                         .padding(.horizontal, AppTheme.Spacing.sm)
                         .padding(.vertical, AppTheme.Spacing.sm)
-                }
+                        .allowsHitTesting(false)
+                 }
 
-                TextEditor(text: $inputText)
-                    .font(.body)
-                    .foregroundColor(AppTheme.textPrimary)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, AppTheme.Spacing.xs)
-                    .padding(.vertical, AppTheme.Spacing.xs)
-                    .onSubmit {
-                        sendMessage()
-                    }
+                ClaudeChatComposer(
+                    text: $inputText,
+                    isStreaming: isStreaming,
+                    onSubmit: { sendMessage() },
+                    onPasteImages: { _ in },
+                    onEscape: {}
+                )
             }
             .frame(minHeight: 36, maxHeight: 120)
             .fixedSize(horizontal: false, vertical: true)

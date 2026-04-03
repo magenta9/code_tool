@@ -22,10 +22,14 @@ public struct ClaudeChatView: View {
     @State private var activeReferenceID: String = ""
     @State private var showThinking: Set<UUID> = []
     @State private var showToolDetails: Set<UUID> = []
+    @State private var toolNamesByUseID: [String: String] = [:]
     @State private var showHistory = false
     @State private var chatHistory: [ClaudeChatHistoryRecord] = []
     @State private var cancellationRequested = false
     @State private var workingDirectory: String = Self.defaultWorkingDirectory
+
+    // Stable ID for the streaming message placeholder (avoids view recreation on each delta)
+    private static let streamingMessageID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
 
     // Conversation-scoped history identity
     @State private var activeConversationRecordID: UUID?
@@ -33,6 +37,7 @@ public struct ClaudeChatView: View {
 
     // Image attachment state
     @State private var composerImages: [ClaudeComposerImage] = []
+    @State private var composerHasVisibleText = false
     @State private var attachmentWarning: String = ""
 
     public init() {}
@@ -544,7 +549,11 @@ public struct ClaudeChatView: View {
 
             HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
                 ZStack(alignment: .topLeading) {
-                    if inputText.isEmpty && composerImages.isEmpty {
+                    if Self.shouldShowComposerPlaceholder(
+                        inputText: inputText,
+                        hasVisibleDraftText: composerHasVisibleText,
+                        hasImages: !composerImages.isEmpty
+                    ) {
                         Text("Type a message… (Enter to send, Shift+Enter for newline, Cmd+V to paste images)")
                             .font(.body)
                             .foregroundColor(AppTheme.textMuted)
@@ -563,6 +572,9 @@ public struct ClaudeChatView: View {
                                 cancellationRequested = true
                                 client.cancel()
                             }
+                        },
+                        onVisibleTextChange: { hasVisibleText in
+                            composerHasVisibleText = hasVisibleText
                         }
                     )
                 }
@@ -605,6 +617,7 @@ public struct ClaudeChatView: View {
         }
 
         return ClaudeChatMessage(
+            id: Self.streamingMessageID,
             role: .assistant,
             content: streamingText,
             thinkingContent: streamingThinking.isEmpty ? nil : streamingThinking,
@@ -670,6 +683,7 @@ public struct ClaudeChatView: View {
 
         messages.append(
             ClaudeChatMessage(
+                id: UUID(),
                 role: .user,
                 content: trimmed.isEmpty ? "(image attached)" : trimmed,
                 thinkingContent: nil,
@@ -679,6 +693,7 @@ public struct ClaudeChatView: View {
                 attachments: attachmentRecords
             ))
         inputText = ""
+        composerHasVisibleText = false
         composerImages = []
         attachmentWarning = ""
         errorMessage = ""
@@ -723,6 +738,14 @@ public struct ClaudeChatView: View {
         return parts.joined(separator: "\n")
     }
 
+    static func shouldShowComposerPlaceholder(
+        inputText: String,
+        hasVisibleDraftText: Bool,
+        hasImages: Bool
+    ) -> Bool {
+        inputText.isEmpty && !hasVisibleDraftText && !hasImages
+    }
+
     @MainActor
     private func handleEvent(_ event: ClaudeCLIEvent) {
         switch event {
@@ -736,10 +759,12 @@ public struct ClaudeChatView: View {
         case .textDelta(let text):
             streamingText += text
 
-        case .toolUseStart(_, let name):
+        case .toolUseStart(let id, let name):
             finalizeStreamingAssistantIfNeeded()
+            toolNamesByUseID[id] = name
             messages.append(
                 ClaudeChatMessage(
+                    id: UUID(),
                     role: .toolUse,
                     content: "",
                     thinkingContent: nil,
@@ -762,10 +787,11 @@ public struct ClaudeChatView: View {
             finalizeStreamingAssistantIfNeeded()
             messages.append(
                 ClaudeChatMessage(
+                    id: UUID(),
                     role: .toolResult,
                     content: content,
                     thinkingContent: nil,
-                    toolName: toolUseId,
+                    toolName: toolNamesByUseID[toolUseId] ?? toolUseId,
                     toolInput: nil,
                     isStreaming: false
                 ))
@@ -828,6 +854,7 @@ public struct ClaudeChatView: View {
         guard !streamingText.isEmpty || !streamingThinking.isEmpty else { return }
 
         let message = ClaudeChatMessage(
+            id: UUID(),
             role: .assistant,
             content: streamingText,
             thinkingContent: streamingThinking.isEmpty ? nil : streamingThinking,
@@ -891,6 +918,7 @@ public struct ClaudeChatView: View {
         client.cancel()
         messages = []
         inputText = ""
+        composerHasVisibleText = false
         isStreaming = false
         streamingText = ""
         streamingThinking = ""
@@ -904,6 +932,7 @@ public struct ClaudeChatView: View {
         activeReferenceID = ""
         showThinking = []
         showToolDetails = []
+        toolNamesByUseID = [:]
         activeConversationRecordID = nil
         activeConversationCreatedAt = nil
         composerImages = []
@@ -945,6 +974,7 @@ public struct ClaudeChatView: View {
     private func restoreChat(_ record: ClaudeChatHistoryRecord) {
         messages = record.messages.map { item in
             ClaudeChatMessage(
+                id: UUID(),
                 role: ClaudeChatMessageRole(rawValue: item.role) ?? .assistant,
                 content: item.content,
                 thinkingContent: item.thinkingContent,
@@ -956,6 +986,7 @@ public struct ClaudeChatView: View {
         }
 
         showThinking = []
+        toolNamesByUseID = [:]
         sessionId = record.sessionId ?? ""
         currentModel = record.model
         workingDirectory = record.workingDirectory ?? Self.defaultWorkingDirectory
@@ -965,6 +996,10 @@ public struct ClaudeChatView: View {
         totalDurationMs = record.durationMs ?? 0
         activeReferenceID = record.referenceID
         errorMessage = ""
+        inputText = ""
+        composerHasVisibleText = false
+        composerImages = []
+        attachmentWarning = ""
 
         // Restore conversation identity so continued chat overwrites the same record
         activeConversationRecordID = record.id
@@ -1038,7 +1073,7 @@ private struct ClaudeChatMessage: Identifiable {
     var attachments: [ClaudeChatAttachmentRecord]
 
     init(
-        id: UUID = UUID(),
+        id: UUID,
         role: ClaudeChatMessageRole,
         content: String,
         thinkingContent: String?,

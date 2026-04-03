@@ -31,6 +31,7 @@ public struct ClaudeCLISettingsView: View {
                     apiKeySection
                     modelSection
                     limitsSection
+                    permissionsSection
                     systemPromptSection
                 }
                 .padding(.horizontal, AppTheme.Spacing.xxl)
@@ -207,12 +208,38 @@ public struct ClaudeCLISettingsView: View {
                         Text("Use bare mode")
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                             .foregroundStyle(AppTheme.textPrimary)
-                        Text("Runs the CLI with --bare to minimize extra wrapper output.")
+                        Text("Runs the CLI with --bare to minimize extra wrapper output. This also skips automatic MCP/plugin loading.")
                             .font(.system(size: 11, weight: .medium, design: .rounded))
                             .foregroundStyle(AppTheme.textMuted)
                     }
                 }
                 .toggleStyle(.switch)
+            }
+        }
+    }
+
+    private var permissionsSection: some View {
+        StyledPanel(title: "Permissions") {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                Text("AI Chat uses Claude CLI print mode, so it cannot show interactive approval prompts. Choose how tool calls should be handled.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                Picker("Permission Mode", selection: $settings.permissionMode) {
+                    ForEach(ClaudeCLIPermissionMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(settings.permissionMode.summary)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(
+                        settings.permissionMode == .bypassPermissions
+                            ? AppTheme.warning : AppTheme.textMuted
+                    )
             }
         }
     }

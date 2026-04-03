@@ -108,6 +108,7 @@ public final class ClaudeCLIClient: @unchecked Sendable {
             "--include-partial-messages",
             "--model", settings.model,
             "--max-turns", String(settings.maxTurns),
+            "--permission-mode", settings.permissionMode.rawValue,
         ]
 
         if settings.maxBudgetUSD > 0 {
@@ -354,6 +355,10 @@ public final class ClaudeCLIClient: @unchecked Sendable {
                         let id = block["id"] as? String ?? ""
                         let name = block["name"] as? String ?? ""
                         onEvent(.toolUseStart(id: id, name: name))
+                    } else if blockType == "tool_result" {
+                        let toolUseId = block["tool_use_id"] as? String ?? ""
+                        let content = Self.toolResultContent(from: block)
+                        onEvent(.toolResult(toolUseId: toolUseId, content: content))
                     }
                 }
 
@@ -427,5 +432,38 @@ public final class ClaudeCLIClient: @unchecked Sendable {
         default:
             break // Ignore "assistant" snapshot messages etc.
         }
+    }
+
+    private static func toolResultContent(from block: [String: Any]) -> String {
+        if let content = block["content"] as? String {
+            return content
+        }
+
+        if let items = block["content"] as? [[String: Any]] {
+            return items
+                .compactMap { item in
+                    if let text = item["text"] as? String {
+                        return text
+                    }
+                    return jsonString(for: item)
+                }
+                .joined(separator: "\n\n")
+        }
+
+        if let content = block["content"] {
+            return jsonString(for: content) ?? ""
+        }
+
+        return ""
+    }
+
+    private static func jsonString(for value: Any) -> String? {
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted])
+        else {
+            return nil
+        }
+
+        return String(data: data, encoding: .utf8)
     }
 }

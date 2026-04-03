@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 @Observable
-public final class ClaudeCLISettingsStore {
+public final class ClaudeCLISettingsStore: UserDefaultsStorage {
     public static let shared = ClaudeCLISettingsStore()
     public static let fallbackModels = [
         "claude-sonnet-4-20250514",
@@ -10,7 +10,7 @@ public final class ClaudeCLISettingsStore {
         "claude-haiku-3-5-20241022",
     ]
 
-    private enum Keys {
+    public enum Keys: UserDefaultsStorageKeys {
         static let claudePath = "claudeCLI_path"
         static let apiKey = "claudeCLI_api_key"
         static let model = "claudeCLI_model"
@@ -18,17 +18,18 @@ public final class ClaudeCLISettingsStore {
         static let maxTurns = "claudeCLI_max_turns"
         static let maxBudgetUSD = "claudeCLI_max_budget_usd"
         static let useBare = "claudeCLI_use_bare"
+        static let permissionMode = "claudeCLI_permission_mode"
     }
 
     public var claudePath: String {
-        didSet { UserDefaults.standard.set(claudePath, forKey: Keys.claudePath) }
+        didSet { setValue(claudePath, forKey: Keys.claudePath) }
     }
     public var apiKey: String {
-        didSet { UserDefaults.standard.set(apiKey, forKey: Keys.apiKey) }
+        didSet { setValue(apiKey, forKey: Keys.apiKey) }
     }
     public var model: String {
         didSet {
-            UserDefaults.standard.set(model, forKey: Keys.model)
+            setValue(model, forKey: Keys.model)
             availableModels = Self.resolvedModels(
                 discoveredModels: discoveredModels,
                 currentModel: model
@@ -36,16 +37,19 @@ public final class ClaudeCLISettingsStore {
         }
     }
     public var systemPrompt: String {
-        didSet { UserDefaults.standard.set(systemPrompt, forKey: Keys.systemPrompt) }
+        didSet { setValue(systemPrompt, forKey: Keys.systemPrompt) }
     }
     public var maxTurns: Int {
-        didSet { UserDefaults.standard.set(maxTurns, forKey: Keys.maxTurns) }
+        didSet { setValue(maxTurns, forKey: Keys.maxTurns) }
     }
     public var maxBudgetUSD: Double {
-        didSet { UserDefaults.standard.set(maxBudgetUSD, forKey: Keys.maxBudgetUSD) }
+        didSet { setValue(maxBudgetUSD, forKey: Keys.maxBudgetUSD) }
     }
     public var useBare: Bool {
-        didSet { UserDefaults.standard.set(useBare, forKey: Keys.useBare) }
+        didSet { setValue(useBare, forKey: Keys.useBare) }
+    }
+    public var permissionMode: ClaudeCLIPermissionMode {
+        didSet { setValue(permissionMode.rawValue, forKey: Keys.permissionMode) }
     }
 
     /// Whether a valid claude binary has been discovered
@@ -67,6 +71,10 @@ public final class ClaudeCLISettingsStore {
         self.maxTurns = defaults.object(forKey: Keys.maxTurns) as? Int ?? 10
         self.maxBudgetUSD = defaults.object(forKey: Keys.maxBudgetUSD) as? Double ?? 5.0
         self.useBare = defaults.object(forKey: Keys.useBare) as? Bool ?? true
+        self.permissionMode =
+            ClaudeCLIPermissionMode(
+                rawValue: defaults.string(forKey: Keys.permissionMode) ?? ""
+            ) ?? .auto
         self.discoveredModels = []
         self.availableModels = Self.fallbackModels
         self.isUsingFallbackModels = true
@@ -126,6 +134,7 @@ public final class ClaudeCLISettingsStore {
         maxTurns = 10
         maxBudgetUSD = 5.0
         useBare = true
+        permissionMode = .auto
         discoverCLI()
         refreshAvailableModels()
     }
@@ -152,5 +161,50 @@ public final class ClaudeCLISettingsStore {
         }
 
         return models
+    }
+}
+
+public enum ClaudeCLIPermissionMode: String, CaseIterable, Identifiable {
+    case auto
+    case `default`
+    case acceptEdits
+    case dontAsk
+    case bypassPermissions
+    case plan
+
+    public var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .auto:
+            return "Auto"
+        case .default:
+            return "Default"
+        case .acceptEdits:
+            return "Accept Edits"
+        case .dontAsk:
+            return "Don't Ask"
+        case .bypassPermissions:
+            return "Bypass Permissions"
+        case .plan:
+            return "Plan"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .auto:
+            return "Auto-approve low-risk tools in print mode."
+        case .default:
+            return "Use Claude's default permission checks."
+        case .acceptEdits:
+            return "Allow edits without prompts, but still gate higher-risk tools."
+        case .dontAsk:
+            return "Deny anything that is not already pre-approved."
+        case .bypassPermissions:
+            return "Run tools without approval prompts. Use only in trusted workspaces."
+        case .plan:
+            return "Planning-oriented mode that avoids executing tools."
+        }
     }
 }

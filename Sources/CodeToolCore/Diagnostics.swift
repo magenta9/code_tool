@@ -265,7 +265,7 @@ public actor DiagnosticsStore {
         return exportURL
     }
 
-    internal func sanitizeFilenameComponent(_ input: String) -> String {
+    nonisolated internal func sanitizeFilenameComponent(_ input: String) -> String {
         String(input.unicodeScalars.map { Self.safeFilenameCharacters.contains($0) ? Character($0) : "_" })
     }
 

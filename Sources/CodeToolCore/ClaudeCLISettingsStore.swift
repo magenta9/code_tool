@@ -4,6 +4,11 @@ import Observation
 @Observable
 public final class ClaudeCLISettingsStore {
     public static let shared = ClaudeCLISettingsStore()
+    public static let fallbackModels = [
+        "claude-sonnet-4-20250514",
+        "claude-opus-4-20250514",
+        "claude-haiku-3-5-20241022",
+    ]
 
     private enum Keys {
         static let claudePath = "claudeCLI_path"
@@ -13,7 +18,6 @@ public final class ClaudeCLISettingsStore {
         static let maxTurns = "claudeCLI_max_turns"
         static let maxBudgetUSD = "claudeCLI_max_budget_usd"
         static let useBare = "claudeCLI_use_bare"
-        static let workingDirectory = "claudeCLI_working_directory"
     }
 
     public var claudePath: String {
@@ -23,7 +27,13 @@ public final class ClaudeCLISettingsStore {
         didSet { UserDefaults.standard.set(apiKey, forKey: Keys.apiKey) }
     }
     public var model: String {
-        didSet { UserDefaults.standard.set(model, forKey: Keys.model) }
+        didSet {
+            UserDefaults.standard.set(model, forKey: Keys.model)
+            availableModels = Self.resolvedModels(
+                discoveredModels: discoveredModels,
+                currentModel: model
+            )
+        }
     }
     public var systemPrompt: String {
         didSet { UserDefaults.standard.set(systemPrompt, forKey: Keys.systemPrompt) }
@@ -37,33 +47,30 @@ public final class ClaudeCLISettingsStore {
     public var useBare: Bool {
         didSet { UserDefaults.standard.set(useBare, forKey: Keys.useBare) }
     }
-    public var workingDirectory: String {
-        didSet { UserDefaults.standard.set(workingDirectory, forKey: Keys.workingDirectory) }
-    }
 
     /// Whether a valid claude binary has been discovered
     public var isAvailable: Bool { !resolvedClaudePath.isEmpty }
 
     /// Resolved path after discovery
     public var resolvedClaudePath: String = ""
+    public private(set) var availableModels: [String]
+    public private(set) var isUsingFallbackModels: Bool
 
-    public static let availableModels = [
-        "claude-sonnet-4-20250514",
-        "claude-opus-4-20250514",
-        "claude-haiku-3-5-20241022",
-    ]
+    private var discoveredModels: [String]
 
     private init() {
         let defaults = UserDefaults.standard
         self.claudePath = defaults.string(forKey: Keys.claudePath) ?? ""
         self.apiKey = defaults.string(forKey: Keys.apiKey) ?? ""
-        self.model = defaults.string(forKey: Keys.model) ?? "claude-sonnet-4-20250514"
+        self.model = defaults.string(forKey: Keys.model) ?? Self.fallbackModels[0]
         self.systemPrompt = defaults.string(forKey: Keys.systemPrompt) ?? ""
         self.maxTurns = defaults.object(forKey: Keys.maxTurns) as? Int ?? 10
         self.maxBudgetUSD = defaults.object(forKey: Keys.maxBudgetUSD) as? Double ?? 5.0
         self.useBare = defaults.object(forKey: Keys.useBare) as? Bool ?? true
-        self.workingDirectory = defaults.string(forKey: Keys.workingDirectory)
-            ?? FileManager.default.homeDirectoryForCurrentUser.path
+        self.discoveredModels = []
+        self.availableModels = Self.fallbackModels
+        self.isUsingFallbackModels = true
+        refreshAvailableModels()
     }
 
     /// Discover claude binary. Call on app launch or settings change.
@@ -114,12 +121,36 @@ public final class ClaudeCLISettingsStore {
     public func resetToDefaults() {
         claudePath = ""
         apiKey = ""
-        model = "claude-sonnet-4-20250514"
+        model = Self.fallbackModels[0]
         systemPrompt = ""
         maxTurns = 10
         maxBudgetUSD = 5.0
         useBare = true
-        workingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
         discoverCLI()
+        refreshAvailableModels()
+    }
+
+    public func refreshAvailableModels() {
+        let discoveredModels = ClaudeConfigReader().availableModels()
+        self.discoveredModels = discoveredModels
+        isUsingFallbackModels = discoveredModels.isEmpty
+        availableModels = Self.resolvedModels(
+            discoveredModels: discoveredModels,
+            currentModel: model
+        )
+    }
+
+    private static func resolvedModels(
+        discoveredModels: [String],
+        currentModel: String
+    ) -> [String] {
+        var models = discoveredModels.isEmpty ? fallbackModels : discoveredModels
+        let trimmedCurrentModel = currentModel.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !trimmedCurrentModel.isEmpty && !models.contains(trimmedCurrentModel) {
+            models.insert(trimmedCurrentModel, at: 0)
+        }
+
+        return models
     }
 }

@@ -55,12 +55,14 @@ public final class ClaudeCLIClient: @unchecked Sendable {
     public func send(
         request: ClaudeCLITurnRequest,
         settings: ClaudeCLISettingsStore,
+        workingDirectory: String,
         onEvent: @escaping @Sendable (ClaudeCLIEvent) -> Void
     ) async {
         await send(
             message: request.prompt,
             settings: settings,
             sessionId: request.sessionID,
+            workingDirectory: workingDirectory,
             referenceID: request.referenceID,
             onEvent: onEvent
         )
@@ -71,6 +73,7 @@ public final class ClaudeCLIClient: @unchecked Sendable {
         message: String,
         settings: ClaudeCLISettingsStore,
         sessionId: String?,
+        workingDirectory: String,
         referenceID: String? = nil,
         onEvent: @escaping @Sendable (ClaudeCLIEvent) -> Void
     ) async {
@@ -133,7 +136,7 @@ public final class ClaudeCLIClient: @unchecked Sendable {
         proc.arguments = arguments
 
         // Working directory
-        let cwd = settings.workingDirectory
+        let cwd = workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         if FileManager.default.fileExists(atPath: cwd) {
             proc.currentDirectoryURL = URL(fileURLWithPath: cwd)
         }
@@ -158,7 +161,7 @@ public final class ClaudeCLIClient: @unchecked Sendable {
             message: "Started Claude CLI subprocess.",
             metadata: [
                 "model": settings.model,
-                "workingDirectory": proc.currentDirectoryURL?.lastPathComponent ?? URL(fileURLWithPath: settings.workingDirectory).lastPathComponent,
+                "workingDirectory": proc.currentDirectoryURL?.path ?? cwd,
                 "resumingSession": String(!(sessionId ?? "").isEmpty),
                 "promptSummary": promptSummary
             ]

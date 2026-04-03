@@ -70,7 +70,6 @@ final class CodeToolTests: XCTestCase {
     private var savedClaudeMaxTurns = 10
     private var savedClaudeMaxBudgetUSD = 5.0
     private var savedClaudeUseBare = true
-    private var savedClaudeWorkingDirectory = ""
     private var temporaryLogDirectoryURL: URL?
     private var temporaryDiagnosticsDirectoryURL: URL?
     private let asyncLogPropagationDelay: UInt64 = 300_000_000 // 300 ms: async Tasks writing to actors may take a few event-loop turns
@@ -90,7 +89,6 @@ final class CodeToolTests: XCTestCase {
         savedClaudeMaxTurns = claudeStore.maxTurns
         savedClaudeMaxBudgetUSD = claudeStore.maxBudgetUSD
         savedClaudeUseBare = claudeStore.useBare
-        savedClaudeWorkingDirectory = claudeStore.workingDirectory
 
         store.apiKey = "test-api-key"
         store.baseURL = "https://example.com/v1"
@@ -139,7 +137,6 @@ final class CodeToolTests: XCTestCase {
         claudeStore.maxTurns = savedClaudeMaxTurns
         claudeStore.maxBudgetUSD = savedClaudeMaxBudgetUSD
         claudeStore.useBare = savedClaudeUseBare
-        claudeStore.workingDirectory = savedClaudeWorkingDirectory
         claudeStore.discoverCLI()
 
         MockURLProtocol.requestHandler = nil
@@ -260,6 +257,7 @@ final class CodeToolTests: XCTestCase {
 
     func testClaudeChatHistoryRecordCodable() throws {
         let record = ClaudeChatHistoryRecord(
+            workingDirectory: "/tmp/demo-project",
             messages: [
                 ClaudeChatMessageRecord(role: "user", content: "Hello"),
                 ClaudeChatMessageRecord(
@@ -284,6 +282,32 @@ final class CodeToolTests: XCTestCase {
         XCTAssertEqual(decoded.messages.count, 2)
         XCTAssertEqual(decoded.messages[1].thinkingContent, "User says hello")
         XCTAssertEqual(decoded.totalCostUSD, 0.05)
+        XCTAssertEqual(decoded.workingDirectory, "/tmp/demo-project")
+    }
+
+    func testClaudeChatHistoryRecordCodableBackwardCompatibilityWithoutWorkingDirectory() throws {
+        let json = """
+        {
+          "id": "B3B7B6A9-7A7F-42D2-8D54-CA8E77F594B1",
+          "createdAt": "2026-04-03T00:00:00Z",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello"
+            }
+          ],
+          "model": "claude-sonnet-4-20250514",
+          "referenceID": "test-ref"
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ClaudeChatHistoryRecord.self, from: Data(json.utf8))
+
+        XCTAssertNil(decoded.workingDirectory)
+        XCTAssertEqual(decoded.messages.count, 1)
+        XCTAssertEqual(decoded.model, "claude-sonnet-4-20250514")
     }
 
     func testClaudeCLIClientUsesResumeForExistingSession() async throws {
@@ -315,7 +339,8 @@ final class CodeToolTests: XCTestCase {
         await client.send(
             message: "你好",
             settings: store,
-            sessionId: "4cde10f7-cc71-4d25-8472-f9737d911dc8"
+            sessionId: "4cde10f7-cc71-4d25-8472-f9737d911dc8",
+            workingDirectory: tempDirectory.path
         ) { _ in }
 
         let argsText = try String(contentsOf: argsLogURL, encoding: .utf8)
@@ -327,6 +352,54 @@ final class CodeToolTests: XCTestCase {
         XCTAssertFalse(args.contains("--session-id"))
         let resumeIndex = try XCTUnwrap(args.firstIndex(of: "--resume"))
         XCTAssertEqual(args[resumeIndex + 1], "4cde10f7-cc71-4d25-8472-f9737d911dc8")
+    }
+
+    func testClaudeCLIClientUsesExplicitWorkingDirectory() async throws {
+        let tempDirectory = try XCTUnwrap(temporaryLogDirectoryURL)
+        let scriptURL = tempDirectory.appendingPathComponent("fake-claude-working-dir.sh")
+        let cwdLogURL = tempDirectory.appendingPathComponent("claude-cwd.log")
+        let workingDirectoryURL = tempDirectory.appendingPathComponent("workspace", isDirectory: true)
+
+        try FileManager.default.createDirectory(
+            at: workingDirectoryURL,
+            withIntermediateDirectories: true
+        )
+
+        let script = """
+        #!/bin/zsh
+        print -r -- "$PWD" > "$CODETOOL_CLAUDE_CWD_LOG"
+        print '{"type":"system","subtype":"init","session_id":"working-dir-session","model":"claude-sonnet-4-20250514"}'
+        print '{"type":"result","is_error":false,"total_cost_usd":0,"duration_ms":1,"usage":{"input_tokens":1,"output_tokens":1},"session_id":"working-dir-session"}'
+        """
+
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: scriptURL.path
+        )
+
+        setenv("CODETOOL_CLAUDE_CWD_LOG", cwdLogURL.path, 1)
+        defer { unsetenv("CODETOOL_CLAUDE_CWD_LOG") }
+
+        let store = ClaudeCLISettingsStore.shared
+        store.claudePath = scriptURL.path
+        store.discoverCLI()
+
+        let client = ClaudeCLIClient()
+        await client.send(
+            message: "pwd",
+            settings: store,
+            sessionId: nil,
+            workingDirectory: workingDirectoryURL.path
+        ) { _ in }
+
+        let cwd = try String(contentsOf: cwdLogURL, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        XCTAssertEqual(
+            URL(fileURLWithPath: cwd).resolvingSymlinksInPath().path,
+            workingDirectoryURL.resolvingSymlinksInPath().path
+        )
     }
 
     func testToolViewCacheRetainsVisitedToolsInSelectionOrder() {

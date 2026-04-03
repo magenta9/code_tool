@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 public struct ClaudeChatView: View {
     @Bindable private var settings = ClaudeCLISettingsStore.shared
+    private static let defaultWorkingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
 
     @State private var client = ClaudeCLIClient()
     @State private var messages: [ClaudeChatMessage] = []
@@ -24,6 +25,7 @@ public struct ClaudeChatView: View {
     @State private var showHistory = false
     @State private var chatHistory: [ClaudeChatHistoryRecord] = []
     @State private var cancellationRequested = false
+    @State private var workingDirectory: String = Self.defaultWorkingDirectory
 
     // Conversation-scoped history identity
     @State private var activeConversationRecordID: UUID?
@@ -120,6 +122,16 @@ public struct ClaudeChatView: View {
         var items: [ToolStatusItem] = []
 
         let resolvedModel = currentModel.isEmpty ? settings.model : currentModel
+        items.append(
+            ToolStatusItem(
+                title: workingDirectoryTitle,
+                systemImage: "folder",
+                tint: AppTheme.textSecondary,
+                help: workingDirectory,
+                accessibilityLabel: "Working directory: \(workingDirectory)",
+                action: chooseWorkingDirectory
+            ))
+
         if !resolvedModel.isEmpty {
             items.append(
                 ToolStatusItem(
@@ -531,23 +543,9 @@ public struct ClaudeChatView: View {
             }
 
             HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
-                // Image picker button
-                if !isStreaming {
-                    Button {
-                        pickImageFile()
-                    } label: {
-                        Image(systemName: "photo.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Attach image")
-                }
-
                 ZStack(alignment: .topLeading) {
                     if inputText.isEmpty && composerImages.isEmpty {
-                        Text("Type a message… (Enter to send, Shift+Enter for newline)")
+                        Text("Type a message… (Enter to send, Shift+Enter for newline, Cmd+V to paste images)")
                             .font(.body)
                             .foregroundColor(AppTheme.textMuted)
                             .padding(.horizontal, AppTheme.Spacing.sm)
@@ -700,7 +698,8 @@ public struct ClaudeChatView: View {
                     sessionID: outgoingSessionId,
                     referenceID: requestReferenceID
                 ),
-                settings: settings
+                settings: settings,
+                workingDirectory: workingDirectory
             ) { event in
                 Task { @MainActor in
                     handleEvent(event)
@@ -836,9 +835,6 @@ public struct ClaudeChatView: View {
             toolInput: nil,
             isStreaming: false
         )
-        if let thinkingContent = message.thinkingContent, !thinkingContent.isEmpty {
-            showThinking.insert(message.id)
-        }
         messages.append(message)
         streamingText = ""
         streamingThinking = ""
@@ -857,6 +853,7 @@ public struct ClaudeChatView: View {
             id: activeConversationRecordID!,
             createdAt: activeConversationCreatedAt!,
             systemPrompt: normalizedSystemPrompt,
+            workingDirectory: workingDirectory,
             messages: messages.map { message in
                 ClaudeChatMessageRecord(
                     role: message.role.rawValue,
@@ -911,56 +908,29 @@ public struct ClaudeChatView: View {
         activeConversationCreatedAt = nil
         composerImages = []
         attachmentWarning = ""
+        workingDirectory = Self.defaultWorkingDirectory
     }
 
     private var lastAssistantReply: String {
         messages.last(where: { $0.role == .assistant })?.content ?? ""
     }
 
-    private func pickImageFile() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .gif, .tiff, .bmp, .webP]
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
-        panel.message = "Select images to attach"
-
-        guard panel.runModal() == .OK else { return }
-
-        for url in panel.urls {
-            guard let data = try? Data(contentsOf: url),
-                  let image = NSImage(data: data) else { continue }
-
-            let ext = url.pathExtension.lowercased()
-            let mimeType: String
-            switch ext {
-            case "png": mimeType = "image/png"
-            case "jpg", "jpeg": mimeType = "image/jpeg"
-            case "gif": mimeType = "image/gif"
-            case "webp": mimeType = "image/webp"
-            case "tiff", "tif": mimeType = "image/tiff"
-            case "bmp": mimeType = "image/bmp"
-            default: mimeType = "image/png"
-            }
-
-            let fileName = "\(UUID().uuidString).\(ext)"
-            composerImages.append(
-                ClaudeComposerImage(
-                    image: image, fileName: fileName, data: data, mimeType: mimeType))
-        }
-    }
-
     private func handlePastedImages(_ images: [NSImage]) {
-        for image in images {
+        let pastedImages = images.compactMap { image -> ClaudeComposerImage? in
             guard let tiffData = image.tiffRepresentation,
                   let bitmap = NSBitmapImageRep(data: tiffData),
                   let pngData = bitmap.representation(using: .png, properties: [:])
-            else { continue }
+            else { return nil }
 
-            let fileName = "\(UUID().uuidString).png"
-            composerImages.append(
-                ClaudeComposerImage(
-                    image: image, fileName: fileName, data: pngData, mimeType: "image/png"))
+            return ClaudeComposerImage(
+                image: image,
+                fileName: "\(UUID().uuidString).png",
+                data: pngData,
+                mimeType: "image/png"
+            )
         }
+
+        composerImages.append(contentsOf: pastedImages)
     }
 
     private func loadHistory() {
@@ -985,13 +955,10 @@ public struct ClaudeChatView: View {
             )
         }
 
-        showThinking = Set(
-            messages
-                .filter { ($0.thinkingContent ?? "").isEmpty == false }
-                .map(\.id)
-        )
+        showThinking = []
         sessionId = record.sessionId ?? ""
         currentModel = record.model
+        workingDirectory = record.workingDirectory ?? Self.defaultWorkingDirectory
         totalCostUSD = record.totalCostUSD ?? 0
         inputTokens = record.inputTokens ?? 0
         outputTokens = record.outputTokens ?? 0
@@ -1020,6 +987,27 @@ public struct ClaudeChatView: View {
             await MainActor.run {
                 chatHistory = []
             }
+        }
+    }
+
+    private var workingDirectoryTitle: String {
+        let lastPathComponent = URL(fileURLWithPath: workingDirectory).lastPathComponent
+        return lastPathComponent.isEmpty ? workingDirectory : lastPathComponent
+    }
+
+    private func chooseWorkingDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        if FileManager.default.fileExists(atPath: workingDirectory) {
+            panel.directoryURL = URL(fileURLWithPath: workingDirectory)
+        }
+
+        if panel.runModal() == .OK, let url = panel.url {
+            workingDirectory = url.path
         }
     }
 

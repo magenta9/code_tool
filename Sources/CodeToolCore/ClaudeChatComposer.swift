@@ -6,7 +6,7 @@ import SwiftUI
 /// Supports:
 /// - `Enter` to send
 /// - `Shift+Enter` to insert newline
-/// - `Cmd+V` to paste images (falls back to text paste)
+/// - `Cmd+V` to paste images from the clipboard (falls back to text paste)
 /// - `Esc` callback
 public struct ClaudeChatComposer: NSViewRepresentable {
     @Binding var text: String
@@ -50,10 +50,14 @@ public struct ClaudeChatComposer: NSViewRepresentable {
 
     public func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? ComposerTextView else { return }
+        let hasMarkedText = textView.markedRange().location != NSNotFound
 
         context.coordinator.isUpdating = true
-        if textView.string != text {
+        if textView.string != text && !hasMarkedText {
             textView.string = text
+        }
+        if !hasMarkedText {
+            context.coordinator.lastCommittedText = textView.string
         }
         context.coordinator.isUpdating = false
     }
@@ -68,14 +72,22 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         var parent: ClaudeChatComposer
         weak var textView: NSTextView?
         var isUpdating = false
+        var lastCommittedText: String
 
         init(_ parent: ClaudeChatComposer) {
             self.parent = parent
+            self.lastCommittedText = parent.text
         }
 
         public func textDidChange(_ notification: Notification) {
             guard !isUpdating, let textView else { return }
-            parent.text = textView.string
+            guard textView.markedRange().location == NSNotFound else { return }
+
+            let committedText = textView.string
+            guard committedText != lastCommittedText else { return }
+
+            lastCommittedText = committedText
+            parent.text = committedText
         }
 
         // MARK: - ComposerTextViewDelegate

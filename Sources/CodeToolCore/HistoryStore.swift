@@ -132,6 +132,7 @@ public struct ClaudeChatHistoryRecord: Codable, Identifiable {
     public let id: UUID
     public let createdAt: Date
     public let systemPrompt: String?
+    public let workingDirectory: String?
     public let messages: [ClaudeChatMessageRecord]
     public let model: String
     public let totalCostUSD: Double?
@@ -145,6 +146,7 @@ public struct ClaudeChatHistoryRecord: Codable, Identifiable {
         id: UUID = UUID(),
         createdAt: Date = Date(),
         systemPrompt: String? = nil,
+        workingDirectory: String? = nil,
         messages: [ClaudeChatMessageRecord],
         model: String,
         totalCostUSD: Double? = nil,
@@ -157,6 +159,7 @@ public struct ClaudeChatHistoryRecord: Codable, Identifiable {
         self.id = id
         self.createdAt = createdAt
         self.systemPrompt = systemPrompt
+        self.workingDirectory = workingDirectory
         self.messages = messages
         self.model = model
         self.totalCostUSD = totalCostUSD

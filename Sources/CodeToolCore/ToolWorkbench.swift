@@ -5,11 +5,24 @@ public struct ToolStatusItem: Identifiable {
     public let title: String
     public let systemImage: String
     public let tint: Color
+    public let help: String?
+    public let accessibilityLabel: String?
+    public let action: (() -> Void)?
 
-    public init(title: String, systemImage: String, tint: Color = AppTheme.accent) {
+    public init(
+        title: String,
+        systemImage: String,
+        tint: Color = AppTheme.accent,
+        help: String? = nil,
+        accessibilityLabel: String? = nil,
+        action: (() -> Void)? = nil
+    ) {
         self.title = title
         self.systemImage = systemImage
         self.tint = tint
+        self.help = help
+        self.accessibilityLabel = accessibilityLabel
+        self.action = action
     }
 }
 
@@ -100,17 +113,7 @@ public struct ToolWorkbench<Actions: View, Content: View>: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppTheme.Spacing.sm) {
                         ForEach(statusItems) { item in
-                            Label(item.title, systemImage: item.systemImage)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundStyle(item.tint)
-                                .padding(.horizontal, AppTheme.Spacing.md)
-                                .padding(.vertical, AppTheme.Spacing.sm)
-                                .background(item.tint.opacity(0.10))
-                                .clipShape(Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .strokeBorder(item.tint.opacity(0.25), lineWidth: 1)
-                                )
+                            statusItemView(item)
                         }
                     }
                 }
@@ -122,6 +125,35 @@ public struct ToolWorkbench<Actions: View, Content: View>: View {
         .background(Color.black.opacity(0.10))
         .overlay(alignment: .bottom) {
             AppTheme.border.frame(height: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func statusItemView(_ item: ToolStatusItem) -> some View {
+        let capsule = Label(item.title, systemImage: item.systemImage)
+            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .foregroundStyle(item.tint)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm)
+            .background(item.tint.opacity(0.10))
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(item.tint.opacity(0.25), lineWidth: 1)
+            )
+
+        if let action = item.action {
+            Button(action: action) {
+                capsule
+            }
+            .buttonStyle(.plain)
+            .contentShape(Capsule())
+            .help(item.help ?? "")
+            .accessibilityLabel(item.accessibilityLabel ?? item.title)
+        } else {
+            capsule
+                .help(item.help ?? "")
+                .accessibilityLabel(item.accessibilityLabel ?? item.title)
         }
     }
 }

@@ -32,7 +32,6 @@ public struct ClaudeCLISettingsView: View {
                     modelSection
                     limitsSection
                     systemPromptSection
-                    workingDirectorySection
                 }
                 .padding(.horizontal, AppTheme.Spacing.xxl)
                 .padding(.top, AppTheme.Spacing.xl)
@@ -41,6 +40,7 @@ public struct ClaudeCLISettingsView: View {
         }
         .onAppear {
             settings.discoverCLI()
+            settings.refreshAvailableModels()
         }
         .onChange(of: settings.claudePath) { _, _ in
             settings.discoverCLI()
@@ -139,7 +139,7 @@ public struct ClaudeCLISettingsView: View {
                     .foregroundStyle(AppTheme.textSecondary)
 
                 Picker("Model", selection: $settings.model) {
-                    ForEach(ClaudeCLISettingsStore.availableModels, id: \.self) { model in
+                    ForEach(settings.availableModels, id: \.self) { model in
                         Text(model)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .tag(model)
@@ -148,6 +148,14 @@ public struct ClaudeCLISettingsView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(
+                    settings.isUsingFallbackModels
+                        ? "Using the built-in default model list."
+                        : "Loaded available models from ~/.claude/settings.json."
+                )
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
             }
         }
     }
@@ -225,48 +233,6 @@ public struct ClaudeCLISettingsView: View {
         }
     }
 
-    private var workingDirectorySection: some View {
-        StyledPanel(title: "Working Directory") {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Text("Claude CLI commands run from this directory.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-
-                HStack(spacing: AppTheme.Spacing.sm) {
-                    TextField("/Users/you/project", text: $settings.workingDirectory)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .padding(AppTheme.Spacing.md)
-                        .background(AppTheme.surface)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                                .strokeBorder(AppTheme.border, lineWidth: 1)
-                        )
-
-                    StyledButton("Choose…", systemImage: "folder", variant: .secondary) {
-                        chooseWorkingDirectory()
-                    }
-                }
-            }
-        }
-    }
-
-    private func chooseWorkingDirectory() {
-        #if canImport(AppKit)
-            let panel = NSOpenPanel()
-            panel.canChooseDirectories = true
-            panel.canChooseFiles = false
-            panel.allowsMultipleSelection = false
-            panel.canCreateDirectories = true
-            panel.directoryURL = URL(fileURLWithPath: settings.workingDirectory)
-
-            if panel.runModal() == .OK, let url = panel.url {
-                settings.workingDirectory = url.path
-            }
-        #endif
-    }
 }
 
 #if DEBUG

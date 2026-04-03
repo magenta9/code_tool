@@ -158,7 +158,7 @@ public final class ClaudeCLIClient: @unchecked Sendable {
             message: "Started Claude CLI subprocess.",
             metadata: [
                 "model": settings.model,
-                "workingDirectory": proc.currentDirectoryURL?.path ?? settings.workingDirectory,
+                "workingDirectory": proc.currentDirectoryURL?.lastPathComponent ?? URL(fileURLWithPath: settings.workingDirectory).lastPathComponent,
                 "resumingSession": String(!(sessionId ?? "").isEmpty),
                 "promptSummary": promptSummary
             ]

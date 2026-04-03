@@ -73,6 +73,7 @@ final class CodeToolTests: XCTestCase {
     private var savedClaudeWorkingDirectory = ""
     private var temporaryLogDirectoryURL: URL?
     private var temporaryDiagnosticsDirectoryURL: URL?
+    private let asyncLogPropagationDelay: UInt64 = 300_000_000 // 300 ms: async Tasks writing to actors may take a few event-loop turns
 
     override func setUp() {
         super.setUp()
@@ -1201,4 +1202,103 @@ final class CodeToolTests: XCTestCase {
             XCTAssertTrue(textView.composerDelegate === coordinator)
         }
     #endif
+
+    // MARK: - AppUnifiedLogSink formatting tests
+
+    func testUnifiedLogSinkFormatsEventAndReferenceIDAndMessage() {
+        let sink = AppUnifiedLogSink()
+        let entry = AppLogEntry(
+            timestamp: "2024-01-01T00:00:00.000Z",
+            level: .info,
+            subsystem: "com.test",
+            category: .observability,
+            event: "test_event",
+            referenceID: "ref-123",
+            message: "Something happened.",
+            durationMs: nil,
+            metadata: [:],
+            stackTrace: nil
+        )
+        let formatted = sink.formattedMessage(for: entry)
+        XCTAssertTrue(formatted.contains("event=test_event"), "Expected event field in log payload")
+        XCTAssertTrue(formatted.contains("referenceID=ref-123"), "Expected referenceID field in log payload")
+        XCTAssertTrue(formatted.contains("message=Something happened."), "Expected message field in log payload")
+    }
+
+    func testUnifiedLogSinkSanitizesNewlinesInFields() {
+        let sink = AppUnifiedLogSink()
+        let entry = AppLogEntry(
+            timestamp: "2024-01-01T00:00:00.000Z",
+            level: .info,
+            subsystem: "com.test",
+            category: .observability,
+            event: "event\ninjected",
+            referenceID: "ref\r123",
+            message: "line1\nline2",
+            durationMs: nil,
+            metadata: [:],
+            stackTrace: nil
+        )
+        let formatted = sink.formattedMessage(for: entry)
+        XCTAssertFalse(formatted.contains("\n"), "Newlines must be escaped in log payload")
+        XCTAssertFalse(formatted.contains("\r"), "Carriage returns must be escaped in log payload")
+        XCTAssertTrue(formatted.contains("\\n"), "Expected escaped newline in log payload")
+        XCTAssertTrue(formatted.contains("\\r"), "Expected escaped carriage return in log payload")
+    }
+
+    // MARK: - sanitizeFilenameComponent tests
+
+    func testSanitizeFilenameComponentAllowsAlphanumericsAndDashUnderscore() {
+        let store = DiagnosticsStore.shared
+        XCTAssertEqual(store.sanitizeFilenameComponent("safe-ref_123"), "safe-ref_123")
+        XCTAssertEqual(store.sanitizeFilenameComponent("ABCabc0123"), "ABCabc0123")
+    }
+
+    func testSanitizeFilenameComponentReplacesPathSeparatorsAndDots() {
+        let store = DiagnosticsStore.shared
+        XCTAssertEqual(store.sanitizeFilenameComponent("../etc/passwd"), "___etc_passwd")
+        XCTAssertEqual(store.sanitizeFilenameComponent("ref\\back"), "ref_back")
+    }
+
+    func testSanitizeFilenameComponentHandlesEmptyString() {
+        XCTAssertEqual(DiagnosticsStore.shared.sanitizeFilenameComponent(""), "")
+    }
+
+    func testSanitizeFilenameComponentReplacesSpacesAndSpecialChars() {
+        let store = DiagnosticsStore.shared
+        XCTAssertEqual(store.sanitizeFilenameComponent("hello world!"), "hello_world_")
+        XCTAssertEqual(store.sanitizeFilenameComponent("ref@#$%"), "ref____")
+    }
+
+    // MARK: - rootViewReady idempotency test
+
+    func testRootViewReadyIsIdempotent() async throws {
+        let observability = ObservabilitySystem()
+
+        // Call rootViewReady multiple times
+        observability.rootViewReady()
+        observability.rootViewReady()
+        observability.rootViewReady()
+
+        // Give async log tasks time to settle
+        try await Task.sleep(nanoseconds: asyncLogPropagationDelay)
+
+        let logFiles = await AppLogger.shared.logFileURLs(for: .observability)
+        let allEntries: [AppLogEntry] = try logFiles.flatMap { url -> [AppLogEntry] in
+            let data = try Data(contentsOf: url)
+            let lines = String(decoding: data, as: UTF8.self).split(whereSeparator: \.isNewline)
+            return try lines.enumerated().map { index, line in
+                do {
+                    return try JSONDecoder().decode(AppLogEntry.self, from: Data(line.utf8))
+                } catch {
+                    struct DecodeError: Error, CustomStringConvertible {
+                        let description: String
+                    }
+                    throw DecodeError(description: "JSON decode failed at \(url.lastPathComponent) line \(index): \(error)")
+                }
+            }
+        }
+        let readyEvents = allEntries.filter { $0.event == "root_view_ready" }
+        XCTAssertEqual(readyEvents.count, 1, "rootViewReady() must only emit one log event regardless of how many times it is called")
+    }
 }

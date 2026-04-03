@@ -213,13 +213,14 @@ private actor AppLoggerPipeline {
             timestamp: AppLogger.makeTimestamp(),
             level: .fault,
             subsystem: AppLogger.subsystem,
-            category: entry.category,
+            category: .observability,
             event: "observability_sink_failed",
             referenceID: entry.referenceID,
             message: "Observability sink failed.",
             durationMs: nil,
             metadata: [
                 "sink": sink,
+                "originalCategory": entry.category.rawValue,
                 "originalEvent": entry.event,
                 "errorDescription": error.localizedDescription
             ],
@@ -243,10 +244,14 @@ public final class AppLogger {
         UUID().uuidString.lowercased()
     }
 
-    static func makeTimestamp(date: Date = Date()) -> String {
+    private static let timestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    static func makeTimestamp(date: Date = Date()) -> String {
+        timestampFormatter.string(from: date)
     }
 
     public static func summarize(text: String?, limit: Int = 180) -> String {

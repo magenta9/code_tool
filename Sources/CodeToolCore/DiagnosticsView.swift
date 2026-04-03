@@ -386,10 +386,14 @@ public struct DiagnosticsView: View {
             do {
                 let exportURL = try await DiagnosticsStore.shared.exportPackage(referenceID: referenceID)
                 #if canImport(AppKit)
-                    let panel = NSSavePanel()
-                    panel.nameFieldStringValue = exportURL.lastPathComponent
-                    panel.allowedContentTypes = [.json]
-                    if panel.runModal() == .OK, let destinationURL = panel.url {
+                    let destinationURL: URL? = await MainActor.run {
+                        let panel = NSSavePanel()
+                        panel.nameFieldStringValue = exportURL.lastPathComponent
+                        panel.allowedContentTypes = [.json]
+                        guard panel.runModal() == .OK else { return nil }
+                        return panel.url
+                    }
+                    if let destinationURL {
                         if FileManager.default.fileExists(atPath: destinationURL.path) {
                             try FileManager.default.removeItem(at: destinationURL)
                         }

@@ -103,6 +103,8 @@ public actor DiagnosticsStore {
         return formatter
     }()
 
+    private static let safeFilenameCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+
     private let fileManager = FileManager.default
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -255,11 +257,16 @@ public actor DiagnosticsStore {
             metricSummaries: try await recentMetricSummaries(limit: 10)
         )
 
+        let safeRefID = sanitizeFilenameComponent(referenceID ?? "recent")
         let exportURL = fileManager.temporaryDirectory
-            .appendingPathComponent("CodeTool-Diagnostics-\(referenceID ?? "recent")-\(UUID().uuidString).json")
+            .appendingPathComponent("CodeTool-Diagnostics-\(safeRefID)-\(UUID().uuidString).json")
         let data = try encoder.encode(package)
         try data.write(to: exportURL, options: .atomic)
         return exportURL
+    }
+
+    internal func sanitizeFilenameComponent(_ input: String) -> String {
+        String(input.unicodeScalars.map { Self.safeFilenameCharacters.contains($0) ? Character($0) : "_" })
     }
 
     private func appendJSONLine<T: Encodable>(_ value: T, to fileURL: URL) throws {
@@ -343,6 +350,7 @@ public final class ObservabilitySystem: NSObject {
     private let lock = NSLock()
     private let launchStartedAt = Date()
     private var isBootstrapped = false
+    private var isRootViewReady = false
 
     public func bootstrap() {
         lock.lock()
@@ -379,6 +387,15 @@ public final class ObservabilitySystem: NSObject {
     }
 
     public func rootViewReady() {
+        lock.lock()
+        let shouldFire = !isRootViewReady
+        if shouldFire {
+            isRootViewReady = true
+        }
+        lock.unlock()
+
+        guard shouldFire else { return }
+
         Task {
             await AppLogger.shared.log(
                 level: .info,

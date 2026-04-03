@@ -172,7 +172,27 @@ protocol AppRemoteLogSink: AppLogSink {}
 struct AppUnifiedLogSink: AppLogSink {
     func write(entry: AppLogEntry) async throws {
         let logger = Logger(subsystem: entry.subsystem, category: entry.category.rawValue)
-        let payload = entry.message ?? entry.event
+        let payload = formattedMessage(for: entry)
         logger.log(level: entry.level.osLogType, "\(payload, privacy: .public)")
+    }
+
+    internal func formattedMessage(for entry: AppLogEntry) -> String {
+        var components = ["event=\(sanitizeLogField(entry.event))"]
+
+        if let referenceID = entry.referenceID, !referenceID.isEmpty {
+            components.append("referenceID=\(sanitizeLogField(referenceID))")
+        }
+
+        if let message = entry.message, !message.isEmpty {
+            components.append("message=\(sanitizeLogField(message))")
+        }
+
+        return components.joined(separator: " ")
+    }
+
+    private func sanitizeLogField(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
     }
 }

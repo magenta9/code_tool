@@ -1,16 +1,25 @@
-import AVFoundation
 import AppKit
 import CodeToolUI
 import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AISpeechView: View {
+    private enum SpeechStreamPhase: Equatable {
+        case idle
+        case buffering
+        case playable
+        case ready
+        case cancelled
+        case failed
+    }
+
     private var settings = MiniMaxSettingsStore.shared
 
     @State private var inputText: String = ""
-    @State private var isGenerating: Bool = false
-    @State private var audioData: Data? = nil
-    @State private var audioPlayer: AVAudioPlayer? = nil
+    @State private var streamPhase: SpeechStreamPhase = .idle
+    @State private var audioData = Data()
+    @State private var completedAudioData: Data? = nil
+    @State private var playbackController = StreamingSpeechPlayer()
     @State private var isPlaying: Bool = false
     @State private var errorMessage: String = ""
     @State private var selectedVoice: String = "male-qn-qingse"
@@ -18,9 +27,13 @@ public struct AISpeechView: View {
     @State private var volume: Double = 1.0
     @State private var pitch: Double = 0
     @State private var outputFormat: String = "mp3"
+    @State private var loadedAudioFormat: String? = nil
     @State private var latestReferenceID: String = ""
+    @State private var activeGenerationReferenceID: String? = nil
     @State private var showHistory = false
     @State private var speechHistory: [SpeechHistoryRecord] = []
+    @State private var generationTask: Task<Void, Never>? = nil
+    @State private var didConfigurePlaybackController = false
 
     private let voices: [(id: String, name: String)] = [
         ("male-qn-qingse", "青涩青年"),
@@ -33,17 +46,47 @@ public struct AISpeechView: View {
         ("audiobook_female_1", "有声书女"),
     ]
 
-    private let outputFormats = ["mp3", "wav", "flac"]
+    private let outputFormats = ["mp3", "flac"]
+    private let minimumPlaybackBufferBytes = 32 * 1024
 
     public init() {}
 
-    // MARK: - Body
+    private var isGenerating: Bool {
+        switch streamPhase {
+        case .buffering, .playable:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private var hasBufferedAudio: Bool {
+        !audioData.isEmpty
+    }
+
+    private var canStartPlayback: Bool {
+        guard hasBufferedAudio else { return false }
+        if isPlaying || completedAudioData != nil { return true }
+
+        switch streamPhase {
+        case .playable, .ready, .cancelled, .failed:
+            return true
+        case .buffering:
+            return audioData.count >= minimumPlaybackBufferBytes
+        case .idle:
+            return false
+        }
+    }
+
+    private var currentAudioFormat: String {
+        loadedAudioFormat ?? outputFormat
+    }
 
     public var body: some View {
         ToolWorkbench(
             eyebrow: "Text to Speech",
             title: "AI Speech",
-            description: "Generate natural speech from text using MiniMax Speech 2.8 model.",
+            description: "Stream MiniMax Speech 2.8 audio, buffer it live, and start playback when you're ready.",
             systemImage: "waveform",
             statusItems: statusItems
         ) {
@@ -54,7 +97,13 @@ public struct AISpeechView: View {
                 inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating
                     || !settings.isConfigured)
 
-            if audioData != nil {
+            if isGenerating {
+                StyledButton("Stop Generation", systemImage: "stop.circle", variant: .secondary) {
+                    cancelGeneration()
+                }
+            }
+
+            if completedAudioData != nil {
                 StyledButton("Save Audio", systemImage: "square.and.arrow.down") {
                     saveAudio()
                 }
@@ -68,7 +117,7 @@ public struct AISpeechView: View {
             StyledButton("Clear", systemImage: "trash", variant: .ghost) {
                 clearAll()
             }
-            .disabled(inputText.isEmpty && audioData == nil)
+            .disabled(inputText.isEmpty && !hasBufferedAudio)
         } content: {
             VStack(spacing: AppTheme.Spacing.lg) {
                 HSplitView {
@@ -97,6 +146,9 @@ public struct AISpeechView: View {
                 )
             }
         }
+        .onAppear {
+            configurePlaybackControllerIfNeeded()
+        }
     }
 
     // MARK: - Status Items
@@ -114,18 +166,35 @@ public struct AISpeechView: View {
         if isGenerating {
             items.append(
                 ToolStatusItem(
-                    title: "Generating…",
+                    title: streamPhase == .playable ? "Streaming" : "Buffering…",
                     systemImage: "arrow.triangle.2.circlepath",
                     tint: AppTheme.accentWarm
                 ))
         }
 
-        if audioData != nil {
+        if hasBufferedAudio {
+            let title: String
+            let tint: Color
+
+            if isPlaying {
+                title = "Playing"
+                tint = AppTheme.accentWarm
+            } else if completedAudioData != nil {
+                title = "Audio ready"
+                tint = AppTheme.success
+            } else if canStartPlayback {
+                title = "Buffered"
+                tint = AppTheme.success
+            } else {
+                title = "Buffering"
+                tint = AppTheme.accent
+            }
+
             items.append(
                 ToolStatusItem(
-                    title: isPlaying ? "Playing" : "Audio ready",
-                    systemImage: isPlaying ? "speaker.wave.3.fill" : "checkmark.circle.fill",
-                    tint: isPlaying ? AppTheme.accentWarm : AppTheme.success
+                    title: title,
+                    systemImage: isPlaying ? "speaker.wave.3.fill" : "waveform.circle.fill",
+                    tint: tint
                 ))
         }
 
@@ -174,7 +243,7 @@ public struct AISpeechView: View {
                     voiceSection
                     parameterSection
                     formatSection
-                    if audioData != nil {
+                    if hasBufferedAudio {
                         playbackSection
                     }
                 }
@@ -249,6 +318,10 @@ public struct AISpeechView: View {
                 }
             }
             .pickerStyle(.segmented)
+
+            Text("WAV is unavailable in streaming mode.")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
         }
     }
 
@@ -268,6 +341,7 @@ public struct AISpeechView: View {
                 ) {
                     togglePlayback()
                 }
+                .disabled(!isPlaying && !canStartPlayback)
 
                 StyledIconButton("stop.fill", help: "Stop") {
                     stopPlayback()
@@ -276,11 +350,19 @@ public struct AISpeechView: View {
 
                 Spacer()
 
-                if let data = audioData {
-                    Text(formattedSize(data.count))
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(AppTheme.textMuted)
-                }
+                Text(formattedSize(audioData.count))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+
+            if isGenerating && !canStartPlayback {
+                Text("Buffering live audio. Play unlocks automatically once enough audio is queued.")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+            } else if isGenerating && !isPlaying {
+                Text("Streaming is in progress. Click Play whenever you want to start playback.")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
             }
         }
     }
@@ -295,30 +377,52 @@ public struct AISpeechView: View {
                 message: "MiniMax API key is required. Configure it in MiniMax Settings.",
                 tint: AppTheme.warning
             )
-        } else if isGenerating {
-            ToolMessageBanner(
-                systemImage: "arrow.triangle.2.circlepath",
-                message: "Generating speech…",
-                tint: AppTheme.accent
-            )
         } else if !errorMessage.isEmpty {
             ToolMessageBanner(
                 systemImage: "exclamationmark.triangle.fill",
                 message: errorMessage,
                 tint: AppTheme.error
             )
-        } else if audioData != nil {
+        } else if isGenerating && isPlaying {
+            ToolMessageBanner(
+                systemImage: "speaker.wave.3.fill",
+                message: "Streaming speech and playing buffered audio…",
+                tint: AppTheme.accent
+            )
+        } else if isGenerating && canStartPlayback {
+            ToolMessageBanner(
+                systemImage: "waveform.circle.fill",
+                message: "Speech is still streaming. Buffered audio is ready, and playback remains manual.",
+                tint: AppTheme.accent
+            )
+        } else if isGenerating {
+            ToolMessageBanner(
+                systemImage: "arrow.triangle.2.circlepath",
+                message: "Streaming speech and buffering audio…",
+                tint: AppTheme.accent
+            )
+        } else if completedAudioData != nil {
             ToolMessageBanner(
                 systemImage: "checkmark.circle.fill",
-                message:
-                    "Audio generated successfully. Use the playback controls or save to file.",
+                message: "Speech streamed successfully. Use playback controls or save the final audio.",
                 tint: AppTheme.success
+            )
+        } else if streamPhase == .cancelled && hasBufferedAudio {
+            ToolMessageBanner(
+                systemImage: "stop.circle.fill",
+                message: "Generation stopped. The buffered audio remains available for preview.",
+                tint: AppTheme.warning
+            )
+        } else if streamPhase == .failed && hasBufferedAudio {
+            ToolMessageBanner(
+                systemImage: "exclamationmark.triangle.fill",
+                message: "Streaming stopped early, but the buffered audio is still available.",
+                tint: AppTheme.warning
             )
         } else {
             ToolMessageBanner(
                 systemImage: "sparkles",
-                message:
-                    "Enter text and select a voice, then generate speech using MiniMax Speech 2.8.",
+                message: "Enter text and stream speech with MiniMax Speech 2.8, then press Play when enough audio is buffered.",
                 tint: AppTheme.accentWarm
             )
         }
@@ -327,113 +431,182 @@ public struct AISpeechView: View {
     // MARK: - Actions
 
     private func generateSpeech() {
-        guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let trimmedInput = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedInput.isEmpty else { return }
 
-        isGenerating = true
+        configurePlaybackControllerIfNeeded()
+        generationTask?.cancel()
+        playbackController.reset(format: outputFormat)
+
+        let referenceID = AppLogger.makeReferenceID()
+        let selectedVoice = selectedVoice
+        let speed = speed
+        let volume = volume
+        let pitchValue = Int(pitch)
+        let format = outputFormat
+        let pitchRecordValue = pitch
+
+        audioData.removeAll(keepingCapacity: false)
+        completedAudioData = nil
+        loadedAudioFormat = format
         errorMessage = ""
-        latestReferenceID = ""
-        stopPlayback()
+        latestReferenceID = referenceID
+        activeGenerationReferenceID = referenceID
+        streamPhase = .buffering
 
-        Task {
+        generationTask = Task {
             do {
-                let response = try await MiniMaxAPIClient.shared.textToSpeech(
-                    text: inputText,
+                let response = try await MiniMaxAPIClient.shared.textToSpeechStream(
+                    text: trimmedInput,
                     voiceId: selectedVoice,
                     speed: speed,
                     vol: volume,
-                    pitch: Int(pitch),
-                    format: outputFormat
-                )
+                    pitch: pitchValue,
+                    format: format,
+                    referenceID: referenceID
+                ) { chunk in
+                    Task { @MainActor in
+                        receiveAudioChunk(chunk, referenceID: referenceID)
+                    }
+                }
+
                 await MainActor.run {
-                    audioData = response.audioData
-                    latestReferenceID = response.referenceID
-                    isGenerating = false
+                    completeStreaming(response, referenceID: referenceID)
                 }
 
                 let recordID = UUID()
-                let audioFileName = "\(recordID.uuidString).\(outputFormat)"
+                let audioFileName = "\(recordID.uuidString).\(format)"
                 let record = SpeechHistoryRecord(
                     id: recordID,
                     createdAt: Date(),
-                    inputText: inputText,
+                    inputText: trimmedInput,
                     voice: selectedVoice,
                     speed: speed,
                     volume: volume,
-                    pitch: pitch,
-                    outputFormat: outputFormat,
+                    pitch: pitchRecordValue,
+                    outputFormat: format,
                     model: MiniMaxSettingsStore.shared.speechModel,
                     durationMs: response.durationMs,
                     audioFileName: audioFileName,
                     referenceID: response.referenceID
                 )
                 try? await HistoryStore.shared.save(record, audioData: response.audioData)
+            } catch is CancellationError {
+                await MainActor.run {
+                    handleCancelledGeneration(referenceID: referenceID)
+                }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    isGenerating = false
+                    handleStreamingFailure(error, referenceID: referenceID)
+                }
+            }
+
+            await MainActor.run {
+                if activeGenerationReferenceID == referenceID {
+                    generationTask = nil
+                    activeGenerationReferenceID = nil
                 }
             }
         }
     }
 
-    private func togglePlayback() {
-        if isPlaying {
-            audioPlayer?.pause()
-            isPlaying = false
-        } else {
-            playAudio()
+    private func receiveAudioChunk(_ chunk: Data, referenceID: String) {
+        guard activeGenerationReferenceID == referenceID else { return }
+        guard !chunk.isEmpty else { return }
+
+        audioData.append(chunk)
+        playbackController.append(chunk)
+
+        if streamPhase == .buffering && audioData.count >= minimumPlaybackBufferBytes {
+            streamPhase = .playable
         }
     }
 
-    private func playAudio() {
-        guard let data = audioData else { return }
+    private func completeStreaming(
+        _ response: MiniMaxAPIClient.TTSResponse,
+        referenceID: String
+    ) {
+        guard activeGenerationReferenceID == referenceID else { return }
+        audioData = response.audioData
+        completedAudioData = response.audioData
+        loadedAudioFormat = response.format
+        latestReferenceID = response.referenceID
+        playbackController.markStreamFinished()
 
-        do {
-            let player = try AVAudioPlayer(data: data)
-            player.prepareToPlay()
-            player.play()
-            audioPlayer = player
-            isPlaying = true
-        } catch {
-            let playbackError = error
-            let referenceID = latestReferenceID
-            Task {
-                let resolvedReferenceID = await AppLogger.shared.error(
-                    category: .aispeech,
-                    event: "player_prepare_failed",
-                    referenceID: referenceID.isEmpty ? nil : referenceID,
-                    message: "Failed to prepare generated speech for playback.",
-                    metadata: [
-                        "stage": "prepare_audio_player",
-                        "byteCount": String(data.count),
-                        "format": outputFormat,
-                    ],
-                    error: playbackError
-                )
+        if !isPlaying {
+            streamPhase = .ready
+        }
+    }
 
-                await MainActor.run {
-                    errorMessage = "Speech playback failed. Reference ID: \(resolvedReferenceID)"
-                    isPlaying = false
-                }
+    private func handleCancelledGeneration(referenceID: String) {
+        guard activeGenerationReferenceID == referenceID else { return }
+        playbackController.markStreamFinished()
+        streamPhase = hasBufferedAudio ? .cancelled : .idle
+    }
+
+    private func handleStreamingFailure(_ error: Error, referenceID: String) {
+        guard activeGenerationReferenceID == referenceID else { return }
+        playbackController.markStreamFinished()
+        errorMessage = error.localizedDescription
+        streamPhase = hasBufferedAudio ? .failed : .idle
+    }
+
+    private func cancelGeneration() {
+        generationTask?.cancel()
+    }
+
+    private func togglePlayback() {
+        if isPlaying {
+            playbackController.pause()
+        } else {
+            do {
+                try playbackController.play()
+                errorMessage = ""
+            } catch {
+                handlePlaybackFailure(error)
             }
         }
     }
 
     private func stopPlayback() {
-        audioPlayer?.stop()
-        audioPlayer = nil
-        isPlaying = false
+        playbackController.stop()
+    }
+
+    private func handlePlaybackFailure(_ error: Error) {
+        let playbackError = error
+        let referenceID = latestReferenceID
+
+        Task {
+            let resolvedReferenceID = await AppLogger.shared.error(
+                category: .aispeech,
+                event: "player_prepare_failed",
+                referenceID: referenceID.isEmpty ? nil : referenceID,
+                message: "Failed to prepare streamed speech for playback.",
+                metadata: [
+                    "stage": "prepare_streaming_audio_player",
+                    "byteCount": String(audioData.count),
+                    "format": currentAudioFormat,
+                ],
+                error: playbackError
+            )
+
+            await MainActor.run {
+                errorMessage = "Speech playback failed. Reference ID: \(resolvedReferenceID)"
+                isPlaying = false
+            }
+        }
     }
 
     private func saveAudio() {
-        guard let data = audioData else { return }
+        guard let data = completedAudioData else { return }
+        let format = currentAudioFormat
 
         let panel = NSSavePanel()
         panel.title = "Save Audio"
-        panel.nameFieldStringValue = "speech.\(outputFormat)"
+        panel.nameFieldStringValue = "speech.\(format)"
         panel.canCreateDirectories = true
 
-        switch outputFormat {
+        switch format {
         case "wav":
             panel.allowedContentTypes = [.wav]
         case "flac":
@@ -453,15 +626,50 @@ public struct AISpeechView: View {
     }
 
     private func clearAll() {
+        generationTask?.cancel()
+        generationTask = nil
+        activeGenerationReferenceID = nil
         stopPlayback()
+        playbackController.reset(format: outputFormat)
         inputText = ""
-        audioData = nil
+        audioData.removeAll(keepingCapacity: false)
+        completedAudioData = nil
+        loadedAudioFormat = nil
         errorMessage = ""
         latestReferenceID = ""
+        streamPhase = .idle
     }
 
     private func formattedSize(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+
+    private func configurePlaybackControllerIfNeeded() {
+        guard !didConfigurePlaybackController else { return }
+        didConfigurePlaybackController = true
+
+        playbackController.onPlaybackStateChanged = { playing in
+            Task { @MainActor in
+                isPlaying = playing
+            }
+        }
+
+        playbackController.onPlaybackFinished = {
+            Task { @MainActor in
+                isPlaying = false
+                if completedAudioData != nil {
+                    streamPhase = .ready
+                } else if isGenerating {
+                    streamPhase = canStartPlayback ? .playable : .buffering
+                }
+            }
+        }
+
+        playbackController.onError = { error in
+            Task { @MainActor in
+                handlePlaybackFailure(error)
+            }
+        }
     }
 
     // MARK: - History
@@ -474,21 +682,53 @@ public struct AISpeechView: View {
     }
 
     private func restoreSpeech(_ record: SpeechHistoryRecord) {
+        generationTask?.cancel()
+        generationTask = nil
+        activeGenerationReferenceID = nil
+        stopPlayback()
+        configurePlaybackControllerIfNeeded()
+
         inputText = record.inputText
         selectedVoice = record.voice
         speed = record.speed
         volume = record.volume
         pitch = record.pitch
-        outputFormat = record.outputFormat
+        outputFormat = outputFormats.contains(record.outputFormat) ? record.outputFormat : outputFormats[0]
         errorMessage = ""
+        latestReferenceID = record.referenceID
 
-        // Try to load audio
         Task {
             if let data = try? await HistoryStore.shared.loadData(category: .speech, fileName: record.audioFileName) {
-                await MainActor.run { audioData = data }
+                await MainActor.run {
+                    if !outputFormats.contains(record.outputFormat) {
+                        audioData = data
+                        completedAudioData = data
+                        loadedAudioFormat = record.outputFormat
+                        streamPhase = .ready
+                        errorMessage =
+                            "\(record.outputFormat.uppercased()) history can still be exported, but new streaming generations use MP3 or FLAC."
+                    } else {
+                        do {
+                            try playbackController.loadCompletedAudio(data, format: record.outputFormat)
+                            audioData = data
+                            completedAudioData = data
+                            loadedAudioFormat = record.outputFormat
+                            streamPhase = .ready
+                        } catch {
+                            audioData.removeAll(keepingCapacity: false)
+                            completedAudioData = nil
+                            loadedAudioFormat = nil
+                            streamPhase = .idle
+                            errorMessage = "Failed to load audio: \(error.localizedDescription)"
+                        }
+                    }
+                }
             } else {
                 await MainActor.run {
-                    audioData = nil
+                    audioData.removeAll(keepingCapacity: false)
+                    completedAudioData = nil
+                    loadedAudioFormat = nil
+                    streamPhase = .idle
                     errorMessage = "Audio file missing — text and parameters restored. Regenerate to create audio."
                 }
             }

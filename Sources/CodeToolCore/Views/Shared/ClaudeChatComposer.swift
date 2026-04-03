@@ -210,35 +210,10 @@ final class ComposerTextView: NSTextView {
     override func paste(_ sender: Any?) {
         let pasteboard = NSPasteboard.general
 
-        // Check for images first
-        let imageTypes: [NSPasteboard.PasteboardType] = [.tiff, .png]
-        if pasteboard.canReadItem(withDataConformingToTypes: imageTypes.map(\.rawValue)) {
-            var images: [NSImage] = []
-
-            if let tiffData = pasteboard.data(forType: .tiff),
-               let image = NSImage(data: tiffData) {
-                images.append(image)
-            } else if let pngData = pasteboard.data(forType: .png),
-                      let image = NSImage(data: pngData) {
-                images.append(image)
-            }
-
-            // Also check for file URLs pointing to images
-            if images.isEmpty,
-               let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [
-                   .urlReadingContentsConformToTypes: ["public.image"]
-               ]) as? [URL] {
-                for url in urls {
-                    if let image = NSImage(contentsOf: url) {
-                        images.append(image)
-                    }
-                }
-            }
-
-            if !images.isEmpty {
-                composerDelegate?.composerDidPasteImages(images)
-                return
-            }
+        let images = ImageImportSupport.pasteboardImages(from: pasteboard)
+        if !images.isEmpty {
+            composerDelegate?.composerDidPasteImages(images)
+            return
         }
 
         // Fallback to default text paste

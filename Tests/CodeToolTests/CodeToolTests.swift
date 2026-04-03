@@ -4,6 +4,10 @@ import XCTest
 @testable import CodeToolCore
 @testable import CodeToolFoundation
 
+#if canImport(AppKit)
+    import AppKit
+#endif
+
 #if canImport(SwiftUI)
     import SwiftUI
 #endif
@@ -36,6 +40,46 @@ private final class MockURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+private final class MockWebSocket: MiniMaxWebSocketing {
+    private(set) var sentPayloads: [String] = []
+    private var receivedMessages: [URLSessionWebSocketTask.Message]
+    private(set) var closeCode: URLSessionWebSocketTask.CloseCode?
+    private(set) var closeReason: Data?
+
+    init(receivedMessages: [URLSessionWebSocketTask.Message]) {
+        self.receivedMessages = receivedMessages
+    }
+
+    func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        switch message {
+        case .string(let payload):
+            sentPayloads.append(payload)
+        case .data(let payload):
+            sentPayloads.append(String(data: payload, encoding: .utf8) ?? "")
+        @unknown default:
+            throw URLError(.cannotDecodeRawData)
+        }
+    }
+
+    func receive() async throws -> URLSessionWebSocketTask.Message {
+        guard !receivedMessages.isEmpty else {
+            throw URLError(.badServerResponse)
+        }
+        return receivedMessages.removeFirst()
+    }
+
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        self.closeCode = closeCode
+        closeReason = reason
+    }
+
+    func sentJSONObject(at index: Int) throws -> [String: Any] {
+        try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(sentPayloads[index].utf8)) as? [String: Any]
+        )
+    }
 }
 
 final class CodeToolTests: XCTestCase {
@@ -218,6 +262,10 @@ final class CodeToolTests: XCTestCase {
 
         return data
     }
+
+    private static let tinyPNGBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+kv0YAAAAASUVORK5CYII="
+    private static let tinyPNGData = Data(base64Encoded: tinyPNGBase64) ?? Data()
 
     func testRegistryDefaultsNotEmpty() {
         XCTAssertFalse(ToolRegistry.defaults.isEmpty)
@@ -583,6 +631,92 @@ final class CodeToolTests: XCTestCase {
         XCTAssertFalse(response.referenceID.isEmpty)
     }
 
+    func testTextToSpeechStreamSendsWebSocketEventsAndDecodesChunks() async throws {
+        let socket = MockWebSocket(receivedMessages: [
+            .string(#"{"event":"connected_success"}"#),
+            .string(#"{"event":"task_started"}"#),
+            .string(#"{"data":{"audio":"48656c"}}"#),
+            .string(#"{"data":{"audio":"6c6f"},"extra_info":{"audio_length":321},"is_final":true}"#),
+        ])
+
+        var capturedRequest: URLRequest?
+        let streamingClient = MiniMaxAPIClient.makeTestingClient(
+            urlProtocolType: MockURLProtocol.self
+        ) { request in
+            capturedRequest = request
+            return socket
+        }
+
+        var chunks: [Data] = []
+        let response = try await streamingClient.textToSpeechStream(
+            text: "Hello",
+            referenceID: "stream-ref-001"
+        ) { chunk in
+            chunks.append(chunk)
+        }
+
+        XCTAssertEqual(capturedRequest?.url?.absoluteString, "wss://example.com/ws/v1/t2a_v2")
+        XCTAssertEqual(
+            capturedRequest?.value(forHTTPHeaderField: "Authorization"),
+            "Bearer test-api-key"
+        )
+        XCTAssertEqual(chunks, [Data("Hel".utf8), Data("lo".utf8)])
+        XCTAssertEqual(response.audioData, Data("Hello".utf8))
+        XCTAssertEqual(response.format, "mp3")
+        XCTAssertEqual(response.durationMs, 321)
+        XCTAssertEqual(response.referenceID, "stream-ref-001")
+        XCTAssertEqual(socket.closeCode, .normalClosure)
+
+        XCTAssertEqual(socket.sentPayloads.count, 3)
+        let taskStart = try socket.sentJSONObject(at: 0)
+        let taskContinue = try socket.sentJSONObject(at: 1)
+        let taskFinish = try socket.sentJSONObject(at: 2)
+
+        XCTAssertEqual(taskStart["event"] as? String, "task_start")
+        XCTAssertEqual(taskStart["model"] as? String, MiniMaxSettingsStore.shared.speechModel)
+        XCTAssertEqual(
+            (taskStart["audio_setting"] as? [String: Any])?["format"] as? String,
+            "mp3"
+        )
+        XCTAssertEqual(taskContinue["event"] as? String, "task_continue")
+        XCTAssertEqual(taskContinue["text"] as? String, "Hello")
+        XCTAssertEqual(taskFinish["event"] as? String, "task_finish")
+    }
+
+    func testTextToSpeechStreamErrorWritesStructuredLog() async throws {
+        let referenceID = "stream-error-ref-001"
+        let socket = MockWebSocket(receivedMessages: [
+            .string(#"{"event":"connected_success"}"#),
+            .string(#"{"event":"task_started"}"#),
+            .string(#"{"event":"task_failed","message":"stream rate limited"}"#),
+        ])
+
+        let streamingClient = MiniMaxAPIClient.makeTestingClient(
+            urlProtocolType: MockURLProtocol.self
+        ) { _ in
+            socket
+        }
+
+        do {
+            _ = try await streamingClient.textToSpeechStream(
+                text: "private speech text",
+                referenceID: referenceID
+            ) { _ in }
+            XCTFail("Expected textToSpeechStream to throw")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("Reference ID: \(referenceID)"))
+
+            let logContent = try await logContent(for: .aispeech)
+            XCTAssertTrue(logContent.contains("request_started"))
+            XCTAssertTrue(logContent.contains("request_failed"))
+            XCTAssertTrue(logContent.contains("stream_text_to_speech"))
+            XCTAssertTrue(logContent.contains(referenceID))
+            XCTAssertFalse(logContent.contains("private speech text"))
+        }
+
+        XCTAssertEqual(socket.closeCode, .goingAway)
+    }
+
     func testRedactionPolicyHashesTextWithoutPreviewByDefault() {
         let result = AppRedactionPolicy.standard.redact(text: "secret prompt")
 
@@ -831,6 +965,257 @@ final class CodeToolTests: XCTestCase {
             XCTAssertFalse(logContent.contains(sensitivePrompt))
         }
     }
+
+    func testGenerateImageRequestIncludesSubjectReference() async throws {
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/image_generation")
+
+            let bodyData = try Self.requestBodyData(for: request)
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+            )
+
+            let subjectReference = try XCTUnwrap(
+                (bodyObject["subject_reference"] as? [[String: Any]])?.first
+            )
+            XCTAssertEqual(subjectReference["type"] as? String, "character")
+            let imageFile = try XCTUnwrap(subjectReference["image_file"] as? String)
+            XCTAssertTrue(imageFile.hasPrefix("data:image/png;base64,"))
+            XCTAssertTrue(imageFile.contains("ZmFrZQ=="))
+
+            let responseBody: [String: Any] = [
+                "base_resp": [
+                    "status_code": 0,
+                    "status_msg": "success",
+                ],
+                "data": [
+                    "image_base64": [Self.tinyPNGBase64]
+                ],
+            ]
+            let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
+            return (response, responseData)
+        }
+
+        let response = try await miniMaxClient.generateImage(
+            request: MiniMaxAPIClient.MiniMaxImageGenerationRequest(
+                prompt: "Reference portrait",
+                aspectRatio: "16:9",
+                subjectReferences: [
+                    MiniMaxAPIClient.MiniMaxSubjectReference(imageBase64: "ZmFrZQ==")
+                ]
+            )
+        )
+
+        XCTAssertEqual(response.images.count, 1)
+    }
+
+    func testGenerateImageRequestIncludesAdvancedParameters() async throws {
+        MockURLProtocol.requestHandler = { request in
+            let bodyData = try Self.requestBodyData(for: request)
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+            )
+
+            XCTAssertEqual(bodyObject["seed"] as? Int, 42)
+            XCTAssertEqual(bodyObject["prompt_optimizer"] as? Bool, true)
+            XCTAssertEqual(bodyObject["n"] as? Int, 3)
+            XCTAssertEqual(bodyObject["aspect_ratio"] as? String, "9:16")
+
+            let responseBody: [String: Any] = [
+                "base_resp": [
+                    "status_code": 0,
+                    "status_msg": "success",
+                ],
+                "data": [
+                    "image_base64": [Self.tinyPNGBase64]
+                ],
+            ]
+            let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
+            return (response, responseData)
+        }
+
+        let response = try await miniMaxClient.generateImage(
+            request: MiniMaxAPIClient.MiniMaxImageGenerationRequest(
+                prompt: "High fashion silhouette",
+                aspectRatio: "9:16",
+                imageCount: 3,
+                seed: 42,
+                promptOptimizer: true
+            )
+        )
+
+        XCTAssertEqual(response.images.count, 1)
+    }
+
+    func testGenerateImageRequestUsesCustomSizeWhenSelected() async throws {
+        MockURLProtocol.requestHandler = { request in
+            let bodyData = try Self.requestBodyData(for: request)
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+            )
+
+            XCTAssertEqual(bodyObject["width"] as? Int, 1536)
+            XCTAssertEqual(bodyObject["height"] as? Int, 1024)
+            XCTAssertNil(bodyObject["aspect_ratio"])
+
+            let responseBody: [String: Any] = [
+                "base_resp": [
+                    "status_code": 0,
+                    "status_msg": "success",
+                ],
+                "data": [
+                    "image_base64": [Self.tinyPNGBase64]
+                ],
+            ]
+            let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
+            return (response, responseData)
+        }
+
+        let response = try await miniMaxClient.generateImage(
+            request: MiniMaxAPIClient.MiniMaxImageGenerationRequest(
+                prompt: "Custom canvas composition",
+                width: 1536,
+                height: 1024,
+                imageCount: 2
+            )
+        )
+
+        XCTAssertEqual(response.images.count, 1)
+    }
+
+    func testImageHistoryRecordCodableWithReferenceImages() throws {
+        let record = ImageHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            prompt: "Editorial portrait",
+            aspectRatio: nil,
+            width: 1536,
+            height: 1024,
+            imageCount: 2,
+            seed: 99,
+            promptOptimizer: true,
+            model: "image-01",
+            referenceImages: [
+                ImageReferenceRecord(
+                    fileName: "record-ref-0.png",
+                    mimeType: "image/png",
+                    sizeBytes: 2048
+                )
+            ],
+            outputImageFileNames: ["record-out-0.png", "record-out-1.png"],
+            referenceID: "img-ref-001"
+        )
+
+        let data = try JSONEncoder().encode(record)
+        let decoded = try JSONDecoder().decode(ImageHistoryRecord.self, from: data)
+
+        XCTAssertEqual(decoded.prompt, record.prompt)
+        XCTAssertEqual(decoded.width, 1536)
+        XCTAssertEqual(decoded.height, 1024)
+        XCTAssertEqual(decoded.seed, 99)
+        XCTAssertTrue(decoded.promptOptimizer)
+        XCTAssertEqual(decoded.referenceImages.count, 1)
+        XCTAssertEqual(decoded.referenceImages.first?.fileName, "record-ref-0.png")
+        XCTAssertEqual(decoded.outputImageFileNames, ["record-out-0.png", "record-out-1.png"])
+    }
+
+    func testImageHistoryRecordDecodesLegacyImageFileNames() throws {
+        let json = """
+        {
+          "id": "B3B7B6A9-7A7F-42D2-8D54-CA8E77F594B1",
+          "createdAt": "2026-04-03T00:00:00Z",
+          "prompt": "Legacy prompt",
+          "aspectRatio": "1:1",
+          "imageCount": 1,
+          "model": "image-01",
+          "imageFileNames": ["legacy-out-0.png"],
+          "referenceID": "legacy-image-ref"
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ImageHistoryRecord.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.outputImageFileNames, ["legacy-out-0.png"])
+        XCTAssertEqual(decoded.referenceImages.count, 0)
+        XCTAssertFalse(decoded.promptOptimizer)
+    }
+
+    func testDeleteImageHistoryRemovesReferenceAndOutputFiles() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ImageHistoryDelete-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer {
+            Task { await HistoryStore.shared.setBaseURLForTesting(nil) }
+        }
+
+        let recordID = UUID()
+        let record = ImageHistoryRecord(
+            id: recordID,
+            createdAt: Date(),
+            prompt: "Delete me",
+            aspectRatio: "16:9",
+            imageCount: 1,
+            model: "image-01",
+            referenceImages: [
+                ImageReferenceRecord(
+                    fileName: "\(recordID.uuidString)-ref-0.png",
+                    mimeType: "image/png",
+                    sizeBytes: Self.tinyPNGData.count
+                )
+            ],
+            outputImageFileNames: ["\(recordID.uuidString)-out-0.png"],
+            referenceID: "delete-ref"
+        )
+
+        try await HistoryStore.shared.save(
+            record,
+            outputImages: [Self.tinyPNGData],
+            referenceImageData: [Self.tinyPNGData]
+        )
+
+        let imageDir = tempDir.appendingPathComponent("image", isDirectory: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("\(recordID.uuidString).json").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("\(recordID.uuidString)-ref-0.png").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("\(recordID.uuidString)-out-0.png").path))
+
+        try await HistoryStore.shared.deleteImage(id: recordID)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("\(recordID.uuidString).json").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("\(recordID.uuidString)-ref-0.png").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: imageDir.appendingPathComponent("\(recordID.uuidString)-out-0.png").path))
+    }
+
+    #if canImport(AppKit)
+        func testImageImportSupportNormalizationPrefersPNGData() throws {
+            let asset = try ImageImportSupport.importAsset(
+                from: Self.tinyPNGData,
+                suggestedFileName: "portrait.jpeg"
+            )
+
+            XCTAssertEqual(asset.mimeType, "image/png")
+            XCTAssertEqual(asset.fileName, "portrait.png")
+            XCTAssertEqual(asset.sizeBytes, asset.pngData.count)
+            XCTAssertEqual(Array(asset.pngData.prefix(4)), [0x89, 0x50, 0x4E, 0x47])
+            XCTAssertTrue(ImageImportSupport.dataURI(for: asset).hasPrefix("data:image/png;base64,"))
+        }
+    #endif
 
     func testChatCompletionStreamAPIErrorWritesStructuredErrorLog() async throws {
         let sensitivePrompt = "private chat prompt"

@@ -60,7 +60,7 @@ extension ImageHistoryRecord: HistoryDrawerItem {
         String(prompt.prefix(60))
     }
     public var drawerSubtitle: String {
-        "\(aspectRatio) · \(imageCount) image\(imageCount > 1 ? "s" : "")"
+        "\(referenceImages.count) ref\(referenceImages.count == 1 ? "" : "s") · \(sizeSummary) · \(imageCount) output\(imageCount == 1 ? "" : "s")"
     }
     public var drawerTimestamp: Date { createdAt }
     public var drawerIcon: String { "photo.artframe" }

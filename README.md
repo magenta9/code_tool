@@ -10,6 +10,10 @@ A macOS developer toolkit built with Swift and SwiftUI, providing a collection o
 - **Timestamp Converter** – Convert between timestamps and human-readable dates
 - **JWT Tool** – Encode and decode JWT tokens
 - **Word Cloud** – Generate word cloud visualizations from text
+- **AI Chat** – Chat with Claude through the local CLI agent harness
+- **AI Speech** – Stream text-to-speech with MiniMax Speech 2.8
+- **AI Image** – Generate images with MiniMax image-01 using text alone or reference images via drag-and-drop, file selection, or paste
+- **AI Music** – Generate music with MiniMax Music-2.5
 
 ## Requirements
 
@@ -79,3 +83,13 @@ The project is split into two targets:
 
 - **`CodeToolCore`** – A reusable library that contains the data models, view hierarchy, and business logic. This can be imported and tested independently.
 - **`CodeToolApp`** – The executable entry point that wires up the SwiftUI `App` lifecycle and `AppDelegate`.
+
+## AI Image Workflow
+
+The **AI Image** tool now supports a reference-driven workbench:
+
+- Stage one or more reference images with **drag-and-drop**, **Add Images…**, or **Cmd+V paste**
+- Mix references with a prompt for MiniMax `image-01`
+- Choose either an **aspect-ratio preset** or a **custom width/height**
+- Tune **image count**, **seed**, and **prompt optimizer**
+- Restore prior prompts, parameters, references, and outputs from local history

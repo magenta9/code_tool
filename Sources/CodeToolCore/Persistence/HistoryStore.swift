@@ -38,15 +38,158 @@ public struct SpeechHistoryRecord: Codable, Identifiable {
 }
 
 /// History record for an AI Image generation.
+public struct ImageReferenceRecord: Codable, Identifiable {
+    public let id: UUID
+    public let fileName: String
+    public let mimeType: String
+    public let sizeBytes: Int
+
+    public init(
+        id: UUID = UUID(),
+        fileName: String,
+        mimeType: String,
+        sizeBytes: Int
+    ) {
+        self.id = id
+        self.fileName = fileName
+        self.mimeType = mimeType
+        self.sizeBytes = sizeBytes
+    }
+}
+
 public struct ImageHistoryRecord: Codable, Identifiable {
     public let id: UUID
     public let createdAt: Date
     public let prompt: String
-    public let aspectRatio: String
+    public let aspectRatio: String?
+    public let width: Int?
+    public let height: Int?
     public let imageCount: Int
+    public let seed: Int?
+    public let promptOptimizer: Bool
     public let model: String
-    public let imageFileNames: [String]
+    public let referenceImages: [ImageReferenceRecord]
+    public let outputImageFileNames: [String]
     public let referenceID: String
+
+    public init(
+        id: UUID = UUID(),
+        createdAt: Date = Date(),
+        prompt: String,
+        aspectRatio: String? = nil,
+        width: Int? = nil,
+        height: Int? = nil,
+        imageCount: Int,
+        seed: Int? = nil,
+        promptOptimizer: Bool = false,
+        model: String,
+        referenceImages: [ImageReferenceRecord] = [],
+        outputImageFileNames: [String],
+        referenceID: String
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.prompt = prompt
+        self.aspectRatio = aspectRatio
+        self.width = width
+        self.height = height
+        self.imageCount = imageCount
+        self.seed = seed
+        self.promptOptimizer = promptOptimizer
+        self.model = model
+        self.referenceImages = referenceImages
+        self.outputImageFileNames = outputImageFileNames
+        self.referenceID = referenceID
+    }
+
+    public var imageFileNames: [String] {
+        outputImageFileNames
+    }
+
+    public var persistedFileNames: [String] {
+        referenceImages.map(\.fileName) + outputImageFileNames
+    }
+
+    public var sizeSummary: String {
+        if let aspectRatio, !aspectRatio.isEmpty {
+            return aspectRatio
+        }
+
+        if let width, let height {
+            return "\(width)x\(height)"
+        }
+
+        return "Auto"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case createdAt
+        case prompt
+        case aspectRatio
+        case width
+        case height
+        case imageCount
+        case seed
+        case promptOptimizer
+        case model
+        case referenceImages
+        case outputImageFileNames
+        case legacyImageFileNames = "imageFileNames"
+        case referenceID
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        aspectRatio = try container.decodeIfPresent(String.self, forKey: .aspectRatio)
+        width = try container.decodeIfPresent(Int.self, forKey: .width)
+        height = try container.decodeIfPresent(Int.self, forKey: .height)
+        imageCount = try container.decode(Int.self, forKey: .imageCount)
+        seed = try container.decodeIfPresent(Int.self, forKey: .seed)
+        promptOptimizer = try container.decodeIfPresent(Bool.self, forKey: .promptOptimizer) ?? false
+        model = try container.decode(String.self, forKey: .model)
+        referenceImages = try container.decodeIfPresent([ImageReferenceRecord].self, forKey: .referenceImages) ?? []
+        outputImageFileNames =
+            try container.decodeIfPresent([String].self, forKey: .outputImageFileNames)
+            ?? container.decodeIfPresent([String].self, forKey: .legacyImageFileNames)
+            ?? []
+        referenceID = try container.decode(String.self, forKey: .referenceID)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(prompt, forKey: .prompt)
+        try container.encode(imageCount, forKey: .imageCount)
+        try container.encode(promptOptimizer, forKey: .promptOptimizer)
+        try container.encode(model, forKey: .model)
+        try container.encode(outputImageFileNames, forKey: .outputImageFileNames)
+        try container.encode(referenceID, forKey: .referenceID)
+
+        if let aspectRatio {
+            try container.encode(aspectRatio, forKey: .aspectRatio)
+        }
+
+        if let width {
+            try container.encode(width, forKey: .width)
+        }
+
+        if let height {
+            try container.encode(height, forKey: .height)
+        }
+
+        if let seed {
+            try container.encode(seed, forKey: .seed)
+        }
+
+        if !referenceImages.isEmpty {
+            try container.encode(referenceImages, forKey: .referenceImages)
+        }
+    }
 }
 
 /// History record for an AI Music generation.
@@ -276,7 +419,7 @@ extension WordCloudHistoryRecord: HistoryRecord {}
 /// Application Support/CodeTool/history/
 ///   chat/    – ChatHistoryRecord JSON files
 ///   speech/  – SpeechHistoryRecord JSON files + audio blobs
-///   image/   – ImageHistoryRecord JSON files + image blobs
+///   image/   – ImageHistoryRecord JSON files + reference/output image blobs
 ///   music/   – MusicHistoryRecord JSON files + audio blobs
 /// ```
 public actor HistoryStore {
@@ -412,12 +555,53 @@ public actor HistoryStore {
     }
 
     public func save(_ record: ImageHistoryRecord, images: [Data]) throws {
+        try save(record, outputImages: images)
+    }
+
+    public func save(
+        _ record: ImageHistoryRecord,
+        outputImages: [Data],
+        referenceImageData: [Data] = []
+    ) throws {
+        guard referenceImageData.count == record.referenceImages.count else {
+            throw HistoryStoreError.invalidImageDataCount(
+                expected: record.referenceImages.count,
+                actual: referenceImageData.count
+            )
+        }
+
+        guard outputImages.count == record.outputImageFileNames.count else {
+            throw HistoryStoreError.invalidImageDataCount(
+                expected: record.outputImageFileNames.count,
+                actual: outputImages.count
+            )
+        }
+
         let dir = try categoryURL(.image)
+
+        for (index, imageData) in referenceImageData.enumerated() {
+            let tempURL = dir.appendingPathComponent("\(record.id.uuidString)-ref-\(index).tmp")
+            try imageData.write(to: tempURL)
+        }
+
+        for (index, imageData) in outputImages.enumerated() {
+            let tempURL = dir.appendingPathComponent("\(record.id.uuidString)-out-\(index).tmp")
+            try imageData.write(to: tempURL)
+        }
+
         let data = try encoder.encode(record)
         try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
-        for (index, imageData) in images.enumerated() {
-            guard index < record.imageFileNames.count else { break }
-            try imageData.write(to: dir.appendingPathComponent(record.imageFileNames[index]))
+
+        for (index, _) in referenceImageData.enumerated() {
+            let tempURL = dir.appendingPathComponent("\(record.id.uuidString)-ref-\(index).tmp")
+            let finalURL = dir.appendingPathComponent(record.referenceImages[index].fileName)
+            try fileManager.moveItem(at: tempURL, to: finalURL)
+        }
+
+        for (index, _) in outputImages.enumerated() {
+            let tempURL = dir.appendingPathComponent("\(record.id.uuidString)-out-\(index).tmp")
+            let finalURL = dir.appendingPathComponent(record.outputImageFileNames[index])
+            try fileManager.moveItem(at: tempURL, to: finalURL)
         }
     }
 
@@ -586,7 +770,8 @@ public actor HistoryStore {
                     createdAt: record.createdAt,
                     referenceID: record.referenceID,
                     title: "AI Image",
-                    detail: "model=\(record.model), images=\(record.imageCount), aspectRatio=\(record.aspectRatio)"
+                    detail:
+                        "model=\(record.model), refs=\(record.referenceImages.count), outputs=\(record.imageCount), size=\(record.sizeSummary)"
                 )
             )
         }
@@ -636,7 +821,32 @@ public actor HistoryStore {
 
     public func deleteImage(id: UUID) throws {
         let dir = try categoryURL(.image)
-        removeFiles(in: dir, prefix: id.uuidString)
+        let jsonURL = dir.appendingPathComponent("\(id.uuidString).json")
+
+        var errors: [Error] = []
+
+        if let data = try? Data(contentsOf: jsonURL),
+           let record = try? decoder.decode(ImageHistoryRecord.self, from: data) {
+            for fileName in record.persistedFileNames {
+                do {
+                    try fileManager.removeItem(at: dir.appendingPathComponent(fileName))
+                } catch {
+                    errors.append(error)
+                }
+            }
+        } else {
+            removeFiles(in: dir, prefix: id.uuidString)
+        }
+
+        do {
+            try fileManager.removeItem(at: jsonURL)
+        } catch {
+            errors.append(error)
+        }
+
+        if let firstError = errors.first {
+            throw firstError
+        }
     }
 
     public func deleteMusic(id: UUID) throws {
@@ -758,11 +968,14 @@ public actor HistoryStore {
 
 public enum HistoryStoreError: LocalizedError {
     case storageUnavailable
+    case invalidImageDataCount(expected: Int, actual: Int)
 
     public var errorDescription: String? {
         switch self {
         case .storageUnavailable:
             return "Unable to locate Application Support directory for history storage."
+        case .invalidImageDataCount(let expected, let actual):
+            return "Image data count mismatch: expected \(expected) but got \(actual)."
         }
     }
 }

@@ -45,6 +45,7 @@ public struct ContentView: View {
         }
         .onAppear {
             ClaudeCLISettingsStore.shared.discoverCLI()
+            ObservabilitySystem.shared.rootViewReady()
             retainedToolNames = ToolViewCache.retainedToolNames(
                 current: retainedToolNames,
                 selectedToolName: selectedTool?.name
@@ -904,9 +905,10 @@ private struct SettingsSheet: View {
                 Picker("", selection: $selectedTab) {
                     Text("MiniMax").tag("minimax")
                     Text("Claude CLI").tag("claude")
+                    Text("Diagnostics").tag("diagnostics")
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 260)
+                .frame(width: 380)
 
                 Spacer()
                 Button {
@@ -922,8 +924,10 @@ private struct SettingsSheet: View {
 
             if selectedTab == "minimax" {
                 MiniMaxSettingsView()
-            } else {
+            } else if selectedTab == "claude" {
                 ClaudeCLISettingsView()
+            } else {
+                DiagnosticsView()
             }
         }
         .frame(minWidth: 600, minHeight: 500)

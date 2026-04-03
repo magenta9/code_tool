@@ -18,6 +18,7 @@ public struct ClaudeChatView: View {
     @State private var inputTokens: Int = 0
     @State private var outputTokens: Int = 0
     @State private var totalDurationMs: Int = 0
+    @State private var activeReferenceID: String = ""
     @State private var showThinking: Set<UUID> = []
     @State private var showToolDetails: Set<UUID> = []
     @State private var showHistory = false
@@ -647,6 +648,22 @@ public struct ClaudeChatView: View {
                 }
             } catch {
                 attachmentWarning = "Failed to save attachment: \(error.localizedDescription)"
+                let referenceID = activeReferenceID.isEmpty ? AppLogger.makeReferenceID() : activeReferenceID
+                activeReferenceID = referenceID
+                Task {
+                    _ = await AppLogger.shared.error(
+                        category: .claudechat,
+                        event: "attachment_save_failed",
+                        referenceID: referenceID,
+                        message: "Failed to persist Claude chat attachment.",
+                        metadata: [
+                            "fileName": storedFileName,
+                            "mimeType": img.mimeType
+                        ],
+                        error: error,
+                        stackTrace: []
+                    )
+                }
             }
         }
 
@@ -671,12 +688,18 @@ public struct ClaudeChatView: View {
         streamingText = ""
         streamingThinking = ""
         cancellationRequested = false
+        let requestReferenceID = AppLogger.makeReferenceID()
+        activeReferenceID = requestReferenceID
 
         let outgoingSessionId = sessionId.isEmpty ? nil : sessionId
 
         Task {
             await client.send(
-                request: ClaudeCLITurnRequest(prompt: prompt, sessionID: outgoingSessionId),
+                request: ClaudeCLITurnRequest(
+                    prompt: prompt,
+                    sessionID: outgoingSessionId,
+                    referenceID: requestReferenceID
+                ),
                 settings: settings
             ) { event in
                 Task { @MainActor in
@@ -850,7 +873,7 @@ public struct ClaudeChatView: View {
             outputTokens: outputTokens > 0 ? outputTokens : nil,
             durationMs: totalDurationMs > 0 ? totalDurationMs : nil,
             sessionId: sessionId.isEmpty ? nil : sessionId,
-            referenceID: AppLogger.makeReferenceID()
+            referenceID: activeReferenceID.isEmpty ? AppLogger.makeReferenceID() : activeReferenceID
         )
     }
 
@@ -881,6 +904,7 @@ public struct ClaudeChatView: View {
         inputTokens = 0
         outputTokens = 0
         totalDurationMs = 0
+        activeReferenceID = ""
         showThinking = []
         showToolDetails = []
         activeConversationRecordID = nil
@@ -972,6 +996,7 @@ public struct ClaudeChatView: View {
         inputTokens = record.inputTokens ?? 0
         outputTokens = record.outputTokens ?? 0
         totalDurationMs = record.durationMs ?? 0
+        activeReferenceID = record.referenceID
         errorMessage = ""
 
         // Restore conversation identity so continued chat overwrites the same record

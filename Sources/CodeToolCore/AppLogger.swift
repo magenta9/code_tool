@@ -1,16 +1,20 @@
 import Foundation
 
-public enum AppLogLevel: String, Codable {
-    case info
+public enum AppLogLevel: String, Codable, Sendable {
+    case fault
     case error
+    case info
+    case debug
+    case trace
 }
 
-public enum AppLogCategory: String, Codable {
+public enum AppLogCategory: String, Codable, Sendable {
     case aimusic
     case aispeech
     case aiimage
     case aichat
     case claudechat
+    case observability
 }
 
 public struct LoggedDiagnosticError: LocalizedError {
@@ -62,18 +66,7 @@ public struct LoggedDiagnosticError: LocalizedError {
     }
 }
 
-private struct AppLogEntry: Codable {
-    let timestamp: String
-    let level: AppLogLevel
-    let category: AppLogCategory
-    let event: String
-    let referenceID: String?
-    let message: String?
-    let metadata: [String: String]
-    let stackTrace: [String]?
-}
-
-private actor AppLogStore {
+private actor AppFileLogSink {
     private enum StoreError: Error {
         case invalidDirectory
     }
@@ -81,7 +74,8 @@ private actor AppLogStore {
     private let fileManager = FileManager.default
     private let encoder = JSONEncoder()
     private let dayFormatter: DateFormatter
-    private let timestampFormatter: ISO8601DateFormatter
+    private let retentionExecutor = AppLogRetentionExecutor()
+    private let retentionPolicy = AppLogRetentionPolicy()
     private let maxFileSizeBytes: UInt64 = 1_048_576
     private var overrideDirectoryURL: URL?
 
@@ -91,60 +85,39 @@ private actor AppLogStore {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         self.dayFormatter = formatter
-
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        self.timestampFormatter = isoFormatter
     }
 
     func setOverrideDirectoryURL(_ url: URL?) {
         overrideDirectoryURL = url
     }
 
-    func write(
-        level: AppLogLevel,
-        category: AppLogCategory,
-        event: String,
-        referenceID: String?,
-        message: String?,
-        metadata: [String: String],
-        stackTrace: [String]?
-    ) async {
-        let entry = AppLogEntry(
-            timestamp: timestampFormatter.string(from: Date()),
-            level: level,
-            category: category,
-            event: event,
-            referenceID: referenceID,
-            message: message,
-            metadata: metadata,
-            stackTrace: stackTrace
-        )
+    func write(entry: AppLogEntry) async throws {
+        let directoryURL = try resolveDirectoryURL()
+        let fileURL = try resolveLogFileURL(in: directoryURL, category: entry.category)
+        var data = try encoder.encode(entry)
+        data.append(0x0A)
 
-        do {
-            let directoryURL = try resolveDirectoryURL()
-            let fileURL = try resolveLogFileURL(in: directoryURL, category: category)
-            var data = try encoder.encode(entry)
-            data.append(0x0A)
-
-            if !fileManager.fileExists(atPath: fileURL.path) {
-                fileManager.createFile(atPath: fileURL.path, contents: nil)
-            }
-
-            let handle = try FileHandle(forWritingTo: fileURL)
-            defer {
-                try? handle.close()
-            }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: data)
-        } catch {
-            assertionFailure("Failed to write log entry: \(error.localizedDescription)")
+        if !fileManager.fileExists(atPath: fileURL.path) {
+            fileManager.createFile(atPath: fileURL.path, contents: nil)
         }
+
+        let handle = try FileHandle(forWritingTo: fileURL)
+        defer {
+            try? handle.close()
+        }
+
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+        try await retentionExecutor.prune(directoryURL: directoryURL, policy: retentionPolicy)
     }
 
     func logFileURLs(for category: AppLogCategory) -> [URL] {
         guard let directoryURL = try? resolveDirectoryURL(),
-              let urls = try? fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]) else {
+              let urls = try? fileManager.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+              ) else {
             return []
         }
 
@@ -195,15 +168,90 @@ private actor AppLogStore {
     }
 }
 
+private actor AppLoggerPipeline {
+    private let unifiedSink = AppUnifiedLogSink()
+    private let fileSink = AppFileLogSink()
+    private var isReportingInternalFailure = false
+
+    func emit(_ entry: AppLogEntry) async {
+        do {
+            try await unifiedSink.write(entry: entry)
+        } catch {
+            await reportInternalFailure(sink: "unified", error: error, entry: entry)
+        }
+
+        do {
+            try await fileSink.write(entry: entry)
+        } catch {
+            await reportInternalFailure(sink: "file", error: error, entry: entry)
+        }
+
+        do {
+            try await DiagnosticsStore.shared.record(entry: entry)
+        } catch {
+            await reportInternalFailure(sink: "diagnostics", error: error, entry: entry)
+        }
+    }
+
+    func setDirectoryURLForTesting(_ url: URL?) async {
+        await fileSink.setOverrideDirectoryURL(url)
+    }
+
+    func logFileURLs(for category: AppLogCategory) async -> [URL] {
+        await fileSink.logFileURLs(for: category)
+    }
+
+    private func reportInternalFailure(sink: String, error: Error, entry: AppLogEntry) async {
+        guard !isReportingInternalFailure else {
+            return
+        }
+
+        isReportingInternalFailure = true
+        defer { isReportingInternalFailure = false }
+
+        let internalEntry = AppLogEntry(
+            timestamp: AppLogger.makeTimestamp(),
+            level: .fault,
+            subsystem: AppLogger.subsystem,
+            category: .observability,
+            event: "observability_sink_failed",
+            referenceID: entry.referenceID,
+            message: "Observability sink failed.",
+            durationMs: nil,
+            metadata: [
+                "sink": sink,
+                "originalCategory": entry.category.rawValue,
+                "originalEvent": entry.event,
+                "errorDescription": error.localizedDescription
+            ],
+            stackTrace: nil
+        )
+
+        try? await unifiedSink.write(entry: internalEntry)
+        try? await fileSink.write(entry: internalEntry)
+    }
+}
+
 public final class AppLogger {
+    public static let subsystem = "com.codetool.app"
     public static let shared = AppLogger()
 
-    private let store = AppLogStore()
+    private let pipeline = AppLoggerPipeline()
 
     private init() {}
 
     public static func makeReferenceID() -> String {
         UUID().uuidString.lowercased()
+    }
+
+    private static let timestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static func makeTimestamp(date: Date = Date()) -> String {
+        timestampFormatter.string(from: date)
     }
 
     public static func summarize(text: String?, limit: Int = 180) -> String {
@@ -228,6 +276,32 @@ public final class AppLogger {
         return String(compact[..<endIndex]) + "…"
     }
 
+    public func log(
+        level: AppLogLevel,
+        category: AppLogCategory,
+        event: String,
+        referenceID: String? = nil,
+        message: String? = nil,
+        metadata: [String: String] = [:],
+        durationMs: Int? = nil,
+        stackTrace: [String]? = nil
+    ) async {
+        let entry = AppLogEntry(
+            timestamp: Self.makeTimestamp(),
+            level: level,
+            subsystem: Self.subsystem,
+            category: category,
+            event: event,
+            referenceID: referenceID,
+            message: message,
+            durationMs: durationMs,
+            metadata: metadata,
+            stackTrace: stackTrace
+        )
+
+        await pipeline.emit(entry)
+    }
+
     public func info(
         category: AppLogCategory,
         event: String,
@@ -235,14 +309,13 @@ public final class AppLogger {
         message: String? = nil,
         metadata: [String: String] = [:]
     ) async {
-        await store.write(
+        await log(
             level: .info,
             category: category,
             event: event,
             referenceID: referenceID,
             message: message,
-            metadata: metadata,
-            stackTrace: nil
+            metadata: metadata
         )
     }
 
@@ -260,25 +333,25 @@ public final class AppLogger {
         var enrichedMetadata = metadata
         enrich(metadata: &enrichedMetadata, with: error)
 
-        await store.write(
+        await log(
             level: .error,
             category: category,
             event: event,
             referenceID: resolvedReferenceID,
             message: message,
             metadata: enrichedMetadata,
-            stackTrace: stackTrace,
+            stackTrace: stackTrace
         )
 
         return resolvedReferenceID
     }
 
     func setDirectoryURLForTesting(_ url: URL?) async {
-        await store.setOverrideDirectoryURL(url)
+        await pipeline.setDirectoryURLForTesting(url)
     }
 
     func logFileURLs(for category: AppLogCategory) async -> [URL] {
-        await store.logFileURLs(for: category)
+        await pipeline.logFileURLs(for: category)
     }
 
     private func enrich(metadata: inout [String: String], with error: Error) {

@@ -38,6 +38,8 @@ private final class MockURLProtocol: URLProtocol {
 }
 
 final class CodeToolTests: XCTestCase {
+    private var miniMaxClient: MiniMaxAPIClient!
+
     // MARK: - Tool model tests
 
     func testToolInitialization() {
@@ -93,6 +95,7 @@ final class CodeToolTests: XCTestCase {
 
         URLProtocol.registerClass(MockURLProtocol.self)
         MockURLProtocol.requestHandler = nil
+        miniMaxClient = MiniMaxAPIClient.makeTestingClient(urlProtocolType: MockURLProtocol.self)
 
         let tempDirectoryURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("CodeToolTests-\(UUID().uuidString)", isDirectory: true)
@@ -131,6 +134,7 @@ final class CodeToolTests: XCTestCase {
         claudeStore.discoverCLI()
 
         MockURLProtocol.requestHandler = nil
+        miniMaxClient = nil
         URLProtocol.unregisterClass(MockURLProtocol.self)
 
         let resetExpectation = expectation(description: "reset log directory")
@@ -153,6 +157,38 @@ final class CodeToolTests: XCTestCase {
 
         let logData = try Data(contentsOf: try XCTUnwrap(logFiles.first))
         return try XCTUnwrap(String(data: logData, encoding: .utf8))
+    }
+
+    private static func requestBodyData(for request: URLRequest) throws -> Data {
+        if let body = request.httpBody {
+            return body
+        }
+
+        guard let stream = request.httpBodyStream else {
+            XCTFail("Expected request body data")
+            return Data()
+        }
+
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        let bufferSize = 4096
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        while true {
+            let readCount = stream.read(buffer, maxLength: bufferSize)
+            if readCount < 0 {
+                throw stream.streamError ?? URLError(.cannotDecodeRawData)
+            }
+            if readCount == 0 {
+                break
+            }
+            data.append(buffer, count: readCount)
+        }
+
+        return data
     }
 
     func testRegistryDefaultsNotEmpty() {
@@ -306,7 +342,7 @@ final class CodeToolTests: XCTestCase {
         MockURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.url?.path, "/v1/t2a_v2")
 
-            let bodyData = try XCTUnwrap(request.httpBody)
+            let bodyData = try Self.requestBodyData(for: request)
             let bodyObject = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
             XCTAssertEqual(bodyObject["output_format"] as? String, "hex")
@@ -335,7 +371,7 @@ final class CodeToolTests: XCTestCase {
             return (response, responseData)
         }
 
-        let response = try await MiniMaxAPIClient.shared.textToSpeech(text: "Hello")
+        let response = try await miniMaxClient.textToSpeech(text: "Hello")
 
         XCTAssertEqual(response.audioData, Data("Hello".utf8))
         XCTAssertEqual(response.format, "mp3")
@@ -352,7 +388,7 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.textToSpeech(text: sensitiveText)
+            _ = try await miniMaxClient.textToSpeech(text: sensitiveText)
             XCTFail("Expected textToSpeech to throw")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
@@ -388,7 +424,7 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.generateImage(prompt: sensitivePrompt)
+            _ = try await miniMaxClient.generateImage(prompt: sensitivePrompt)
             XCTFail("Expected generateImage to throw")
         } catch {
             XCTAssertTrue(error.localizedDescription.contains("Reference ID:"))
@@ -425,7 +461,7 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            try await MiniMaxAPIClient.shared.chatCompletionStream(
+            try await miniMaxClient.chatCompletionStream(
                 messages: [MiniMaxAPIClient.ChatMessage(role: "user", content: sensitivePrompt)],
                 referenceID: referenceID
             ) { _ in }
@@ -446,7 +482,7 @@ final class CodeToolTests: XCTestCase {
         MockURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.url?.path, "/v1/music_generation")
 
-            let bodyData = try XCTUnwrap(request.httpBody)
+            let bodyData = try Self.requestBodyData(for: request)
             let bodyObject = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
             XCTAssertEqual(bodyObject["output_format"] as? String, "url")
@@ -478,7 +514,7 @@ final class CodeToolTests: XCTestCase {
             return (response, responseData)
         }
 
-        let response = try await MiniMaxAPIClient.shared.generateMusic(
+        let response = try await miniMaxClient.generateMusic(
             prompt: "folk song",
             lyrics: "[Verse]\nHello world"
         )
@@ -495,7 +531,7 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.generateMusic(
+            _ = try await miniMaxClient.generateMusic(
                 prompt: "slow orchestral soundtrack")
             XCTFail("Expected generateMusic to throw")
         } catch {
@@ -538,7 +574,7 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "dark piano")
+            _ = try await miniMaxClient.generateMusic(prompt: "dark piano")
             XCTFail("Expected generateMusic to throw")
         } catch {
             XCTAssertTrue(
@@ -556,7 +592,7 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.generateMusic(
+            _ = try await miniMaxClient.generateMusic(
                 prompt: "dark piano", lyrics: "[Verse]\nHello\n[Chorus]\nWorld")
             XCTFail("Expected generateMusic to throw")
         } catch {
@@ -576,7 +612,7 @@ final class CodeToolTests: XCTestCase {
             XCTAssertEqual(request.url?.path, "/v1/music_generation")
             XCTAssertEqual(request.httpMethod, "POST")
 
-            let bodyData = try XCTUnwrap(request.httpBody)
+            let bodyData = try Self.requestBodyData(for: request)
             let bodyObject = try XCTUnwrap(
                 JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
 
@@ -605,12 +641,52 @@ final class CodeToolTests: XCTestCase {
             return (response, responseData)
         }
 
-        let response = try await MiniMaxAPIClient.shared.generateMusic(
+        let response = try await miniMaxClient.generateMusic(
             prompt: "folk song", lyrics: nil)
 
         XCTAssertEqual(requestCount, 1)
         XCTAssertNil(response.audioData)
         XCTAssertEqual(response.audioURL, "https://example.com/generated.mp3")
+        XCTAssertFalse(response.referenceID.isEmpty)
+    }
+
+    func testGenerateMusicWithEmptyLyricsUsesLyricsOptimizer() async throws {
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/music_generation")
+
+            let bodyData = try Self.requestBodyData(for: request)
+            let bodyObject = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+
+            XCTAssertEqual(bodyObject["lyrics_optimizer"] as? Bool, true)
+            XCTAssertNil(bodyObject["lyrics"])
+            XCTAssertNil(bodyObject["is_instrumental"])
+
+            let responseBody: [String: Any] = [
+                "data": [
+                    "audio": "https://example.com/generated-no-lyrics.mp3",
+                    "status": 2,
+                ],
+                "trace_id": "trace-789",
+                "base_resp": [
+                    "status_code": 0,
+                    "status_msg": "success",
+                ],
+            ]
+
+            let responseData = try JSONSerialization.data(withJSONObject: responseBody)
+            let response = try XCTUnwrap(
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                    headerFields: nil))
+            return (response, responseData)
+        }
+
+        let response = try await miniMaxClient.generateMusic(
+            prompt: "ambient track", lyrics: "")
+
+        XCTAssertNil(response.audioData)
+        XCTAssertEqual(response.audioURL, "https://example.com/generated-no-lyrics.mp3")
         XCTAssertFalse(response.referenceID.isEmpty)
     }
 
@@ -646,7 +722,7 @@ final class CodeToolTests: XCTestCase {
         }
 
         do {
-            _ = try await MiniMaxAPIClient.shared.generateMusic(prompt: "folk song", lyrics: nil)
+            _ = try await miniMaxClient.generateMusic(prompt: "folk song", lyrics: nil)
             XCTFail("Expected generateMusic to fail when music API does not return audio payload")
         } catch {
             XCTAssertEqual(receivedPaths, ["/v1/music_generation"])

@@ -63,7 +63,14 @@ swift build
 ### Run tests
 
 ```bash
-swift test
+make test
+```
+
+If your shell is pointed at Command Line Tools instead of full Xcode, direct `swift test`
+may fail with `no such module 'XCTest'`. In that case, either use `make test` or run:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 ```
 
 ## Architecture

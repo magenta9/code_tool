@@ -57,7 +57,7 @@ struct ClaudeMarkdownDocumentModel: Equatable {
             return .heading(level: heading.level, text: heading.plainText)
 
         case let paragraph as Paragraph:
-            return .paragraph(cleanMarkdown(paragraph.format()))
+            return .paragraph(cleanMarkdown(inlineMarkdown(from: paragraph)))
 
         case let unorderedList as UnorderedList:
             let items = unorderedList.children.compactMap { child in
@@ -120,9 +120,60 @@ struct ClaudeMarkdownDocumentModel: Equatable {
     ) -> [TableCell] {
         cells.enumerated().map { index, cell in
             TableCell(
-                markdown: cleanMarkdown(cell.format()),
+                markdown: cleanMarkdown(inlineMarkdown(from: cell)),
                 alignment: index < alignments.count ? mapAlignment(alignments[index]) : nil
             )
+        }
+    }
+
+    private static func inlineMarkdown<Container: Markup>(from container: Container) -> String {
+        container.children
+            .compactMap { $0 as? any InlineMarkup }
+            .map(renderInline)
+            .joined()
+    }
+
+    private static func renderInline(_ inline: any InlineMarkup) -> String {
+        switch inline {
+        case let text as Markdown.Text:
+            return text.string
+        case let emphasis as Emphasis:
+            return "*" + inlineMarkdown(from: emphasis) + "*"
+        case let strong as Strong:
+            return "**" + inlineMarkdown(from: strong) + "**"
+        case let strikethrough as Strikethrough:
+            return "~~" + inlineMarkdown(from: strikethrough) + "~~"
+        case let inlineCode as InlineCode:
+            return "`" + inlineCode.code + "`"
+        case let inlineHTML as InlineHTML:
+            return inlineHTML.rawHTML
+        case let link as Markdown.Link:
+            let label = inlineMarkdown(from: link)
+            guard let destination = link.destination, !destination.isEmpty else {
+                return label
+            }
+            if link.isAutolink, label == destination {
+                return "<" + destination + ">"
+            }
+            if let title = link.title, !title.isEmpty {
+                return "[\(label)](\(destination) \"\(title)\")"
+            }
+            return "[\(label)](\(destination))"
+        case let image as Markdown.Image:
+            let altText = inlineMarkdown(from: image)
+            let source = image.source ?? ""
+            if let title = image.title, !title.isEmpty {
+                return "![\(altText)](\(source) \"\(title)\")"
+            }
+            return "![\(altText)](\(source))"
+        case let symbolLink as SymbolLink:
+            return "``" + (symbolLink.destination ?? "") + "``"
+        case _ as SoftBreak:
+            return " "
+        case _ as LineBreak:
+            return "  \n"
+        default:
+            return inline.plainText
         }
     }
 

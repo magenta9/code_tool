@@ -20,9 +20,17 @@ APP_BUNDLE     := $(BUILD_DIR)/$(APP_NAME).app
 CONTENTS_DIR   := $(APP_BUNDLE)/Contents
 MACOS_DIR      := $(CONTENTS_DIR)/MacOS
 RESOURCES_DIR  := $(CONTENTS_DIR)/Resources
+TEST_BUILD_DIR := .build/make-test
 INSTALL_DIR    ?= /Applications
+XCODE_DEV_DIR  := /Applications/Xcode.app/Contents/Developer
 
-.PHONY: build run install clean
+ifeq ($(wildcard $(XCODE_DEV_DIR)),)
+TEST_SWIFT     := swift
+else
+TEST_SWIFT     := DEVELOPER_DIR=$(XCODE_DEV_DIR) swift
+endif
+
+.PHONY: build test run install clean
 
 # ── Build ─────────────────────────────────────
 build:
@@ -49,6 +57,11 @@ build:
 	@codesign --force --sign "$(SIGNING_IDENTITY)" --deep "$(APP_BUNDLE)"
 	@echo "✔ $(APP_BUNDLE) is ready."
 
+# ── Test ──────────────────────────────────────
+test:
+	@echo "▸ Running tests…"
+	$(TEST_SWIFT) test --scratch-path "$(TEST_BUILD_DIR)"
+
 # ── Run ───────────────────────────────────────
 run: build
 	@echo "▸ Launching $(APP_NAME)…"
@@ -65,5 +78,6 @@ install: build
 clean:
 	@echo "▸ Cleaning…"
 	swift package clean
+	@rm -rf "$(TEST_BUILD_DIR)"
 	@rm -rf "$(BUILD_DIR)/$(APP_NAME).app"
 	@echo "✔ Clean."

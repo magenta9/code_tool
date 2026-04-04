@@ -123,9 +123,24 @@ final class StreamingSpeechPlayer: NSObject, AVAudioPlayerDelegate {
     }
 
     func play() throws {
-        if format == "wav" {
+        lock.lock()
+        let isComplete = streamComplete
+        lock.unlock()
+
+        if isComplete || format == "wav" {
             try startLegacyPlayback()
             return
+        }
+
+        if format == "mp3" || format == "flac" {
+            throw NSError(
+                domain: "StreamingSpeechPlayer",
+                code: -1,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Playback becomes available after the full audio finishes generating."
+                ]
+            )
         }
 
         lock.lock()
@@ -551,7 +566,7 @@ final class StreamingSpeechPlayer: NSObject, AVAudioPlayerDelegate {
 
     private static let propertyListener: AudioFileStream_PropertyListenerProc = {
         userData, streamID, propertyID, _ in
-        let player = Unmanaged<StreamingSpeechPlayer>.fromOpaque(userData).takeRetainedValue()
+        let player = Unmanaged<StreamingSpeechPlayer>.fromOpaque(userData).takeUnretainedValue()
         player.incrementCallbacksInFlight()
         defer { player.decrementCallbacksInFlight() }
 
@@ -567,7 +582,7 @@ final class StreamingSpeechPlayer: NSObject, AVAudioPlayerDelegate {
 
     private static let packetsListener: AudioFileStream_PacketsProc = {
         userData, numberBytes, numberPackets, inputData, packetDescriptions in
-        let player = Unmanaged<StreamingSpeechPlayer>.fromOpaque(userData).takeRetainedValue()
+        let player = Unmanaged<StreamingSpeechPlayer>.fromOpaque(userData).takeUnretainedValue()
         player.incrementCallbacksInFlight()
         defer { player.decrementCallbacksInFlight() }
 
@@ -584,7 +599,7 @@ final class StreamingSpeechPlayer: NSObject, AVAudioPlayerDelegate {
     private static let outputCallback: AudioQueueOutputCallback = {
         userData, queue, buffer in
         guard let userData else { return }
-        let player = Unmanaged<StreamingSpeechPlayer>.fromOpaque(userData).takeRetainedValue()
+        let player = Unmanaged<StreamingSpeechPlayer>.fromOpaque(userData).takeUnretainedValue()
         player.incrementCallbacksInFlight()
         defer { player.decrementCallbacksInFlight() }
 

@@ -738,6 +738,40 @@ final class CodeToolTests: XCTestCase {
         XCTAssertEqual(socket.closeCode, .goingAway)
     }
 
+    func testStreamingSpeechPlayerCallbacksUseUnretainedBridgeForOpaqueSelfPointer() throws {
+        let testsDirectory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+        let repositoryRoot = testsDirectory
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = repositoryRoot
+            .appendingPathComponent("Sources/CodeToolCore/Views/AITools/StreamingSpeechPlayer.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("takeUnretainedValue()"),
+            "Opaque self pointers passed with passUnretained must be recovered with takeUnretainedValue."
+        )
+        XCTAssertFalse(
+            source.contains("takeRetainedValue()"),
+            "takeRetainedValue over-releases the player and can crash streaming MP3 playback."
+        )
+    }
+
+    func testStreamingSpeechPlayerRejectsIncompleteMP3Playback() throws {
+        let player = StreamingSpeechPlayer()
+        player.reset(format: "mp3")
+        player.append(Data([0x49, 0x44, 0x33, 0x04]))
+
+        XCTAssertThrowsError(try player.play()) { error in
+            XCTAssertTrue(
+                error.localizedDescription.contains(
+                    "Playback becomes available after the full audio finishes generating."
+                )
+            )
+        }
+    }
+
     func testRedactionPolicyHashesTextWithoutPreviewByDefault() {
         let result = AppRedactionPolicy.standard.redact(text: "secret prompt")
 

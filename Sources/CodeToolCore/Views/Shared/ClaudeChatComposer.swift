@@ -40,12 +40,13 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         textView.isEditable = true
         textView.isSelectable = true
         textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textView.font = .systemFont(ofSize: 16, weight: .regular)
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
-        textView.textContainerInset = NSSize(width: 4, height: 6)
+        textView.textContainerInset = NSSize(width: 10, height: 12)
+        textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.widthTracksTextView = true
     }
 

@@ -582,7 +582,6 @@ public final class MiniMaxAPIClient {
         let startedAt = Date()
         let socket = webSocketFactory(request)
         var didStartTask = false
-        var didReceiveFinalMessage = false
         var durationMs = 0
         var audioData = Data()
         var chunkCount = 0
@@ -648,7 +647,6 @@ public final class MiniMaxAPIClient {
                 }
 
                 if let isFinal = payload["is_final"] as? Bool, isFinal {
-                    didReceiveFinalMessage = true
                     break
                 }
             }

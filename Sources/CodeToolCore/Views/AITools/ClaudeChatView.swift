@@ -41,6 +41,29 @@ public struct ClaudeChatView: View {
     @State private var composerHasVisibleText = false
     @State private var attachmentWarning: String = ""
 
+    private let starterPrompts: [ClaudeStarterPrompt] = [
+        ClaudeStarterPrompt(
+            title: "Review my latest changes",
+            detail: "Inspect the current diff and surface only the risky bugs or regressions.",
+            prompt: "Review my latest changes and call out risky bugs or regressions."
+        ),
+        ClaudeStarterPrompt(
+            title: "Trace a feature flow",
+            detail: "Follow the request path through the codebase and explain how the pieces fit.",
+            prompt: "Trace this feature flow through the codebase and explain how the pieces fit together."
+        ),
+        ClaudeStarterPrompt(
+            title: "Refactor a rough module",
+            detail: "Suggest a cleaner structure, then implement the safest first pass.",
+            prompt: "Help me refactor this rough module into a cleaner, easier-to-maintain shape."
+        ),
+        ClaudeStarterPrompt(
+            title: "Summarize this repo",
+            detail: "Map the architecture, important entry points, and where to make changes.",
+            prompt: "Summarize this repository architecture and highlight the best entry points for new changes."
+        ),
+    ]
+
     public init() {}
 
     public var body: some View {
@@ -61,33 +84,13 @@ public struct ClaudeChatView: View {
             CopyButton("Copy Last", text: lastAssistantReply)
         } content: {
             VStack(spacing: 0) {
-                if !settings.isAvailable {
-                    ToolMessageBanner(
-                        systemImage: "exclamationmark.triangle",
-                        message: "Claude CLI was not found. Open Settings and detect the binary or set its path manually.",
-                        tint: AppTheme.warning
-                    )
-                    .padding(.horizontal, AppTheme.Spacing.xxl)
-                    .padding(.top, AppTheme.Spacing.xl)
-                }
-
-                if !errorMessage.isEmpty {
-                    ToolMessageBanner(
-                        systemImage: "xmark.octagon",
-                        message: errorMessage,
-                        tint: AppTheme.error
-                    )
-                    .padding(.horizontal, AppTheme.Spacing.xxl)
-                    .padding(.top, AppTheme.Spacing.sm)
-                }
-
+                bannerStack
                 messageListView
-                    .padding(.horizontal, AppTheme.Spacing.xxl)
-                    .padding(.top, AppTheme.Spacing.xl)
-
+            }
+            .safeAreaInset(edge: .bottom) {
                 inputArea
                     .padding(.horizontal, AppTheme.Spacing.xxl)
-                    .padding(.top, AppTheme.Spacing.md)
+                    .padding(.top, AppTheme.Spacing.lg)
                     .padding(.bottom, AppTheme.Spacing.xxl)
             }
         }
@@ -124,10 +127,31 @@ public struct ClaudeChatView: View {
         }
     }
 
+    private var bannerStack: some View {
+        VStack(spacing: AppTheme.Spacing.sm) {
+            if !settings.isAvailable {
+                ToolMessageBanner(
+                    systemImage: "exclamationmark.triangle",
+                    message: "Claude CLI was not found. Open Settings and detect the binary or set its path manually.",
+                    tint: AppTheme.warning
+                )
+            }
+
+            if !errorMessage.isEmpty {
+                ToolMessageBanner(
+                    systemImage: "xmark.octagon",
+                    message: errorMessage,
+                    tint: AppTheme.error
+                )
+            }
+        }
+        .padding(.horizontal, AppTheme.Spacing.xxl)
+        .padding(.top, AppTheme.Spacing.sm)
+    }
+
     private var statusItems: [ToolStatusItem] {
         var items: [ToolStatusItem] = []
 
-        let resolvedModel = currentModel.isEmpty ? settings.model : currentModel
         items.append(
             ToolStatusItem(
                 title: workingDirectoryTitle,
@@ -138,10 +162,10 @@ public struct ClaudeChatView: View {
                 action: chooseWorkingDirectory
             ))
 
-        if !resolvedModel.isEmpty {
+        if !resolvedModelName.isEmpty {
             items.append(
                 ToolStatusItem(
-                    title: resolvedModel,
+                    title: resolvedModelName,
                     systemImage: "cpu",
                     tint: AppTheme.accent
                 ))
@@ -187,58 +211,160 @@ public struct ClaudeChatView: View {
     }
 
     private var messageListView: some View {
-        StyledPanel {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                        if messages.isEmpty && streamingMessage == nil && !isStreaming {
-                            emptyStateView
-                        }
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
+                    if messages.isEmpty && streamingMessage == nil && !isStreaming {
+                        emptyStateView
+                    } else {
+                        conversationLeadIn
 
-                        ForEach(messages) { message in
-                            messageView(for: message)
-                        }
+                        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
+                            ForEach(messages) { message in
+                                messageView(for: message)
+                            }
 
-                        if let streamingMessage {
-                            messageView(for: streamingMessage)
+                            if let streamingMessage {
+                                messageView(for: streamingMessage)
+                            }
                         }
-
-                        Color.clear
-                            .frame(height: 1)
-                            .id("bottom")
                     }
-                    .padding(AppTheme.Spacing.md)
+
+                    Color.clear
+                        .frame(height: composerReservedSpace)
+                        .id("bottom")
                 }
-                .onChange(of: messages.count) {
-                    withAnimation(AppTheme.Anim.fast) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                }
-                .onChange(of: streamingText) {
+                .frame(maxWidth: messageColumnWidth)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, AppTheme.Spacing.xxl)
+                .padding(.top, AppTheme.Spacing.xl)
+                .padding(.bottom, AppTheme.Spacing.md)
+            }
+            .onChange(of: messages.count) {
+                withAnimation(AppTheme.Anim.fast) {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
-                .onChange(of: streamingThinking) {
-                    proxy.scrollTo("bottom", anchor: .bottom)
-                }
+            }
+            .onChange(of: streamingText) {
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
+            .onChange(of: streamingThinking) {
+                proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
         .frame(minHeight: 220, maxHeight: .infinity)
     }
 
-    private var emptyStateView: some View {
-        VStack(spacing: AppTheme.Spacing.sm) {
-            Image(systemName: "terminal")
-                .font(.system(size: 28))
-                .foregroundColor(AppTheme.textMuted)
-            Text("Chat with Claude")
-                .font(.subheadline)
-                .foregroundColor(AppTheme.textMuted)
-            Text("Send a message to start a conversation with Claude CLI.")
-                .font(.caption)
-                .foregroundColor(AppTheme.textMuted.opacity(0.7))
+    private var conversationLeadIn: some View {
+        HStack(alignment: .center, spacing: AppTheme.Spacing.sm) {
+            ClaudeCapsuleTag(
+                title: isStreaming ? "Live session" : "Workspace chat",
+                systemImage: isStreaming ? "bolt.horizontal.circle" : "sparkles",
+                tint: isStreaming ? AppTheme.success : AppTheme.textSecondary
+            )
+
+            if normalizedSystemPrompt != nil {
+                ClaudeCapsuleTag(
+                    title: "System prompt active",
+                    systemImage: "wand.and.stars",
+                    tint: AppTheme.accentWarm
+                )
+            }
+
+            Spacer()
+
+            ClaudeCapsuleTag(
+                title: workingDirectoryTitle,
+                systemImage: "folder",
+                tint: AppTheme.textMuted
+            )
         }
-        .frame(maxWidth: .infinity, minHeight: 140)
-        .padding(.vertical, AppTheme.Spacing.xl)
+    }
+
+    private var emptyStateView: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    ClaudeCapsuleTag(
+                        title: "Document-first chat",
+                        systemImage: "text.alignleft",
+                        tint: AppTheme.accentWarm
+                    )
+                    ClaudeCapsuleTag(
+                        title: resolvedModelName,
+                        systemImage: "cpu",
+                        tint: AppTheme.accent
+                    )
+                }
+
+                Text("Ask, inspect, and iterate in a calmer workspace.")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(
+                    "Responses read like a document, thinking stays tucked away until you need it, and the composer remains anchored like a workspace dock."
+                )
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: AppTheme.Spacing.md),
+                    GridItem(.flexible(), spacing: AppTheme.Spacing.md),
+                ],
+                spacing: AppTheme.Spacing.md
+            ) {
+                ForEach(starterPrompts) { prompt in
+                    Button {
+                        inputText = prompt.prompt
+                        composerHasVisibleText = !prompt.prompt.isEmpty
+                    } label: {
+                        ClaudeStarterCard(prompt: prompt)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack(spacing: AppTheme.Spacing.sm) {
+                ClaudeCapsuleTag(
+                    title: "Enter to send",
+                    systemImage: "arrow.up.circle",
+                    tint: AppTheme.textMuted
+                )
+                ClaudeCapsuleTag(
+                    title: "Shift+Enter for newline",
+                    systemImage: "return",
+                    tint: AppTheme.textMuted
+                )
+                ClaudeCapsuleTag(
+                    title: "Cmd+V to paste images",
+                    systemImage: "photo.on.rectangle",
+                    tint: AppTheme.textMuted
+                )
+            }
+        }
+        .padding(AppTheme.Spacing.xxl)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.surfaceRaised.opacity(0.78),
+                            AppTheme.surface.opacity(0.48),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                .strokeBorder(AppTheme.borderHover.opacity(0.8), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.16), radius: 24, y: 12)
     }
 
     @ViewBuilder
@@ -255,19 +381,19 @@ public struct ClaudeChatView: View {
 
     @ViewBuilder
     private func userBubble(_ message: ClaudeChatMessage) -> some View {
-        HStack {
-            Spacer(minLength: 60)
-            VStack(alignment: .trailing, spacing: AppTheme.Spacing.xxs) {
-                Text("You")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .textCase(.uppercase)
-                    .foregroundColor(AppTheme.accent)
+        HStack(alignment: .top) {
+            Spacer(minLength: 96)
 
-                VStack(alignment: .trailing, spacing: AppTheme.Spacing.xs) {
-                    // Attachment previews
+            VStack(alignment: .trailing, spacing: AppTheme.Spacing.sm) {
+                ClaudeCapsuleTag(
+                    title: "Prompt",
+                    systemImage: "arrow.up.right",
+                    tint: AppTheme.textSecondary
+                )
+
+                VStack(alignment: .trailing, spacing: AppTheme.Spacing.sm) {
                     if !message.attachments.isEmpty {
-                        HStack(spacing: AppTheme.Spacing.xs) {
+                        HStack(spacing: AppTheme.Spacing.sm) {
                             ForEach(message.attachments) { attachment in
                                 attachmentChip(attachment)
                             }
@@ -276,18 +402,22 @@ public struct ClaudeChatView: View {
 
                     ClaudeMarkdownView(markdown: message.content)
                 }
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.sm)
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .padding(.vertical, AppTheme.Spacing.md)
+                .frame(maxWidth: userBubbleWidth, alignment: .leading)
                 .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .fill(AppTheme.accent.opacity(0.12))
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .strokeBorder(AppTheme.accent.opacity(0.22), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                 )
+                .shadow(color: Color.black.opacity(0.12), radius: 18, y: 10)
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .frame(maxWidth: messageColumnWidth, alignment: .trailing)
     }
 
     @ViewBuilder
@@ -295,26 +425,38 @@ public struct ClaudeChatView: View {
         Group {
             if let url = try? HistoryStore.syncClaudeChatAttachmentURL(fileName: attachment.fileName),
                let image = NSImage(contentsOf: url) {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                            .strokeBorder(AppTheme.accent.opacity(0.3), lineWidth: 1)
-                    )
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 86, height: 74)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
+
+                    Text(attachmentDisplayName(attachment))
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
+                .padding(6)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                        .fill(AppTheme.surface.opacity(0.72))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                        .strokeBorder(AppTheme.border, lineWidth: 1)
+                )
             } else {
                 HStack(spacing: 4) {
                     Image(systemName: "photo")
                         .font(.system(size: 10))
-                    Text(attachment.fileName.split(separator: "-").last.map(String.init) ?? attachment.fileName)
+                    Text(attachmentDisplayName(attachment))
                         .font(.system(size: 10, design: .monospaced))
                         .lineLimit(1)
                 }
                 .foregroundStyle(AppTheme.textMuted)
-                .padding(.horizontal, AppTheme.Spacing.xs)
-                .padding(.vertical, 2)
+                .padding(.horizontal, AppTheme.Spacing.sm)
+                .padding(.vertical, AppTheme.Spacing.xs)
                 .background(
                     Capsule().fill(AppTheme.surface)
                 )
@@ -324,59 +466,58 @@ public struct ClaudeChatView: View {
 
     @ViewBuilder
     private func assistantBubble(_ message: ClaudeChatMessage) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                Text("Claude")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .textCase(.uppercase)
-                    .foregroundColor(AppTheme.accentWarm)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    ClaudeCapsuleTag(
+                        title: "Claude",
+                        systemImage: "sparkles",
+                        tint: AppTheme.accentWarm
+                    )
 
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                    if let thinking = message.thinkingContent, !thinking.isEmpty {
-                        thinkingBlock(
-                            thinking,
-                            messageId: message.id,
-                            isStreaming: message.isStreaming
+                    if message.isStreaming {
+                        ClaudeCapsuleTag(
+                            title: "Responding",
+                            systemImage: "ellipsis.circle",
+                            tint: AppTheme.success
                         )
                     }
-
-                    if !message.content.isEmpty {
-                        ClaudeMarkdownView(markdown: message.content)
-                    }
                 }
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .fill(AppTheme.surface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .strokeBorder(AppTheme.border, lineWidth: 1)
-                )
-            }
 
-            Spacer(minLength: 60)
+                if let thinking = message.thinkingContent, !thinking.isEmpty {
+                    thinkingBlock(
+                        thinking,
+                        messageId: message.id,
+                        isStreaming: message.isStreaming
+                    )
+                }
+
+                if !message.content.isEmpty {
+                    ClaudeMarkdownView(markdown: message.content)
+                }
+            }
+            .frame(maxWidth: assistantColumnWidth, alignment: .leading)
+
+            Spacer(minLength: 96)
         }
+        .frame(maxWidth: messageColumnWidth, alignment: .leading)
     }
 
     @ViewBuilder
     private func thinkingBlock(_ text: String, messageId: UUID, isStreaming: Bool) -> some View {
         let isExpanded = showThinking.contains(messageId) || isStreaming
 
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             Button {
                 withAnimation(AppTheme.Anim.normal) {
                     toggle(messageId, in: &showThinking)
                 }
             } label: {
-                HStack(spacing: AppTheme.Spacing.xs) {
+                HStack(spacing: AppTheme.Spacing.sm) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                    Text(isStreaming ? "Thinking…" : "Thinking")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 10, weight: .bold))
+                    Text(isStreaming ? "Thinking..." : "Thinking complete")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                     if isStreaming {
                         Circle()
                             .fill(AppTheme.accent)
@@ -384,29 +525,33 @@ public struct ClaudeChatView: View {
                             .modifier(PulseModifier())
                     }
                 }
-                .foregroundColor(AppTheme.textMuted)
+                .foregroundColor(AppTheme.textSecondary)
+                .padding(.vertical, 2)
             }
             .buttonStyle(.plain)
 
             if isExpanded {
-                HStack(spacing: 0) {
-                    RoundedRectangle(cornerRadius: 1.5)
+                HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
+                    RoundedRectangle(cornerRadius: 2)
                         .fill(isStreaming ? AppTheme.accent : AppTheme.accent.opacity(0.4))
                         .frame(width: 3)
                         .modifier(BreathingModifier(isActive: isStreaming))
 
                     Text(text)
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .italic()
                         .foregroundColor(AppTheme.textMuted)
                         .textSelection(.enabled)
-                        .padding(.leading, AppTheme.Spacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(AppTheme.Spacing.sm)
+                .padding(AppTheme.Spacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                        .fill(AppTheme.surfaceRaised.opacity(0.6))
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                        .fill(AppTheme.surfaceRaised.opacity(0.56))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                        .strokeBorder(AppTheme.border, lineWidth: 1)
                 )
             }
         }
@@ -416,76 +561,91 @@ public struct ClaudeChatView: View {
     private func toolCard(_ message: ClaudeChatMessage) -> some View {
         let isExpanded = showToolDetails.contains(message.id) || message.isStreaming
 
-        HStack {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
-                Text(message.role == .toolResult ? "Result" : "Tool")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .textCase(.uppercase)
-                    .foregroundColor(AppTheme.accentWarm)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                ClaudeCapsuleTag(
+                    title: message.role == .toolResult ? "Tool result" : "Tool activity",
+                    systemImage: toolIcon(for: message.toolName ?? ""),
+                    tint: AppTheme.accentWarm
+                )
 
-                HStack(spacing: 0) {
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(AppTheme.accentWarm)
-                        .frame(width: 3)
+                Button {
+                    withAnimation(AppTheme.Anim.normal) {
+                        toggle(message.id, in: &showToolDetails)
+                    }
+                } label: {
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppTheme.textMuted)
 
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                        Button {
-                            withAnimation(AppTheme.Anim.normal) {
-                                toggle(message.id, in: &showToolDetails)
-                            }
-                        } label: {
-                            HStack(spacing: AppTheme.Spacing.xs) {
-                                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(AppTheme.textMuted)
-                                Image(systemName: toolIcon(for: message.toolName ?? ""))
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(AppTheme.accentWarm)
-                                Text(message.toolName ?? "Tool")
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                    .foregroundColor(AppTheme.textSecondary)
-                                Spacer(minLength: 0)
-                                if message.isStreaming {
-                                    ProgressView()
-                                        .scaleEffect(0.5)
-                                        .frame(width: 12, height: 12)
-                                }
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(message.toolName ?? "Tool")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppTheme.textPrimary)
+
+                            Text(message.role == .toolResult ? "Finished step output" : "Running with live input")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(AppTheme.textMuted)
                         }
-                        .buttonStyle(.plain)
 
-                        if isExpanded {
-                            if let input = message.toolInput, !input.isEmpty {
+                        Spacer(minLength: 0)
+
+                        if message.isStreaming {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 14, height: 14)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if isExpanded {
+                    VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                        if let input = message.toolInput, !input.isEmpty {
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                                Text("Input")
+                                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                                    .textCase(.uppercase)
+                                    .tracking(1)
+                                    .foregroundStyle(AppTheme.textMuted)
                                 Text(input)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(AppTheme.textMuted)
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundColor(AppTheme.textSecondary)
                                     .textSelection(.enabled)
                             }
+                        }
 
-                            if !message.content.isEmpty {
+                        if !message.content.isEmpty {
+                            VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                                Text("Output")
+                                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                                    .textCase(.uppercase)
+                                    .tracking(1)
+                                    .foregroundStyle(AppTheme.textMuted)
                                 Text(message.content)
-                                    .font(.system(size: 11, design: .monospaced))
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                                     .foregroundColor(AppTheme.textPrimary)
                                     .textSelection(.enabled)
                             }
                         }
                     }
-                    .padding(.horizontal, AppTheme.Spacing.sm)
-                    .padding(.vertical, AppTheme.Spacing.xs)
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                        .fill(AppTheme.surface.opacity(0.8))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                        .strokeBorder(AppTheme.border, lineWidth: 1)
-                )
             }
+            .padding(AppTheme.Spacing.lg)
+            .frame(maxWidth: 720, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                    .fill(AppTheme.surface.opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                    .strokeBorder(AppTheme.border, lineWidth: 1)
+            )
 
-            Spacer(minLength: 60)
+            Spacer(minLength: 96)
         }
+        .frame(maxWidth: messageColumnWidth, alignment: .leading)
     }
 
     private func toolIcon(for name: String) -> String {
@@ -506,15 +666,15 @@ public struct ClaudeChatView: View {
     }
 
     private var inputArea: some View {
-        VStack(spacing: AppTheme.Spacing.xs) {
-            // Attachment warning
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
             if !attachmentWarning.isEmpty {
-                Text(attachmentWarning)
-                    .font(.caption)
-                    .foregroundColor(AppTheme.warning)
+                ToolMessageBanner(
+                    systemImage: "exclamationmark.triangle",
+                    message: attachmentWarning,
+                    tint: AppTheme.warning
+                )
             }
 
-            // Composer image thumbnails
             if !composerImages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppTheme.Spacing.sm) {
@@ -523,10 +683,10 @@ public struct ClaudeChatView: View {
                                 Image(nsImage: img.image)
                                     .resizable()
                                     .aspectRatio(contentMode: .fill)
-                                    .frame(width: 56, height: 56)
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
+                                    .frame(width: 76, height: 76)
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                                        RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
                                             .strokeBorder(AppTheme.border, lineWidth: 1)
                                     )
 
@@ -545,49 +705,88 @@ public struct ClaudeChatView: View {
                     }
                     .padding(.horizontal, AppTheme.Spacing.xs)
                 }
-                .frame(height: 64)
+                .frame(height: 84)
             }
 
-            HStack(alignment: .bottom, spacing: AppTheme.Spacing.sm) {
-                ZStack(alignment: .topLeading) {
-                    if Self.shouldShowComposerPlaceholder(
-                        inputText: inputText,
-                        hasVisibleDraftText: composerHasVisibleText,
-                        hasImages: !composerImages.isEmpty
-                    ) {
-                        Text("Type a message… (Enter to send, Shift+Enter for newline, Cmd+V to paste images)")
-                            .font(.body)
-                            .foregroundColor(AppTheme.textMuted)
-                            .padding(.horizontal, AppTheme.Spacing.sm)
-                            .padding(.vertical, AppTheme.Spacing.sm)
-                            .allowsHitTesting(false)
-                    }
+            ZStack(alignment: .topLeading) {
+                if Self.shouldShowComposerPlaceholder(
+                    inputText: inputText,
+                    hasVisibleDraftText: composerHasVisibleText,
+                    hasImages: !composerImages.isEmpty
+                ) {
+                    Text("Use Claude to inspect the repo, debug an issue, or shape the next change...")
+                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .foregroundColor(AppTheme.textMuted)
+                        .padding(.horizontal, AppTheme.Spacing.md)
+                        .padding(.vertical, AppTheme.Spacing.sm + 2)
+                        .allowsHitTesting(false)
+                }
 
-                    ClaudeChatComposer(
-                        text: $inputText,
-                        isStreaming: isStreaming,
-                        onSubmit: { sendMessage() },
-                        onPasteImages: { images in handlePastedImages(images) },
-                        onEscape: {
-                            if isStreaming {
-                                cancellationRequested = true
-                                client.cancel()
-                            }
-                        },
-                        onVisibleTextChange: { hasVisibleText in
-                            composerHasVisibleText = hasVisibleText
+                ClaudeChatComposer(
+                    text: $inputText,
+                    isStreaming: isStreaming,
+                    onSubmit: { sendMessage() },
+                    onPasteImages: { images in handlePastedImages(images) },
+                    onEscape: {
+                        if isStreaming {
+                            cancellationRequested = true
+                            client.cancel()
                         }
+                    },
+                    onVisibleTextChange: { hasVisibleText in
+                        composerHasVisibleText = hasVisibleText
+                    }
+                )
+            }
+            .frame(minHeight: 88, maxHeight: 220)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                    .fill(AppTheme.background.opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.xl, style: .continuous)
+                    .strokeBorder(AppTheme.border, lineWidth: 1)
+            )
+
+            HStack(spacing: AppTheme.Spacing.sm) {
+                HStack(spacing: AppTheme.Spacing.xs) {
+                    ClaudeComposerAccessoryButton(systemImage: "plus") {
+                        attachmentWarning = "Paste images with Cmd+V to stage them in the composer."
+                    }
+                    .help("Paste images with Cmd+V")
+
+                    ClaudeComposerAccessoryButton(systemImage: "folder") {
+                        chooseWorkingDirectory()
+                    }
+                    .help("Choose working directory")
+
+                    ClaudeComposerAccessoryButton(systemImage: "clock.arrow.circlepath") {
+                        loadHistory()
+                        showHistory = true
+                    }
+                    .help("Open chat history")
+                }
+
+                Spacer(minLength: AppTheme.Spacing.md)
+
+                Text(isStreaming ? "Esc to stop generation" : "Enter to send · Shift+Enter for newline · Cmd+V to paste images")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .lineLimit(1)
+
+                if normalizedSystemPrompt != nil {
+                    ClaudeCapsuleTag(
+                        title: "System",
+                        systemImage: "wand.and.stars",
+                        tint: AppTheme.accentWarm
                     )
                 }
-                .frame(minHeight: 36, maxHeight: 120)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                        .fill(AppTheme.background.opacity(0.82))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                        .strokeBorder(AppTheme.border, lineWidth: 1)
+
+                ClaudeCapsuleTag(
+                    title: resolvedModelName,
+                    systemImage: "cpu",
+                    tint: AppTheme.accent
                 )
 
                 if isStreaming {
@@ -596,14 +795,74 @@ public struct ClaudeChatView: View {
                         client.cancel()
                     }
                 } else {
-                    StyledIconButton("paperplane.fill", help: "Send message") {
+                    ClaudeSendButton(disabled: sendDisabled) {
                         sendMessage()
                     }
-                    .disabled(sendDisabled)
-                    .opacity(sendDisabled ? 0.5 : 1.0)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(AppTheme.Spacing.lg)
+        .frame(maxWidth: 960)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.backgroundRaised.opacity(0.96),
+                            AppTheme.surface.opacity(0.86),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .strokeBorder(composerBorderColor, lineWidth: 1.5)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                .padding(1)
+        )
+        .shadow(color: Color.black.opacity(0.24), radius: 24, y: 14)
+    }
+
+    private var messageColumnWidth: CGFloat {
+        920
+    }
+
+    private var assistantColumnWidth: CGFloat {
+        760
+    }
+
+    private var userBubbleWidth: CGFloat {
+        560
+    }
+
+    private var composerReservedSpace: CGFloat {
+        composerImages.isEmpty ? 220 : 292
+    }
+
+    private var resolvedModelName: String {
+        let name = currentModel.isEmpty ? settings.model : currentModel
+        return name.isEmpty ? "Claude" : name
+    }
+
+    private var composerBorderColor: Color {
+        if isStreaming {
+            return AppTheme.accent.opacity(0.55)
+        }
+        if composerHasVisibleText || !inputText.isEmpty || !composerImages.isEmpty {
+            return AppTheme.accent.opacity(0.34)
+        }
+        return AppTheme.borderHover
+    }
+
+    private func attachmentDisplayName(_ attachment: ClaudeChatAttachmentRecord) -> String {
+        attachment.fileName.split(separator: "-").last.map(String.init) ?? attachment.fileName
     }
 
     private var sendDisabled: Bool {
@@ -1101,6 +1360,148 @@ struct ClaudeComposerImage: Identifiable {
     let fileName: String
     let data: Data
     let mimeType: String
+}
+
+private struct ClaudeStarterPrompt: Identifiable {
+    let id = UUID()
+    let title: String
+    let detail: String
+    let prompt: String
+}
+
+private struct ClaudeStarterCard: View {
+    let prompt: ClaudeStarterPrompt
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            Text(prompt.title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+
+            Text(prompt.detail)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: AppTheme.Spacing.xs) {
+                Text("Use prompt")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .textCase(.uppercase)
+                    .tracking(1)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(AppTheme.accentWarm)
+        }
+        .padding(AppTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                .fill(isHovered ? AppTheme.surfaceHover.opacity(0.72) : AppTheme.surface.opacity(0.78))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                .strokeBorder(AppTheme.borderHover.opacity(isHovered ? 1.0 : 0.7), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(isHovered ? 0.16 : 0.08), radius: 16, y: 10)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .onHover { hovering in
+            withAnimation(AppTheme.Anim.fast) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+private struct ClaudeCapsuleTag: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.xs) {
+            Image(systemName: systemImage)
+                .font(.system(size: 11, weight: .semibold))
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.vertical, AppTheme.Spacing.sm)
+        .background(tint.opacity(0.10))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(tint.opacity(0.22), lineWidth: 1)
+        )
+    }
+}
+
+private struct ClaudeComposerAccessoryButton: View {
+    let systemImage: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary)
+                .frame(width: 32, height: 32)
+                .background(isHovered ? AppTheme.surfaceHover.opacity(0.82) : AppTheme.surfaceRaised.opacity(0.62))
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .strokeBorder(AppTheme.border, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(AppTheme.Anim.fast) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+private struct ClaudeSendButton: View {
+    let disabled: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AppTheme.background)
+                .frame(width: 38, height: 38)
+                .background(
+                    Circle()
+                        .fill(AppTheme.accentGradient)
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                )
+                .shadow(color: AppTheme.accent.opacity(isHovered ? 0.30 : 0.18), radius: 18, y: 10)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.45 : 1)
+        .scaleEffect(disabled ? 1 : (isHovered ? 1.03 : 1.0))
+        .onHover { hovering in
+            withAnimation(AppTheme.Anim.fast) {
+                isHovered = hovering
+            }
+        }
+    }
 }
 
 private struct PulseModifier: ViewModifier {

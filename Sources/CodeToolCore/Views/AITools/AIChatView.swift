@@ -221,46 +221,8 @@ public struct AIChatView: View {
 
     @ViewBuilder
     private func messageBubble(role: String, content: String, id: Int) -> some View {
-        let isUser = role == "user"
-
-        HStack {
-            if isUser { Spacer(minLength: 60) }
-
-            VStack(alignment: isUser ? .trailing : .leading, spacing: AppTheme.Spacing.xxs) {
-                Text(isUser ? "You" : "Assistant")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .textCase(.uppercase)
-                    .foregroundColor(isUser ? AppTheme.accent : AppTheme.accentWarm)
-
-                Group {
-                    if isUser {
-                        Text(content)
-                            .font(.body)
-                            .foregroundColor(AppTheme.textPrimary)
-                    } else {
-                        ClaudeMarkdownView(markdown: content)
-                    }
-                }
-                .textSelection(.enabled)
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .fill(isUser ? AppTheme.accent.opacity(0.12) : AppTheme.surface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                        .strokeBorder(
-                            isUser ? AppTheme.accent.opacity(0.22) : AppTheme.border,
-                            lineWidth: 1
-                        )
-                )
-            }
-
-            if !isUser { Spacer(minLength: 60) }
-        }
-        .id(id)
+        AIChatMessageBubble(role: role, content: content)
+            .id(id)
     }
 
     // MARK: - Input Area
@@ -437,6 +399,64 @@ public struct AIChatView: View {
         Task {
             try? await HistoryStore.shared.clear(category: .chat)
             await MainActor.run { chatHistory = [] }
+        }
+    }
+}
+
+// MARK: - Message Bubble
+
+private struct AIChatMessageBubble: View {
+    let role: String
+    let content: String
+
+    @State private var isHovered = false
+
+    var body: some View {
+        let isUser = role == "user"
+
+        HStack(alignment: .top) {
+            if isUser { Spacer(minLength: 60) }
+
+            VStack(alignment: isUser ? .trailing : .leading, spacing: AppTheme.Spacing.xxs) {
+                Text(isUser ? "You" : "Assistant")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .textCase(.uppercase)
+                    .foregroundColor(isUser ? AppTheme.accent : AppTheme.accentWarm)
+
+                Group {
+                    if isUser {
+                        Text(content)
+                            .font(.body)
+                            .foregroundColor(AppTheme.textPrimary)
+                    } else {
+                        ClaudeMarkdownView(markdown: content)
+                    }
+                }
+                .textSelection(.enabled)
+                .padding(.horizontal, AppTheme.Spacing.md)
+                .padding(.vertical, AppTheme.Spacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                        .fill(isUser ? AppTheme.accent.opacity(0.12) : AppTheme.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+                        .strokeBorder(
+                            isUser ? AppTheme.accent.opacity(0.22) : AppTheme.border,
+                            lineWidth: 1
+                        )
+                )
+
+                if isHovered {
+                    CopyButton(text: content)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: isUser ? .topTrailing : .topLeading)))
+                }
+            }
+            .onHover { isHovered = $0 }
+            .animation(AppTheme.Anim.fast, value: isHovered)
+
+            if !isUser { Spacer(minLength: 60) }
         }
     }
 }

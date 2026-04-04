@@ -238,6 +238,37 @@ public struct CopyButton: View {
     }
 }
 
+// MARK: - Hover Copy Overlay
+
+public struct HoverCopyOverlay: ViewModifier {
+    let text: String
+
+    @State private var isHovered = false
+
+    public func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .bottomTrailing) {
+                if isHovered
+                    && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
+                    CopyButton("", text: text)
+                        .padding(AppTheme.Spacing.xs)
+                        .transition(
+                            .opacity.combined(
+                                with: .scale(scale: 0.9, anchor: .bottomTrailing)))
+                }
+            }
+            .onHover { isHovered = $0 }
+            .animation(AppTheme.Anim.fast, value: isHovered)
+    }
+}
+
+extension View {
+    public func hoverCopy(text: String) -> some View {
+        modifier(HoverCopyOverlay(text: text))
+    }
+}
+
 public struct StyledPanel<Content: View>: View {
     let title: String?
     let content: Content

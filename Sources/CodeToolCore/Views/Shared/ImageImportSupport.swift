@@ -53,7 +53,27 @@ enum ImageImportSupport {
         guard let image = NSImage(data: data) else {
             throw ImageImportError.unreadableImage
         }
+
+        // Prefer preserving PNG data directly when possible to avoid
+        // lossy TIFF-based reconversion which can fail for some images
+        if isPNGData(data) {
+            let fileName = normalizedPNGFileName(for: suggestedFileName)
+            return ImportedImageAsset(
+                image: image,
+                pngData: data,
+                fileName: fileName,
+                mimeType: "image/png",
+                sizeBytes: data.count
+            )
+        }
+
         return try importAsset(from: image, suggestedFileName: suggestedFileName)
+    }
+
+    private static func isPNGData(_ data: Data) -> Bool {
+        guard data.count >= 4 else { return false }
+        let magic: [UInt8] = [0x89, 0x50, 0x4E, 0x47]
+        return Array(data.prefix(4)) == magic
     }
 
     static func importAsset(

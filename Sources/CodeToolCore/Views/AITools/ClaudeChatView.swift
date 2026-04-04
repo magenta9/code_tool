@@ -81,7 +81,6 @@ public struct ClaudeChatView: View {
             StyledButton("Clear Chat", systemImage: "trash", variant: .ghost) {
                 clearChat()
             }
-            CopyButton("Copy Last", text: lastAssistantReply)
         } content: {
             VStack(spacing: 0) {
                 bannerStack
@@ -414,6 +413,7 @@ public struct ClaudeChatView: View {
                         .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.12), radius: 18, y: 10)
+                .hoverCopy(text: message.content)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -497,6 +497,7 @@ public struct ClaudeChatView: View {
                 }
             }
             .frame(maxWidth: assistantColumnWidth, alignment: .leading)
+            .hoverCopy(text: message.content)
 
             Spacer(minLength: 96)
         }
@@ -1198,10 +1199,6 @@ public struct ClaudeChatView: View {
         composerImages = []
         attachmentWarning = ""
         workingDirectory = Self.defaultWorkingDirectory
-    }
-
-    private var lastAssistantReply: String {
-        messages.last(where: { $0.role == .assistant })?.content ?? ""
     }
 
     private func handlePastedImages(_ images: [NSImage]) {

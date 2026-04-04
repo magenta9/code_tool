@@ -38,7 +38,6 @@ public struct AIChatView: View {
             StyledButton("Clear Chat", systemImage: "trash", variant: .ghost) {
                 clearChat()
             }
-            CopyButton("Copy Last", text: lastAssistantReply)
         } content: {
             VStack(spacing: 0) {
                 if !settings.isConfigured {
@@ -364,10 +363,6 @@ public struct AIChatView: View {
         lastTotalTokens = 0
     }
 
-    private var lastAssistantReply: String {
-        messages.last(where: { $0.role == "assistant" })?.content ?? ""
-    }
-
     // MARK: - History
 
     private func loadHistory() {
@@ -409,8 +404,6 @@ private struct AIChatMessageBubble: View {
     let role: String
     let content: String
 
-    @State private var isHovered = false
-
     var body: some View {
         let isUser = role == "user"
 
@@ -447,14 +440,8 @@ private struct AIChatMessageBubble: View {
                             lineWidth: 1
                         )
                 )
-
-                if isHovered {
-                    CopyButton(text: content)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: isUser ? .topTrailing : .topLeading)))
-                }
+                .hoverCopy(text: content)
             }
-            .onHover { isHovered = $0 }
-            .animation(AppTheme.Anim.fast, value: isHovered)
 
             if !isUser { Spacer(minLength: 60) }
         }

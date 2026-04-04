@@ -183,6 +183,12 @@ private actor AppLoggerPipeline {
         isReportingInternalFailure = true
         defer { isReportingInternalFailure = false }
 
+        await SinkFailureWarningSource.shared.record(
+            referenceID: entry.referenceID,
+            sink: sink,
+            errorDescription: error.localizedDescription
+        )
+
         let internalEntry = AppLogEntry(
             timestamp: AppLogger.makeTimestamp(),
             level: .fault,

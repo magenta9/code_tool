@@ -422,10 +422,11 @@ extension WordCloudHistoryRecord: HistoryRecord {}
 ///   image/   – ImageHistoryRecord JSON files + reference/output image blobs
 ///   music/   – MusicHistoryRecord JSON files + audio blobs
 /// ```
-public actor HistoryStore {
+public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
     public static let shared = HistoryStore()
 
     private let fileManager = FileManager.default
+    private let registry = HistoryDefinitionRegistry.shared
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
@@ -465,6 +466,10 @@ public actor HistoryStore {
             try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return dir
+    }
+
+    private func toolURL(_ toolID: HistoryToolID) throws -> URL {
+        try categoryURL(toolID.category)
     }
 
     /// Override the base directory (for tests).
@@ -661,6 +666,134 @@ public actor HistoryStore {
         try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
     }
 
+    // MARK: - Unified Repository API (HistoryRepository)
+
+    public func upsert(_ entry: HistoryEntry, assets: [HistoryAsset]) throws {
+        let dir = try toolURL(entry.toolID)
+        // Write assets first (temp → final if needed)
+        for asset in assets {
+            try asset.data.write(to: dir.appendingPathComponent(asset.fileName))
+        }
+        // Write or overwrite the JSON record (upsert by ID)
+        try entry.payloadData.write(to: dir.appendingPathComponent("\(entry.id.uuidString).json"))
+    }
+
+    public func list(_ query: HistoryQuery) throws -> [HistoryEntry] {
+        let toolIDs: [HistoryToolID]
+        if let toolID = query.toolID {
+            toolIDs = [toolID]
+        } else {
+            toolIDs = HistoryToolID.allCases
+        }
+
+        var entries: [HistoryEntry] = []
+        for toolID in toolIDs {
+            guard let def = registry.definition(for: toolID) else { continue }
+            let dir: URL
+            do {
+                dir = try toolURL(toolID)
+            } catch {
+                continue
+            }
+
+            let urls: [URL]
+            do {
+                urls = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+                    .filter { $0.pathExtension == "json" }
+            } catch {
+                continue
+            }
+
+            for url in urls {
+                do {
+                    let data = try Data(contentsOf: url)
+                    let entry = try def.loadEntry(data)
+                    if let refFilter = query.referenceID, entry.referenceID != refFilter {
+                        continue
+                    }
+                    entries.append(entry)
+                } catch {
+                    continue
+                }
+            }
+        }
+
+        entries.sort { $0.createdAt > $1.createdAt }
+
+        if let limit = query.limit {
+            return Array(entries.prefix(limit))
+        }
+        return entries
+    }
+
+    public func upsert<C: HistoryPayloadCodec>(
+        _ payload: C.Payload,
+        using codec: C,
+        assets: [HistoryAsset] = []
+    ) throws {
+        let data = try encoder.encode(payload)
+        let entry = codec.entry(for: payload, data: data)
+        try upsert(entry, assets: assets)
+    }
+
+    public func payloads<C: HistoryPayloadCodec>(
+        using codec: C,
+        referenceID: String? = nil,
+        limit: Int? = nil
+    ) throws -> [C.Payload] {
+        let entries = try list(
+            HistoryQuery(
+                toolID: codec.toolID,
+                referenceID: referenceID,
+                limit: limit
+            )
+        )
+
+        return entries.compactMap { entry in
+            try? decoder.decode(C.Payload.self, from: entry.payloadData)
+        }
+    }
+
+    public func delete(toolID: HistoryToolID, id: UUID) throws {
+        let dir = try toolURL(toolID)
+        let jsonURL = dir.appendingPathComponent("\(id.uuidString).json")
+
+        // Load the entry to find associated asset files
+        if let data = try? Data(contentsOf: jsonURL),
+           let def = registry.definition(for: toolID),
+           let entry = try? def.loadEntry(data) {
+            // Delete known asset files
+            for assetName in entry.assetFileNames {
+                if toolID == .claudeChat {
+                    // Claude attachments live in a separate directory
+                    if let attachDir = try? claudeChatAttachmentsURL() {
+                        try? fileManager.removeItem(at: attachDir.appendingPathComponent(assetName))
+                    }
+                } else {
+                    try? fileManager.removeItem(at: dir.appendingPathComponent(assetName))
+                }
+            }
+        } else {
+            // Fallback: remove all files with this UUID prefix
+            removeFiles(in: dir, prefix: id.uuidString)
+        }
+
+        try? fileManager.removeItem(at: jsonURL)
+    }
+
+    public func loadAsset(toolID: HistoryToolID, fileName: String) throws -> Data {
+        let dir = try toolURL(toolID)
+        return try Data(contentsOf: dir.appendingPathComponent(fileName))
+    }
+
+    public func clear(toolID: HistoryToolID) throws {
+        try clear(category: toolID.category)
+    }
+
+    public func count(toolID: HistoryToolID) throws -> Int {
+        try count(category: toolID.category)
+    }
+
     // MARK: - Query
 
     /// List all records for a category, newest first.
@@ -737,71 +870,21 @@ public actor HistoryStore {
     }
 
     public func diagnosticsMatches(referenceID: String) throws -> [DiagnosticsHistoryMatch] {
+        let entries = try list(HistoryQuery(referenceID: referenceID))
         var matches: [DiagnosticsHistoryMatch] = []
-
-        for record in try listChat() where record.referenceID == referenceID {
+        for entry in entries {
+            guard let info = entry.diagnosticsInfo else { continue }
             matches.append(
                 DiagnosticsHistoryMatch(
-                    category: HistoryCategory.chat.rawValue,
-                    createdAt: record.createdAt,
-                    referenceID: record.referenceID,
-                    title: "AI Chat",
-                    detail: "model=\(record.model), messages=\(record.messages.count)"
+                    category: entry.toolID.rawValue,
+                    createdAt: entry.createdAt,
+                    referenceID: referenceID,
+                    title: info.title,
+                    detail: info.detail,
+                    sessionID: info.sessionID
                 )
             )
         }
-
-        for record in try listSpeech() where record.referenceID == referenceID {
-            matches.append(
-                DiagnosticsHistoryMatch(
-                    category: HistoryCategory.speech.rawValue,
-                    createdAt: record.createdAt,
-                    referenceID: record.referenceID,
-                    title: "AI Speech",
-                    detail: "voice=\(record.voice), durationMs=\(record.durationMs), format=\(record.outputFormat)"
-                )
-            )
-        }
-
-        for record in try listImage() where record.referenceID == referenceID {
-            matches.append(
-                DiagnosticsHistoryMatch(
-                    category: HistoryCategory.image.rawValue,
-                    createdAt: record.createdAt,
-                    referenceID: record.referenceID,
-                    title: "AI Image",
-                    detail:
-                        "model=\(record.model), refs=\(record.referenceImages.count), outputs=\(record.imageCount), size=\(record.sizeSummary)"
-                )
-            )
-        }
-
-        for record in try listMusic() where record.referenceID == referenceID {
-            matches.append(
-                DiagnosticsHistoryMatch(
-                    category: HistoryCategory.music.rawValue,
-                    createdAt: record.createdAt,
-                    referenceID: record.referenceID,
-                    title: "AI Music",
-                    detail: "model=\(record.model), format=\(record.outputFormat), sampleRate=\(record.sampleRate)"
-                )
-            )
-        }
-
-        for record in try listClaudeChat() where record.referenceID == referenceID {
-            let detail = "model=\(record.model), messages=\(record.messages.count)"
-            matches.append(
-                DiagnosticsHistoryMatch(
-                    category: HistoryCategory.claudeChat.rawValue,
-                    createdAt: record.createdAt,
-                    referenceID: record.referenceID,
-                    title: "Claude Chat",
-                    detail: detail,
-                    sessionID: record.sessionId
-                )
-            )
-        }
-
         return matches.sorted { $0.createdAt > $1.createdAt }
     }
 

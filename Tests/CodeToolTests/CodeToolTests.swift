@@ -271,24 +271,45 @@ final class CodeToolTests: XCTestCase {
         XCTAssertFalse(ToolRegistry.defaults.isEmpty)
     }
 
-    func testRegistryContainsTenTools() {
-        XCTAssertEqual(ToolRegistry.defaults.count, 10)
+    func testEveryToolIDHasCatalogEntry() {
+        let bundled = ToolRegistry.bundledToolIDs
+        for toolID in ToolID.allCases {
+            XCTAssertTrue(bundled.contains(toolID), "ToolID.\(toolID) has no catalog entry")
+        }
     }
 
-    func testRegistryDefaultNamesAreUnique() {
-        let names = ToolRegistry.defaults.map(\.name)
-        let uniqueNames = Set(names)
-        XCTAssertEqual(names.count, uniqueNames.count)
+    func testCatalogToolIDsAreUnique() {
+        let ids = ToolRegistry.defaults.compactMap(\.toolID)
+        XCTAssertEqual(ids.count, Set(ids).count, "Duplicate toolIDs in catalog")
     }
 
-    func testRegistryContainsExpectedTools() {
-        let names = Set(ToolRegistry.defaults.map(\.name))
-        let expected: Set<String> = [
-            "JSON Tool", "Image Converter", "JSON Diff",
-            "Timestamp Converter", "JWT Tool", "Word Cloud",
-            "AI Chat", "AI Speech", "AI Image", "AI Music",
-        ]
-        XCTAssertEqual(names, expected)
+    func testCatalogRouteSlugsAreUnique() {
+        let slugs = ToolRegistry.defaults.compactMap(\.toolID).map(\.routeSlug)
+        XCTAssertEqual(slugs.count, Set(slugs).count, "Duplicate route slugs in catalog")
+    }
+
+    func testCatalogContainsAllExpectedToolIDs() {
+        let bundled = ToolRegistry.bundledToolIDs
+        let expected = Set(ToolID.allCases)
+        XCTAssertEqual(bundled, expected)
+    }
+
+    func testBundledCatalogEntriesMirrorToolRegistryDefaults() {
+        XCTAssertEqual(
+            ToolCatalog.bundled.map(\.id),
+            ToolRegistry.defaults.compactMap(\.toolID)
+        )
+        XCTAssertEqual(
+            ToolCatalog.bundled.map(\.title),
+            ToolRegistry.defaults.map(\.name)
+        )
+    }
+
+    func testDestinationRegistryCoversBundledCatalog() {
+        XCTAssertEqual(
+            ToolDestinationRegistry.registeredToolIDs,
+            Set(ToolCatalog.bundled.map(\.id))
+        )
     }
 
     func testRegistryCanRegisterAdditionalTool() {
@@ -556,31 +577,31 @@ final class CodeToolTests: XCTestCase {
     }
 
     func testToolViewCacheRetainsVisitedToolsInSelectionOrder() {
-        var retainedToolNames: [String] = []
+        var retainedToolIDs: [ToolID] = []
 
-        retainedToolNames = ToolViewCache.retainedToolNames(
-            current: retainedToolNames,
-            selectedToolName: "JSON Tool"
+        retainedToolIDs = ToolViewCache.retainedToolIDs(
+            current: retainedToolIDs,
+            selectedToolID: .jsonTool
         )
-        XCTAssertEqual(retainedToolNames, ["JSON Tool"])
+        XCTAssertEqual(retainedToolIDs, [.jsonTool])
 
-        retainedToolNames = ToolViewCache.retainedToolNames(
-            current: retainedToolNames,
-            selectedToolName: "Image Converter"
+        retainedToolIDs = ToolViewCache.retainedToolIDs(
+            current: retainedToolIDs,
+            selectedToolID: .imageConverter
         )
-        XCTAssertEqual(retainedToolNames, ["JSON Tool", "Image Converter"])
+        XCTAssertEqual(retainedToolIDs, [.jsonTool, .imageConverter])
 
-        retainedToolNames = ToolViewCache.retainedToolNames(
-            current: retainedToolNames,
-            selectedToolName: "JSON Tool"
+        retainedToolIDs = ToolViewCache.retainedToolIDs(
+            current: retainedToolIDs,
+            selectedToolID: .jsonTool
         )
-        XCTAssertEqual(retainedToolNames, ["JSON Tool", "Image Converter"])
+        XCTAssertEqual(retainedToolIDs, [.jsonTool, .imageConverter])
 
-        retainedToolNames = ToolViewCache.retainedToolNames(
-            current: retainedToolNames,
-            selectedToolName: nil
+        retainedToolIDs = ToolViewCache.retainedToolIDs(
+            current: retainedToolIDs,
+            selectedToolID: nil
         )
-        XCTAssertEqual(retainedToolNames, ["JSON Tool", "Image Converter"])
+        XCTAssertEqual(retainedToolIDs, [.jsonTool, .imageConverter])
     }
 
     #if canImport(SwiftUI)
@@ -844,15 +865,18 @@ final class CodeToolTests: XCTestCase {
         )
         try await HistoryStore.shared.save(record)
 
-        let recentIssues = try await DiagnosticsStore.shared.recentIssues(limit: 10)
-        let traceSummary = try await DiagnosticsStore.shared.traceSummary(referenceID: referenceID)
-        let matches = try await HistoryStore.shared.diagnosticsMatches(referenceID: referenceID)
+        let service = DiagnosticsCaseService(
+            eventStore: DiagnosticsStore.shared,
+            historyLookup: HistoryStore.shared,
+            warningSource: SinkFailureWarningSource()
+        )
+        let snapshot = try await service.snapshot(referenceID: referenceID)
 
-        XCTAssertTrue(recentIssues.contains { $0.referenceID == referenceID })
-        XCTAssertEqual(traceSummary?.referenceID, referenceID)
-        XCTAssertEqual(traceSummary?.eventCount, 2)
-        XCTAssertEqual(matches.count, 1)
-        XCTAssertEqual(matches.first?.sessionID, "session-001")
+        XCTAssertTrue(snapshot.recentIssues.contains { $0.referenceID == referenceID })
+        XCTAssertEqual(snapshot.traceSummary?.referenceID, referenceID)
+        XCTAssertEqual(snapshot.traceSummary?.eventCount, snapshot.relatedEvents.count)
+        XCTAssertEqual(snapshot.historyMatches.count, 1)
+        XCTAssertEqual(snapshot.historyMatches.first?.sessionID, "session-001")
     }
 
     func testDiagnosticsExportPackageIncludesHistoryAndMetrics() async throws {
@@ -894,7 +918,12 @@ final class CodeToolTests: XCTestCase {
             )
         )
 
-        let exportURL = try await DiagnosticsStore.shared.exportPackage(referenceID: referenceID)
+        let service = DiagnosticsCaseService(
+            eventStore: DiagnosticsStore.shared,
+            historyLookup: HistoryStore.shared,
+            warningSource: SinkFailureWarningSource()
+        )
+        let exportURL = try await service.export(referenceID: referenceID)
         let data = try Data(contentsOf: exportURL)
         let payload = try XCTUnwrap(
             JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -905,6 +934,7 @@ final class CodeToolTests: XCTestCase {
         XCTAssertNotNil(payload["relatedEvents"])
         XCTAssertNotNil(payload["historyMatches"])
         XCTAssertNotNil(payload["metricSummaries"])
+        XCTAssertNotNil(payload["warnings"])
     }
 
     func testTextToSpeechTimeoutWritesStructuredErrorLog() async throws {
@@ -1989,5 +2019,846 @@ final class CodeToolTests: XCTestCase {
         }
         let readyEvents = allEntries.filter { $0.event == "root_view_ready" }
         XCTAssertEqual(readyEvents.count, 1, "rootViewReady() must only emit one log event regardless of how many times it is called")
+    }
+
+    // MARK: - DiagnosticsCaseService boundary tests
+
+    private actor MockEventStore: DiagnosticsEventStorePort {
+        var relatedEvents: [AppLogEntry] = []
+        var trace: DiagnosticsTraceSummary? = nil
+        var recentIssues: [AppLogEntry] = []
+        var metricSummaries: [DiagnosticsMetricSummary] = []
+
+        func caseData(referenceID: String?, issuesLimit: Int, metricsLimit: Int) async throws -> DiagnosticsEventStoreData {
+            let events: [AppLogEntry]
+            let resolvedTrace: DiagnosticsTraceSummary?
+            if referenceID != nil {
+                events = relatedEvents
+                resolvedTrace = trace
+            } else {
+                events = []
+                resolvedTrace = nil
+            }
+            return DiagnosticsEventStoreData(
+                relatedEvents: events,
+                trace: resolvedTrace,
+                recentIssues: Array(recentIssues.prefix(issuesLimit)),
+                metricSummaries: Array(metricSummaries.prefix(metricsLimit))
+            )
+        }
+
+        func setEvents(_ events: [AppLogEntry]) { relatedEvents = events }
+        func setTrace(_ t: DiagnosticsTraceSummary?) { trace = t }
+        func setRecentIssues(_ issues: [AppLogEntry]) { recentIssues = issues }
+        func setMetrics(_ metrics: [DiagnosticsMetricSummary]) { metricSummaries = metrics }
+    }
+
+    private actor MockHistoryLookup: DiagnosticsHistoryLookupPort {
+        var matches: [DiagnosticsHistoryMatch] = []
+
+        func diagnosticsMatches(referenceID: String) async throws -> [DiagnosticsHistoryMatch] {
+            matches.filter { $0.referenceID == referenceID }
+        }
+
+        func setMatches(_ m: [DiagnosticsHistoryMatch]) { matches = m }
+    }
+
+    private func makeCaseService(
+        eventStore: MockEventStore = MockEventStore(),
+        historyLookup: MockHistoryLookup = MockHistoryLookup(),
+        warningSource: SinkFailureWarningSource = SinkFailureWarningSource()
+    ) -> (DiagnosticsCaseService, MockEventStore, MockHistoryLookup, SinkFailureWarningSource) {
+        let service = DiagnosticsCaseService(
+            eventStore: eventStore,
+            historyLookup: historyLookup,
+            warningSource: warningSource
+        )
+        return (service, eventStore, historyLookup, warningSource)
+    }
+
+    func testCaseSnapshotNilReferenceIDReturnsRecentIssuesPackage() async throws {
+        let (service, _, _, _) = makeCaseService()
+        let snapshot = try await service.snapshot(referenceID: nil)
+        XCTAssertTrue(snapshot.caseID.isRecentIssuesPackage)
+        XCTAssertTrue(snapshot.relatedEvents.isEmpty)
+        XCTAssertNil(snapshot.traceSummary)
+        XCTAssertTrue(snapshot.historyMatches.isEmpty)
+    }
+
+    func testCaseSnapshotEmptyReferenceIDReturnsRecentIssuesPackage() async throws {
+        let (service, _, _, _) = makeCaseService()
+        let snapshot = try await service.snapshot(referenceID: "   ")
+        XCTAssertTrue(snapshot.caseID.isRecentIssuesPackage)
+        XCTAssertTrue(snapshot.relatedEvents.isEmpty)
+    }
+
+    func testCaseSnapshotTraceSummaryEventCountMatchesRelatedEvents() async throws {
+        let mockStore = MockEventStore()
+        let events = [
+            AppLogEntry(timestamp: "2025-01-01T00:00:00.000Z", level: .info, subsystem: "test", category: .aichat,
+                        event: "started", referenceID: "ref-1", message: "e1", durationMs: nil, metadata: [:], stackTrace: nil),
+            AppLogEntry(timestamp: "2025-01-01T00:00:01.000Z", level: .info, subsystem: "test", category: .aichat,
+                        event: "finished", referenceID: "ref-1", message: "e2", durationMs: nil, metadata: [:], stackTrace: nil)
+        ]
+        let trace = DiagnosticsTraceSummary(referenceID: "ref-1", startedAt: Date(), lastUpdatedAt: Date(),
+                                            category: "aichat", eventCount: 2, stages: [], totalDurationMs: nil)
+        await mockStore.setEvents(events)
+        await mockStore.setTrace(trace)
+
+        let (service, _, _, _) = makeCaseService(eventStore: mockStore)
+        let snapshot = try await service.snapshot(referenceID: "ref-1")
+        XCTAssertEqual(snapshot.traceSummary?.eventCount, snapshot.relatedEvents.count)
+    }
+
+    func testCaseExportNilReferenceIDProducesValidJSON() async throws {
+        let (service, _, _, _) = makeCaseService()
+        let exportURL = try await service.export(referenceID: nil)
+        defer { try? FileManager.default.removeItem(at: exportURL) }
+
+        let data = try Data(contentsOf: exportURL)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(payload["focusReferenceID"] as? String)
+        XCTAssertNotNil(payload["recentIssues"])
+        XCTAssertNotNil(payload["warnings"])
+    }
+
+    func testCaseIDTrimsWhitespace() {
+        let caseID = DiagnosticsCaseID(referenceID: "  ref-123  ")
+        XCTAssertEqual(caseID.value, "ref-123")
+        XCTAssertFalse(caseID.isRecentIssuesPackage)
+    }
+
+    func testWarningsAreScopedByReferenceID() async throws {
+        let warningSource = SinkFailureWarningSource()
+        await warningSource.record(referenceID: "ref-A", sink: "file", errorDescription: "err-A")
+        await warningSource.record(referenceID: "ref-B", sink: "diagnostics", errorDescription: "err-B")
+        await warningSource.record(referenceID: nil, sink: "unified", errorDescription: "err-nil")
+
+        let (service, _, _, _) = makeCaseService(warningSource: warningSource)
+        let snapshotA = try await service.snapshot(referenceID: "ref-A")
+        XCTAssertEqual(snapshotA.warnings.count, 1)
+        XCTAssertEqual(snapshotA.warnings.first?.sink, "file")
+
+        let snapshotB = try await service.snapshot(referenceID: "ref-B")
+        XCTAssertEqual(snapshotB.warnings.count, 1)
+        XCTAssertEqual(snapshotB.warnings.first?.sink, "diagnostics")
+    }
+
+    func testExportDrainsWarnings() async throws {
+        let warningSource = SinkFailureWarningSource()
+        await warningSource.record(referenceID: "ref-drain", sink: "file", errorDescription: "err1")
+
+        let (service, _, _, _) = makeCaseService(warningSource: warningSource)
+
+        let url1 = try await service.export(referenceID: "ref-drain")
+        defer { try? FileManager.default.removeItem(at: url1) }
+        let data1 = try Data(contentsOf: url1)
+        let payload1 = try XCTUnwrap(JSONSerialization.jsonObject(with: data1) as? [String: Any])
+        let warnings1 = payload1["warnings"] as? [[String: Any]] ?? []
+        XCTAssertEqual(warnings1.count, 1)
+
+        // Second export should have no warnings — drain cleared them
+        let url2 = try await service.export(referenceID: "ref-drain")
+        defer { try? FileManager.default.removeItem(at: url2) }
+        let data2 = try Data(contentsOf: url2)
+        let payload2 = try XCTUnwrap(JSONSerialization.jsonObject(with: data2) as? [String: Any])
+        let warnings2 = payload2["warnings"] as? [[String: Any]] ?? []
+        XCTAssertEqual(warnings2.count, 0)
+    }
+
+    func testSinkFailureWarningSourceResetForTesting() async throws {
+        let warningSource = SinkFailureWarningSource()
+        await warningSource.record(referenceID: "ref-1", sink: "file", errorDescription: "err")
+        let before = await warningSource.warnings(for: nil)
+        XCTAssertEqual(before.count, 1)
+        await warningSource.resetForTesting()
+        let after = await warningSource.warnings(for: nil)
+        XCTAssertEqual(after.count, 0)
+    }
+
+    func testDiagnosticsCaseServiceConformsToServicingProtocol() {
+        let service: any DiagnosticsCaseServicing = DiagnosticsCaseService.shared
+        XCTAssertNotNil(service)
+    }
+
+    // MARK: - Unified History Repository Tests
+
+    func testUnifiedRepositoryAppendAndListEntries() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedHistory-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let record = ChatHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            systemPrompt: "You are helpful",
+            messages: [ChatMessageRecord(role: "user", content: "Hello unified")],
+            model: "test-model",
+            promptTokens: 10,
+            completionTokens: 20,
+            totalTokens: 30,
+            referenceID: "unified-ref-001"
+        )
+
+        let codec = ChatHistoryCodec()
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(record)
+        let entry = codec.entry(for: record, data: data)
+
+        try await HistoryStore.shared.upsert(entry, assets: [])
+
+        // List via unified API
+        let entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .chat))
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.id, record.id)
+        XCTAssertEqual(entries.first?.toolID, .chat)
+        XCTAssertEqual(entries.first?.summary.title, "Hello unified")
+        XCTAssertEqual(entries.first?.referenceID, "unified-ref-001")
+
+        // List via legacy API should also work
+        let legacyRecords: [ChatHistoryRecord] = try await HistoryStore.shared.listChat()
+        XCTAssertEqual(legacyRecords.count, 1)
+        XCTAssertEqual(legacyRecords.first?.id, record.id)
+    }
+
+    func testCodecBackedUpsertAndListChatPayloads() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodecHistoryChat-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let record = ChatHistoryRecord(
+            id: UUID(),
+            createdAt: Date(timeIntervalSince1970: 200),
+            systemPrompt: "Stay concise",
+            messages: [
+                ChatMessageRecord(role: "user", content: "Hello"),
+                ChatMessageRecord(role: "assistant", content: "Hi"),
+            ],
+            model: "chat-model",
+            promptTokens: 10,
+            completionTokens: 4,
+            totalTokens: 14,
+            referenceID: "chat-ref-1"
+        )
+
+        try await HistoryStore.shared.upsert(record, using: ChatHistoryCodec())
+
+        let records = try await HistoryStore.shared.payloads(using: ChatHistoryCodec())
+        XCTAssertEqual(records.map(\.id), [record.id])
+        XCTAssertEqual(records.first?.referenceID, "chat-ref-1")
+    }
+
+    func testCodecBackedUpsertAndListJSONPayloads() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodecHistoryJSON-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let record = JSONToolHistoryRecord(
+            id: UUID(),
+            createdAt: Date(timeIntervalSince1970: 300),
+            operation: "format",
+            inputText: "{\"hello\":true}",
+            outputText: "{\n  \"hello\" : true\n}",
+            stats: "Keys: 1"
+        )
+
+        try await HistoryStore.shared.upsert(record, using: JSONToolHistoryCodec())
+
+        let records = try await HistoryStore.shared.payloads(using: JSONToolHistoryCodec())
+        XCTAssertEqual(records.map(\.id), [record.id])
+        XCTAssertEqual(records.first?.operation, "format")
+    }
+
+    func testUnifiedRepositoryDeleteEntry() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedDelete-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let recordID = UUID()
+        let record = JSONToolHistoryRecord(
+            id: recordID,
+            createdAt: Date(),
+            operation: "format",
+            inputText: "{\"a\":1}",
+            outputText: "{\n  \"a\": 1\n}",
+            stats: "1 key"
+        )
+
+        try await HistoryStore.shared.save(record)
+        var entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .jsonTool))
+        XCTAssertEqual(entries.count, 1)
+
+        try await HistoryStore.shared.delete(toolID: .jsonTool, id: recordID)
+        entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .jsonTool))
+        XCTAssertEqual(entries.count, 0)
+    }
+
+    func testUnifiedRepositoryCrossToolQuery() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedCrossTool-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let refID = "cross-tool-ref-001"
+
+        // Save a chat record
+        try await HistoryStore.shared.save(
+            ChatHistoryRecord(
+                id: UUID(), createdAt: Date(),
+                systemPrompt: "", messages: [ChatMessageRecord(role: "user", content: "Hello")],
+                model: "m1", promptTokens: 1, completionTokens: 1, totalTokens: 2,
+                referenceID: refID
+            )
+        )
+
+        // Save a claude chat record with same reference ID
+        try await HistoryStore.shared.save(
+            ClaudeChatHistoryRecord(
+                messages: [ClaudeChatMessageRecord(role: "user", content: "Hi claude")],
+                model: "claude-sonnet-4-20250514",
+                referenceID: refID
+            )
+        )
+
+        // Query all tools for this reference ID
+        let entries = try await HistoryStore.shared.list(HistoryQuery(referenceID: refID))
+        XCTAssertEqual(entries.count, 2)
+        let toolIDs = Set(entries.map(\.toolID))
+        XCTAssertTrue(toolIDs.contains(.chat))
+        XCTAssertTrue(toolIDs.contains(.claudeChat))
+    }
+
+    func testUnifiedRepositoryDiagnosticsMatchesUsesCodecs() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedDiag-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let refID = "diag-unified-001"
+        try await HistoryStore.shared.save(
+            ClaudeChatHistoryRecord(
+                messages: [ClaudeChatMessageRecord(role: "user", content: "test")],
+                model: "claude-sonnet-4-20250514",
+                sessionId: "session-unified-1",
+                referenceID: refID
+            )
+        )
+
+        let matches = try await HistoryStore.shared.diagnosticsMatches(referenceID: refID)
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches.first?.title, "Claude Chat")
+        XCTAssertEqual(matches.first?.sessionID, "session-unified-1")
+        XCTAssertEqual(matches.first?.category, "claude-chat")
+    }
+
+    func testHistoryEntryConformsToDrawerItem() {
+        let entry = HistoryEntry(
+            id: UUID(),
+            toolID: .chat,
+            createdAt: Date(),
+            summary: HistoryEntrySummary(title: "Test Title", subtitle: "Test Sub", icon: "star"),
+            payloadData: Data()
+        )
+
+        XCTAssertEqual(entry.drawerTitle, "Test Title")
+        XCTAssertEqual(entry.drawerSubtitle, "Test Sub")
+        XCTAssertEqual(entry.drawerIcon, "star")
+    }
+
+    func testCodecSummaryMatchesDrawerConformance() throws {
+        let record = ChatHistoryRecord(
+            id: UUID(),
+            createdAt: Date(),
+            systemPrompt: "",
+            messages: [
+                ChatMessageRecord(role: "user", content: "What is Swift?"),
+                ChatMessageRecord(role: "assistant", content: "A programming language.")
+            ],
+            model: "test-model",
+            promptTokens: 10,
+            completionTokens: 20,
+            totalTokens: 30,
+            referenceID: "ref-codec-test"
+        )
+
+        let codec = ChatHistoryCodec()
+        let summary = codec.summary(for: record)
+
+        // Codec summary should match legacy drawer conformance
+        XCTAssertEqual(summary.title, record.drawerTitle)
+        XCTAssertEqual(summary.subtitle, record.drawerSubtitle)
+        XCTAssertEqual(summary.icon, record.drawerIcon)
+    }
+
+    func testHistoryDefinitionRegistryCoversAllToolIDs() {
+        let registry = HistoryDefinitionRegistry.shared
+        for toolID in HistoryToolID.allCases {
+            XCTAssertNotNil(
+                registry.definition(for: toolID),
+                "Missing definition for \(toolID.rawValue)"
+            )
+        }
+    }
+
+    func testUnifiedListWithLimit() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedLimit-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        // Save 3 records
+        for i in 0..<3 {
+            try await HistoryStore.shared.save(
+                JSONToolHistoryRecord(
+                    id: UUID(),
+                    createdAt: Date().addingTimeInterval(Double(i)),
+                    operation: "format",
+                    inputText: "input \(i)",
+                    outputText: "output \(i)",
+                    stats: "\(i) keys"
+                )
+            )
+        }
+
+        let limited = try await HistoryStore.shared.list(HistoryQuery(toolID: .jsonTool, limit: 2))
+        XCTAssertEqual(limited.count, 2)
+
+        let all = try await HistoryStore.shared.list(HistoryQuery(toolID: .jsonTool))
+        XCTAssertEqual(all.count, 3)
+    }
+
+    func testUnifiedClearByTool() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedClear-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        try await HistoryStore.shared.save(
+            JSONToolHistoryRecord(
+                id: UUID(), createdAt: Date(), operation: "format",
+                inputText: "x", outputText: "y", stats: "1"
+            )
+        )
+
+        var count = try await HistoryStore.shared.count(toolID: .jsonTool)
+        XCTAssertEqual(count, 1)
+
+        try await HistoryStore.shared.clear(toolID: .jsonTool)
+        count = try await HistoryStore.shared.count(toolID: .jsonTool)
+        XCTAssertEqual(count, 0)
+    }
+
+    func testCodecDiagnosticsInfoIsNilForDevTools() {
+        let codec = JSONToolHistoryCodec()
+        let record = JSONToolHistoryRecord(
+            id: UUID(), createdAt: Date(), operation: "format",
+            inputText: "x", outputText: "y", stats: "1"
+        )
+        XCTAssertNil(codec.diagnosticsInfo(for: record))
+        XCTAssertNil(codec.referenceID(for: record))
+    }
+
+    func testImageCodecAssetFileNames() {
+        let codec = ImageHistoryCodec()
+        let record = ImageHistoryRecord(
+            prompt: "cat",
+            imageCount: 1,
+            model: "test",
+            referenceImages: [
+                ImageReferenceRecord(fileName: "ref-1.png", mimeType: "image/png", sizeBytes: 100)
+            ],
+            outputImageFileNames: ["out-1.png"],
+            referenceID: "ref-img"
+        )
+        let assets = codec.assetFileNames(for: record)
+        XCTAssertEqual(assets, ["ref-1.png", "out-1.png"])
+    }
+
+    // MARK: - Critic-Requested Contract Tests
+
+    func testUnifiedSaveOverwritesByID() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedOverwrite-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let stableID = UUID()
+        let stableCreatedAt = Date()
+        let codec = ClaudeChatHistoryCodec()
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+        // Save first version
+        let record1 = ClaudeChatHistoryRecord(
+            id: stableID,
+            createdAt: stableCreatedAt,
+            messages: [ClaudeChatMessageRecord(role: "user", content: "Hello")],
+            model: "claude-sonnet-4-20250514",
+            referenceID: "ref-overwrite"
+        )
+        let data1 = try encoder.encode(record1)
+        let entry1 = codec.entry(for: record1, data: data1)
+        try await HistoryStore.shared.upsert(entry1, assets: [])
+
+        var entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.id, stableID)
+
+        // Save updated version with same ID — must overwrite, not create second file
+        let record2 = ClaudeChatHistoryRecord(
+            id: stableID,
+            createdAt: stableCreatedAt,
+            messages: [
+                ClaudeChatMessageRecord(role: "user", content: "Hello"),
+                ClaudeChatMessageRecord(role: "assistant", content: "Hi there"),
+            ],
+            model: "claude-sonnet-4-20250514",
+            totalCostUSD: 0.01,
+            referenceID: "ref-overwrite-2"
+        )
+        let data2 = try encoder.encode(record2)
+        let entry2 = codec.entry(for: record2, data: data2)
+        try await HistoryStore.shared.upsert(entry2, assets: [])
+
+        entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
+        XCTAssertEqual(entries.count, 1, "Overwrite must not create a second entry")
+        XCTAssertEqual(entries.first?.id, stableID)
+
+        // Verify the payload was actually overwritten by decoding
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ClaudeChatHistoryRecord.self, from: entries.first!.payloadData)
+        XCTAssertEqual(decoded.messages.count, 2)
+        XCTAssertEqual(decoded.totalCostUSD, 0.01)
+    }
+
+    func testUnifiedDeleteClaudeChatCleansAttachments() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedClaudeDelete-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let attachFileName = "test-attach-\(UUID().uuidString).png"
+
+        // Save an attachment
+        _ = try await HistoryStore.shared.saveClaudeChatAttachment(
+            data: Data("fake-png".utf8), fileName: attachFileName
+        )
+
+        // Save a record referencing the attachment
+        let record = ClaudeChatHistoryRecord(
+            messages: [
+                ClaudeChatMessageRecord(
+                    role: "user", content: "Check image",
+                    attachments: [
+                        ClaudeChatAttachmentRecord(
+                            fileName: attachFileName, mimeType: "image/png", sizeBytes: 8
+                        )
+                    ]
+                )
+            ],
+            model: "claude-sonnet-4-20250514",
+            referenceID: "ref-attach-del"
+        )
+        try await HistoryStore.shared.save(record)
+
+        // Verify attachment exists
+        let attachData = try await HistoryStore.shared.loadClaudeChatAttachment(fileName: attachFileName)
+        XCTAssertFalse(attachData.isEmpty)
+
+        // Delete via unified API
+        try await HistoryStore.shared.delete(toolID: .claudeChat, id: record.id)
+
+        // Verify record is gone
+        let entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
+        XCTAssertEqual(entries.count, 0)
+
+        // Verify attachment was cleaned up
+        do {
+            _ = try await HistoryStore.shared.loadClaudeChatAttachment(fileName: attachFileName)
+            XCTFail("Expected attachment file to be deleted")
+        } catch {
+            // Expected — file should be gone
+        }
+    }
+
+    func testClearAllCleansClaudeAttachments() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedClearAll-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let attachFileName = "clearall-attach-\(UUID().uuidString).png"
+
+        // Save attachment + record
+        _ = try await HistoryStore.shared.saveClaudeChatAttachment(
+            data: Data("fake".utf8), fileName: attachFileName
+        )
+        try await HistoryStore.shared.save(
+            ClaudeChatHistoryRecord(
+                messages: [ClaudeChatMessageRecord(role: "user", content: "hi")],
+                model: "claude-sonnet-4-20250514",
+                referenceID: "ref-clearall"
+            )
+        )
+
+        // Also save a non-Claude record
+        try await HistoryStore.shared.save(
+            JSONToolHistoryRecord(
+                id: UUID(), createdAt: Date(), operation: "format",
+                inputText: "x", outputText: "y", stats: "1"
+            )
+        )
+
+        // clearAll
+        try await HistoryStore.shared.clearAll()
+
+        // Both categories empty
+        let claudeEntries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
+        let jsonEntries = try await HistoryStore.shared.list(HistoryQuery(toolID: .jsonTool))
+        XCTAssertEqual(claudeEntries.count, 0)
+        XCTAssertEqual(jsonEntries.count, 0)
+
+        // Attachment file also gone
+        do {
+            _ = try await HistoryStore.shared.loadClaudeChatAttachment(fileName: attachFileName)
+            XCTFail("Expected attachment to be deleted by clearAll")
+        } catch {
+            // Expected
+        }
+    }
+
+    func testUnifiedDeleteIsIdempotent() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedIdempotent-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        // Delete a non-existent entry — should not throw
+        try await HistoryStore.shared.delete(toolID: .chat, id: UUID())
+    }
+
+    func testUnifiedDeleteImageWithAssets() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedImgDel-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let recordID = UUID()
+        let refFileName = "ref-\(recordID.uuidString).png"
+        let outFileName = "out-\(recordID.uuidString).png"
+
+        let record = ImageHistoryRecord(
+            id: recordID,
+            prompt: "a cat",
+            imageCount: 1,
+            model: "test-model",
+            referenceImages: [
+                ImageReferenceRecord(fileName: refFileName, mimeType: "image/png", sizeBytes: 100)
+            ],
+            outputImageFileNames: [outFileName],
+            referenceID: "ref-img-del"
+        )
+
+        // Save with typed API (which handles two-phase commit)
+        try await HistoryStore.shared.save(
+            record,
+            outputImages: [Data("output-img".utf8)],
+            referenceImageData: [Data("ref-img".utf8)]
+        )
+
+        // Verify files exist
+        let refData = try await HistoryStore.shared.loadData(category: .image, fileName: refFileName)
+        XCTAssertFalse(refData.isEmpty)
+
+        // Delete via unified API
+        try await HistoryStore.shared.delete(toolID: .image, id: recordID)
+
+        // Verify JSON and asset files are gone
+        let entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .image))
+        XCTAssertEqual(entries.count, 0)
+        do {
+            _ = try await HistoryStore.shared.loadData(category: .image, fileName: refFileName)
+            XCTFail("Expected ref image file to be deleted")
+        } catch {
+            // Expected
+        }
+        do {
+            _ = try await HistoryStore.shared.loadData(category: .image, fileName: outFileName)
+            XCTFail("Expected output image file to be deleted")
+        } catch {
+            // Expected
+        }
+    }
+
+    func testDiagnosticsMatchesOnlyReturnsAITools() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("UnifiedDiagAI-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        await HistoryStore.shared.setBaseURLForTesting(tempDir)
+        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
+
+        let refID = "diag-ai-only-001"
+
+        // Save a chat record (AI tool — has diagnostics)
+        try await HistoryStore.shared.save(
+            ChatHistoryRecord(
+                id: UUID(), createdAt: Date(),
+                systemPrompt: "", messages: [ChatMessageRecord(role: "user", content: "Hello")],
+                model: "m1", promptTokens: 1, completionTokens: 1, totalTokens: 2,
+                referenceID: refID
+            )
+        )
+
+        // Save a JSON tool record with no referenceID (dev tool — no diagnostics)
+        // Dev tools have no referenceID, so they naturally don't match
+        let matches = try await HistoryStore.shared.diagnosticsMatches(referenceID: refID)
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertEqual(matches.first?.title, "AI Chat")
+    }
+
+    func testAllCodecSummariesMatchLegacyDrawerConformances() throws {
+        // Verify that codec summaries produce the same output as the legacy HistoryDrawerItem
+        // conformances for each record type. This ensures migration correctness.
+
+        // ClaudeChat
+        let claudeRecord = ClaudeChatHistoryRecord(
+            messages: [
+                ClaudeChatMessageRecord(role: "user", content: "Hello Claude"),
+                ClaudeChatMessageRecord(role: "assistant", content: "Hi!"),
+            ],
+            model: "claude-sonnet-4-20250514",
+            totalCostUSD: 0.005,
+            inputTokens: 100,
+            outputTokens: 50,
+            referenceID: "ref"
+        )
+        let claudeCodec = ClaudeChatHistoryCodec()
+        let claudeSummary = claudeCodec.summary(for: claudeRecord)
+        XCTAssertEqual(claudeSummary.title, claudeRecord.drawerTitle)
+        XCTAssertEqual(claudeSummary.subtitle, claudeRecord.drawerSubtitle)
+        XCTAssertEqual(claudeSummary.icon, claudeRecord.drawerIcon)
+
+        // JSONTool
+        let jsonRecord = JSONToolHistoryRecord(
+            id: UUID(), createdAt: Date(), operation: "format",
+            inputText: "{\"key\":\"value\"}", outputText: "formatted", stats: "1 key"
+        )
+        let jsonCodec = JSONToolHistoryCodec()
+        let jsonSummary = jsonCodec.summary(for: jsonRecord)
+        XCTAssertEqual(jsonSummary.title, jsonRecord.drawerTitle)
+        XCTAssertEqual(jsonSummary.subtitle, jsonRecord.drawerSubtitle)
+        XCTAssertEqual(jsonSummary.icon, jsonRecord.drawerIcon)
+
+        // JSONDiff
+        let diffRecord = JSONDiffHistoryRecord(
+            id: UUID(), createdAt: Date(),
+            leftText: "{}", rightText: "{\"a\":1}",
+            totalDiffs: 1, addedCount: 1, removedCount: 0, modifiedCount: 0
+        )
+        let diffCodec = JSONDiffHistoryCodec()
+        let diffSummary = diffCodec.summary(for: diffRecord)
+        XCTAssertEqual(diffSummary.title, diffRecord.drawerTitle)
+        XCTAssertEqual(diffSummary.subtitle, diffRecord.drawerSubtitle)
+        XCTAssertEqual(diffSummary.icon, diffRecord.drawerIcon)
+
+        // Timestamp
+        let tsRecord = TimestampHistoryRecord(
+            id: UUID(), createdAt: Date(),
+            inputValue: "1700000000", direction: "timestampToDate",
+            selectedDateISO8601: nil,
+            resultISO8601: "2023-11-14T22:13:20Z",
+            resultLocal: "Nov 14, 2023",
+            resultTimestamp: "1700000000"
+        )
+        let tsCodec = TimestampHistoryCodec()
+        let tsSummary = tsCodec.summary(for: tsRecord)
+        XCTAssertEqual(tsSummary.title, tsRecord.drawerTitle)
+        XCTAssertEqual(tsSummary.subtitle, tsRecord.drawerSubtitle)
+        XCTAssertEqual(tsSummary.icon, tsRecord.drawerIcon)
+
+        // JWT
+        let jwtRecord = JWTHistoryRecord(
+            id: UUID(), createdAt: Date(),
+            mode: "decode", jwtInput: "eyJ...",
+            headerJSON: "{}", payloadJSON: "{\"sub\":\"1234\"}", expirationInfo: "expired"
+        )
+        let jwtCodec = JWTHistoryCodec()
+        let jwtSummary = jwtCodec.summary(for: jwtRecord)
+        XCTAssertEqual(jwtSummary.title, jwtRecord.drawerTitle)
+        XCTAssertEqual(jwtSummary.subtitle, jwtRecord.drawerSubtitle)
+        XCTAssertEqual(jwtSummary.icon, jwtRecord.drawerIcon)
+
+        // WordCloud
+        let wcRecord = WordCloudHistoryRecord(
+            id: UUID(), createdAt: Date(),
+            inputText: "hello world hello", inputPreview: "hello world hello",
+            topWords: "hello,world", minWordLength: 3, maxWords: 50, ignoreStopWords: true
+        )
+        let wcCodec = WordCloudHistoryCodec()
+        let wcSummary = wcCodec.summary(for: wcRecord)
+        XCTAssertEqual(wcSummary.title, wcRecord.drawerTitle)
+        XCTAssertEqual(wcSummary.subtitle, wcRecord.drawerSubtitle)
+        XCTAssertEqual(wcSummary.icon, wcRecord.drawerIcon)
+
+        // ImageConverter
+        let icRecord = ImageConverterHistoryRecord(
+            id: UUID(), createdAt: Date(),
+            mode: "imageToBase64", base64Text: "abc",
+            base64Preview: "abc", imageInfo: "photo.png", imageFileName: nil
+        )
+        let icCodec = ImageConverterHistoryCodec()
+        let icSummary = icCodec.summary(for: icRecord)
+        XCTAssertEqual(icSummary.title, icRecord.drawerTitle)
+        XCTAssertEqual(icSummary.subtitle, icRecord.drawerSubtitle)
+        XCTAssertEqual(icSummary.icon, icRecord.drawerIcon)
     }
 }

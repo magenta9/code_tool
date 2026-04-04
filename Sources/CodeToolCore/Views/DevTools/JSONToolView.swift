@@ -285,12 +285,12 @@ public struct JSONToolView: View {
             outputText: outputText,
             stats: stats
         )
-        Task { try? await HistoryStore.shared.save(record) }
+        Task { try? await HistoryStore.shared.upsert(record, using: JSONToolHistoryCodec()) }
     }
 
     private func loadHistory() {
         Task {
-            let records = (try? await HistoryStore.shared.listJSONTool()) ?? []
+            let records = (try? await HistoryStore.shared.payloads(using: JSONToolHistoryCodec())) ?? []
             await MainActor.run { jsonHistory = records }
         }
     }
@@ -304,15 +304,15 @@ public struct JSONToolView: View {
 
     private func deleteJSONRecord(_ record: JSONToolHistoryRecord) {
         Task {
-            try? await HistoryStore.shared.deleteJSONTool(id: record.id)
-            let records = (try? await HistoryStore.shared.listJSONTool()) ?? []
+            try? await HistoryStore.shared.delete(toolID: .jsonTool, id: record.id)
+            let records = (try? await HistoryStore.shared.payloads(using: JSONToolHistoryCodec())) ?? []
             await MainActor.run { jsonHistory = records }
         }
     }
 
     private func clearJSONHistory() {
         Task {
-            try? await HistoryStore.shared.clear(category: .jsonTool)
+            try? await HistoryStore.shared.clear(toolID: .jsonTool)
             await MainActor.run { jsonHistory = [] }
         }
     }

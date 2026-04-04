@@ -2,9 +2,39 @@ import CodeToolFoundation
 import CodeToolUI
 import SwiftUI
 
+enum ToolDestinationRegistry {
+    typealias Factory = () -> AnyView
+
+    private static var factories: [ToolID: Factory] = [
+        .jsonTool: { AnyView(JSONToolView()) },
+        .imageConverter: { AnyView(ImageConverterView()) },
+        .jsonDiff: { AnyView(JSONDiffView()) },
+        .timestampConverter: { AnyView(TimestampConverterView()) },
+        .jwtTool: { AnyView(JWTToolView()) },
+        .wordCloud: { AnyView(WordCloudView()) },
+        .aiChat: { AnyView(ClaudeChatView()) },
+        .aiSpeech: { AnyView(AISpeechView()) },
+        .aiImage: { AnyView(AIImageView()) },
+        .aiMusic: { AnyView(AIMusicView()) },
+    ]
+
+    static var registeredToolIDs: Set<ToolID> {
+        Set(factories.keys)
+    }
+
+    static func makeView(for toolID: ToolID) -> AnyView? {
+        factories[toolID]?()
+    }
+
+    /// Registers a view factory for a tool ID. Idempotent — overwrites existing registration.
+    static func register(_ factory: @escaping Factory, for toolID: ToolID) {
+        factories[toolID] = factory
+    }
+}
+
 public struct ContentView: View {
     @State private var selectedTool: Tool?
-    @State private var retainedToolNames: [String] = []
+    @State private var retainedToolIDs: [ToolID] = []
     @State private var sidebarCollapsed = false
     private let tools = ToolRegistry.defaults
 
@@ -27,7 +57,7 @@ public struct ContentView: View {
             ToolDetailCacheView(
                 tools: tools,
                 selectedTool: $selectedTool,
-                retainedToolNames: retainedToolNames
+                retainedToolIDs: retainedToolIDs
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppTheme.background)
@@ -48,31 +78,31 @@ public struct ContentView: View {
         .onAppear {
             ClaudeCLISettingsStore.shared.discoverCLI()
             ObservabilitySystem.shared.rootViewReady()
-            retainedToolNames = ToolViewCache.retainedToolNames(
-                current: retainedToolNames,
-                selectedToolName: selectedTool?.name
+            retainedToolIDs = ToolViewCache.retainedToolIDs(
+                current: retainedToolIDs,
+                selectedToolID: selectedTool?.toolID
             )
         }
-        .onChange(of: selectedTool?.name) { _, selectedToolName in
-            retainedToolNames = ToolViewCache.retainedToolNames(
-                current: retainedToolNames,
-                selectedToolName: selectedToolName
+        .onChange(of: selectedTool?.toolID) { _, selectedToolID in
+            retainedToolIDs = ToolViewCache.retainedToolIDs(
+                current: retainedToolIDs,
+                selectedToolID: selectedToolID
             )
         }
     }
 }
 
 enum ToolViewCache {
-    static func retainedToolNames(current: [String], selectedToolName: String?) -> [String] {
-        guard let selectedToolName else {
+    static func retainedToolIDs(current: [ToolID], selectedToolID: ToolID?) -> [ToolID] {
+        guard let selectedToolID else {
             return current
         }
 
-        guard !current.contains(selectedToolName) else {
+        guard !current.contains(selectedToolID) else {
             return current
         }
 
-        return current + [selectedToolName]
+        return current + [selectedToolID]
     }
 }
 
@@ -399,7 +429,7 @@ private struct SidebarRow: View {
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
                             .foregroundStyle(AppTheme.textPrimary)
                             .lineLimit(1)
-                        Text(tool.navigationTag)
+                        Text(tool.routeSlug)
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
                             .foregroundStyle(isSelected ? AppTheme.accentWarm : AppTheme.textMuted)
                             .textCase(.uppercase)
@@ -454,7 +484,7 @@ private struct SidebarRow: View {
 private struct ToolDetailCacheView: View {
     let tools: [Tool]
     @Binding var selectedTool: Tool?
-    let retainedToolNames: [String]
+    let retainedToolIDs: [ToolID]
 
     var body: some View {
         ZStack {
@@ -471,8 +501,8 @@ private struct ToolDetailCacheView: View {
     }
 
     private var cachedTools: [Tool] {
-        retainedToolNames.compactMap { retainedToolName in
-            tools.first { $0.name == retainedToolName }
+        retainedToolIDs.compactMap { retainedID in
+            tools.first { $0.toolID == retainedID }
         }
     }
 }
@@ -482,28 +512,13 @@ private struct ToolDetailView: View {
 
     var body: some View {
         Group {
-            switch tool.name {
-            case "JSON Tool":
-                JSONToolView()
-            case "Image Converter":
-                ImageConverterView()
-            case "JSON Diff":
-                JSONDiffView()
-            case "Timestamp Converter":
-                TimestampConverterView()
-            case "JWT Tool":
-                JWTToolView()
-            case "Word Cloud":
-                WordCloudView()
-            case "AI Chat":
-                ClaudeChatView()
-            case "AI Speech":
-                AISpeechView()
-            case "AI Image":
-                AIImageView()
-            case "AI Music":
-                AIMusicView()
-            default:
+            if let toolID = tool.toolID {
+                if let destination = ToolDestinationRegistry.makeView(for: toolID) {
+                    destination
+                } else {
+                    placeholderView
+                }
+            } else {
                 placeholderView
             }
         }
@@ -540,6 +555,7 @@ private struct WelcomeView: View {
 
     private var devTools: [Tool] { tools.filter { $0.category == .devTools } }
     private var aiTools: [Tool] { tools.filter { $0.category == .aiTools } }
+    private var categoryCount: Int { Set(tools.map(\.category)).count }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -639,7 +655,7 @@ private struct WelcomeView: View {
                     .animation(.spring(duration: 0.5, bounce: 0.1).delay(0.2), value: heroAnimated)
             }
 
-            Text("Ten tools. Two categories. One unified language.")
+            Text("\(tools.count) tools. \(categoryCount) categories. One unified language.")
                 .font(.system(size: 17, weight: .medium, design: .rounded))
                 .foregroundStyle(AppTheme.textSecondary)
                 .opacity(heroAnimated ? 1 : 0)
@@ -811,7 +827,7 @@ private struct LandingToolCard: View {
 
                     Spacer()
 
-                    Text(tool.navigationTag)
+                    Text(tool.routeSlug)
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundStyle(accentColor.opacity(0.7))
                         .textCase(.uppercase)
@@ -866,35 +882,6 @@ private struct LandingToolCard: View {
         .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
     }
 }
-extension Tool {
-    fileprivate var navigationTag: String {
-        switch name {
-        case "JSON Tool":
-            return "Format"
-        case "Image Converter":
-            return "Convert"
-        case "JSON Diff":
-            return "Compare"
-        case "Timestamp Converter":
-            return "Time"
-        case "JWT Tool":
-            return "Inspect"
-        case "Word Cloud":
-            return "Visualize"
-        case "AI Chat":
-            return "Chat"
-        case "AI Speech":
-            return "Speech"
-        case "AI Image":
-            return "Image"
-        case "AI Music":
-            return "Music"
-        default:
-            return "Tool"
-        }
-    }
-}
-
 // MARK: - Settings Sheet
 
 private struct SettingsSheet: View {

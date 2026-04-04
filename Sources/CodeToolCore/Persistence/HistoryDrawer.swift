@@ -12,7 +12,16 @@ public protocol HistoryDrawerItem: Identifiable {
     var drawerIcon: String { get }
 }
 
-// MARK: - AI Record Conformances
+// MARK: - Unified HistoryEntry Conformance
+
+extension HistoryEntry: HistoryDrawerItem {
+    public var drawerTitle: String { summary.title }
+    public var drawerSubtitle: String { summary.subtitle }
+    public var drawerTimestamp: Date { createdAt }
+    public var drawerIcon: String { summary.icon }
+}
+
+// MARK: - Legacy Record Conformances (kept for backward compatibility with existing call sites)
 
 extension ChatHistoryRecord: HistoryDrawerItem {
     public var drawerTitle: String {

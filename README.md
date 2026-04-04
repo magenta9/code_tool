@@ -33,7 +33,7 @@ CodeTool/
 │   │   ├── CodeToolApp.swift            # @main SwiftUI App struct
 │   │   └── AppDelegate.swift            # NSApplicationDelegate
 │   └── CodeToolCore/                    # Reusable core library
-│       ├── Tool.swift                   # Tool model & registry
+│       ├── Tool.swift                   # ToolID, Tool model & ToolRegistry catalog
 │       ├── ContentView.swift            # Main SwiftUI view hierarchy
 │       ├── JSONToolView.swift           # JSON formatter/validator/minifier
 │       ├── ImageConverterView.swift     # Image ↔ Base64 converter
@@ -83,6 +83,17 @@ The project is split into two targets:
 
 - **`CodeToolCore`** – A reusable library that contains the data models, view hierarchy, and business logic. This can be imported and tested independently.
 - **`CodeToolApp`** – The executable entry point that wires up the SwiftUI `App` lifecycle and `AppDelegate`.
+
+### Tool Catalog Routing
+
+Every bundled tool has a stable `ToolID` enum case (defined in `CodeToolFoundation/Tool.swift`).
+`ToolRegistry.defaults` is the single source of truth for tool metadata — titles, descriptions,
+icons, categories, and route slugs are all derived from the catalog.
+
+Detail-view routing in `ContentView.swift` switches on `ToolID` rather than display names,
+so renaming a tool's title never silently breaks routing. The `ToolViewCache` also keys
+retained views by `ToolID`. Landing-page counts and category sections are computed from
+the catalog at runtime.
 
 ## AI Image Workflow
 

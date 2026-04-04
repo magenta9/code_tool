@@ -75,7 +75,7 @@ public struct DiagnosticsHistoryMatch: Codable, Identifiable, Sendable {
     }
 }
 
-private struct DiagnosticsExportPackage: Codable {
+struct DiagnosticsExportPackage: Codable {
     struct AppMetadata: Codable {
         let appName: String
         let version: String
@@ -92,9 +92,10 @@ private struct DiagnosticsExportPackage: Codable {
     let traceSummary: DiagnosticsTraceSummary?
     let historyMatches: [DiagnosticsHistoryMatch]
     let metricSummaries: [DiagnosticsMetricSummary]
+    let warnings: [DiagnosticsCaseWarning]
 }
 
-public actor DiagnosticsStore {
+public actor DiagnosticsStore: DiagnosticsEventStorePort {
     public static let shared = DiagnosticsStore()
 
     static let timestampFormatter: ISO8601DateFormatter = {
@@ -181,6 +182,10 @@ public actor DiagnosticsStore {
 
     func traceSummary(referenceID: String) async throws -> DiagnosticsTraceSummary? {
         let relatedEvents = try await events(referenceID: referenceID)
+        return derivedTraceSummary(referenceID: referenceID, relatedEvents: relatedEvents)
+    }
+
+    private func derivedTraceSummary(referenceID: String, relatedEvents: [AppLogEntry]) -> DiagnosticsTraceSummary? {
         guard let firstEvent = relatedEvents.first, let lastEvent = relatedEvents.last else {
             return nil
         }
@@ -219,50 +224,54 @@ public actor DiagnosticsStore {
             .map { $0 }
     }
 
-    public func exportPackage(referenceID: String?) async throws -> URL {
+    func eventsAndTrace(referenceID: String) async throws -> (events: [AppLogEntry], trace: DiagnosticsTraceSummary?) {
+        let relatedEvents = try await events(referenceID: referenceID)
+        let trace = derivedTraceSummary(referenceID: referenceID, relatedEvents: relatedEvents)
+        return (events: relatedEvents, trace: trace)
+    }
+
+    /// Single actor-isolated entry point for DiagnosticsEventStorePort.
+    /// Reads all data needed for a case snapshot in one hop so nothing
+    /// can change between sub-reads.
+    func caseData(referenceID: String?, issuesLimit: Int, metricsLimit: Int) async throws -> DiagnosticsEventStoreData {
+        // Single load for both relatedEvents and recentIssues
+        let allEvents = try loadEventEntries()
+
         let relatedEvents: [AppLogEntry]
-        let resolvedTraceSummary: DiagnosticsTraceSummary?
-        let historyMatches: [DiagnosticsHistoryMatch]
+        let trace: DiagnosticsTraceSummary?
 
         if let referenceID, !referenceID.isEmpty {
-            relatedEvents = try await events(referenceID: referenceID)
-            resolvedTraceSummary = try await traceSummary(referenceID: referenceID)
-            historyMatches = try await HistoryStore.shared.diagnosticsMatches(referenceID: referenceID)
+            relatedEvents = allEvents
+                .filter { $0.referenceID == referenceID }
+                .sorted { $0.timestampDate < $1.timestampDate }
+            trace = derivedTraceSummary(referenceID: referenceID, relatedEvents: relatedEvents)
         } else {
             relatedEvents = []
-            resolvedTraceSummary = nil
-            historyMatches = []
+            trace = nil
         }
 
-        let package = DiagnosticsExportPackage(
-            exportedAt: Date(),
-            focusReferenceID: referenceID,
-            app: .init(
-                appName: Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "CodeTool",
-                version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
-                build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
-                buildType: {
-                    #if DEBUG
-                        "DEBUG"
-                    #else
-                        "RELEASE"
-                    #endif
-                }(),
-                systemVersion: ProcessInfo.processInfo.operatingSystemVersionString
-            ),
-            recentIssues: try await recentIssues(limit: 20),
-            relatedEvents: relatedEvents,
-            traceSummary: resolvedTraceSummary,
-            historyMatches: historyMatches,
-            metricSummaries: try await recentMetricSummaries(limit: 10)
-        )
+        // Recent issues are always global — they represent the dashboard index, not per-case data.
+        let recentIssues = allEvents
+            .filter { $0.level == .fault || $0.level == .error }
+            .sorted { $0.timestampDate > $1.timestampDate }
+            .prefix(issuesLimit)
+            .map { $0 }
 
-        let safeRefID = sanitizeFilenameComponent(referenceID ?? "recent")
-        let exportURL = fileManager.temporaryDirectory
-            .appendingPathComponent("CodeTool-Diagnostics-\(safeRefID)-\(UUID().uuidString).json")
-        let data = try encoder.encode(package)
-        try data.write(to: exportURL, options: .atomic)
-        return exportURL
+        let metricSummaries = try loadMetricEntries()
+            .sorted { $0.createdAt > $1.createdAt }
+            .prefix(metricsLimit)
+            .map { $0 }
+
+        return DiagnosticsEventStoreData(
+            relatedEvents: relatedEvents,
+            trace: trace,
+            recentIssues: recentIssues,
+            metricSummaries: metricSummaries
+        )
+    }
+
+    public func exportPackage(referenceID: String?) async throws -> URL {
+        try await DiagnosticsCaseService.shared.export(referenceID: referenceID)
     }
 
     nonisolated internal func sanitizeFilenameComponent(_ input: String) -> String {

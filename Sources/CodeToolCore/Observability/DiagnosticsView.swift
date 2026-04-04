@@ -337,12 +337,11 @@ public struct DiagnosticsView: View {
 
     private func reload() {
         Task {
-            let issues = (try? await DiagnosticsStore.shared.recentIssues(limit: 12)) ?? []
-            let metrics = (try? await DiagnosticsStore.shared.recentMetricSummaries(limit: 6)) ?? []
+            let summary = try? await DiagnosticsCaseService.shared.recentSummary(issuesLimit: 12, metricsLimit: 6)
 
             await MainActor.run {
-                recentIssues = issues
-                recentMetrics = metrics
+                recentIssues = summary?.recentIssues ?? []
+                recentMetrics = summary?.metricSummaries ?? []
                 bannerMessage = "Diagnostics index refreshed."
             }
 
@@ -364,14 +363,12 @@ public struct DiagnosticsView: View {
 
     @MainActor
     private func loadReferenceDetails(_ referenceID: String) async {
-        let events = (try? await DiagnosticsStore.shared.events(referenceID: referenceID)) ?? []
-        let trace = try? await DiagnosticsStore.shared.traceSummary(referenceID: referenceID)
-        let history = (try? await HistoryStore.shared.diagnosticsMatches(referenceID: referenceID)) ?? []
+        let snap = try? await DiagnosticsCaseService.shared.snapshot(referenceID: referenceID)
 
-        relatedEvents = events
-        traceSummary = trace ?? nil
-        historyMatches = history
-        bannerMessage = events.isEmpty && history.isEmpty
+        relatedEvents = snap?.relatedEvents ?? []
+        traceSummary = snap?.traceSummary
+        historyMatches = snap?.historyMatches ?? []
+        bannerMessage = (snap?.relatedEvents.isEmpty ?? true) && (snap?.historyMatches.isEmpty ?? true)
             ? "No diagnostics data matched \(referenceID)."
             : "Loaded diagnostics for \(referenceID)."
     }
@@ -385,7 +382,7 @@ public struct DiagnosticsView: View {
             }
 
             do {
-                let exportURL = try await DiagnosticsStore.shared.exportPackage(referenceID: referenceID)
+                let exportURL = try await DiagnosticsCaseService.shared.export(referenceID: referenceID)
                 #if canImport(AppKit)
                     let destinationURL: URL? = await MainActor.run {
                         let panel = NSSavePanel()

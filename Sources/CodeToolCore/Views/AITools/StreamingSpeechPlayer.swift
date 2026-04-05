@@ -23,6 +23,23 @@ final class StreamingSpeechPlayer: NSObject, AVAudioPlayerDelegate {
     private var callbacksInFlight = 0
     private let callbackBarrier = DispatchQueue(label: "com.codetool.streamspeech.callbacks")
 
+    var currentTime: TimeInterval {
+        legacyAudioPlayer?.currentTime ?? 0
+    }
+
+    var duration: TimeInterval {
+        legacyAudioPlayer?.duration ?? 0
+    }
+
+    var canSeek: Bool {
+        legacyAudioPlayer != nil
+    }
+
+    func seek(to time: TimeInterval) {
+        guard let player = legacyAudioPlayer else { return }
+        player.currentTime = min(max(0, time), player.duration)
+    }
+
     deinit {
         cleanupLock.lock()
         isDisposed = true

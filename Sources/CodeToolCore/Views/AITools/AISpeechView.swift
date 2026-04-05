@@ -1,5 +1,6 @@
 import AppKit
 import CodeToolUI
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -34,6 +35,8 @@ public struct AISpeechView: View {
     @State private var speechHistory: [SpeechHistoryRecord] = []
     @State private var generationTask: Task<Void, Never>? = nil
     @State private var didConfigurePlaybackController = false
+    @State private var currentTime: TimeInterval = 0
+    @State private var highlightedTextLine: Int? = nil
 
     private let voices: [(id: String, name: String)] = [
         ("male-qn-qingse", "青涩青年"),
@@ -329,43 +332,35 @@ public struct AISpeechView: View {
 
     private var playbackSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            Text("PLAYBACK")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.textMuted)
-                .tracking(1.2)
-
-            HStack(spacing: AppTheme.Spacing.md) {
-                StyledIconButton(
-                    isPlaying ? "pause.fill" : "play.fill",
-                    help: isPlaying ? "Pause" : "Play"
-                ) {
-                    togglePlayback()
-                }
-                .disabled(!isPlaying && !canStartPlayback)
-
-                StyledIconButton("stop.fill", help: "Stop") {
-                    stopPlayback()
-                }
-                .disabled(!isPlaying)
-
-                Spacer()
-
-                Text(formattedSize(audioData.count))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(AppTheme.textMuted)
+            AudioPlayerView(
+                isPlaying: isPlaying,
+                currentTime: currentTime,
+                duration: playbackController.duration,
+                isStreaming: isGenerating,
+                canSeek: playbackController.canSeek,
+                format: currentAudioFormat,
+                fileSize: hasBufferedAudio ? audioData.count : nil,
+                onPlayPause: { togglePlayback() },
+                onStop: { stopPlayback() },
+                onSeek: { time in playbackController.seek(to: time); currentTime = time }
+            )
+            .onReceive(playbackTick) { _ in
+                guard isPlaying else { return }
+                currentTime = playbackController.currentTime
             }
 
-            if isGenerating && !canStartPlayback {
-                Text("Buffering live audio. Play unlocks automatically once enough audio is queued.")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textMuted)
-            } else if isGenerating && !isPlaying {
-                Text("Streaming is in progress. Click Play whenever you want to start playback.")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textMuted)
+            if !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ScrollingLyricsView(
+                    text: inputText,
+                    title: "Text",
+                    highlightedLine: $highlightedTextLine
+                )
+                .frame(minHeight: 160)
             }
         }
     }
+
+    private let playbackTick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     // MARK: - Status Banner
 
@@ -638,6 +633,8 @@ public struct AISpeechView: View {
         errorMessage = ""
         latestReferenceID = ""
         streamPhase = .idle
+        currentTime = 0
+        highlightedTextLine = nil
     }
 
     private func formattedSize(_ bytes: Int) -> String {

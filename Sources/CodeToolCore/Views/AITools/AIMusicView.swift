@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import CodeToolUI
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -14,6 +15,8 @@ public struct AIMusicView: View {
     @State private var audioData: Data? = nil
     @State private var audioPlayer: AVAudioPlayer? = nil
     @State private var isPlaying: Bool = false
+    @State private var currentTime: TimeInterval = 0
+    @State private var highlightedLyricLine: Int? = nil
     @State private var errorMessage: String = ""
     @State private var outputFormat: String = "mp3"
     @State private var sampleRate: Int = 44100
@@ -262,50 +265,39 @@ public struct AIMusicView: View {
     // MARK: - Playback Panel
 
     private var playbackPanel: some View {
-        StyledPanel(title: "Playback") {
-            VStack(spacing: AppTheme.Spacing.lg) {
-                HStack(spacing: AppTheme.Spacing.md) {
-                    StyledIconButton(
-                        isPlaying ? "pause.fill" : "play.fill", help: isPlaying ? "Pause" : "Play"
-                    ) {
-                        togglePlayback()
-                    }
-
-                    StyledIconButton("stop.fill", help: "Stop") {
-                        stopPlayback()
-                    }
-
-                    Spacer()
-
-                    if let player = audioPlayer {
-                        Text(String(format: "Duration: %.1fs", player.duration))
-                            .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
+        VStack(spacing: AppTheme.Spacing.lg) {
+            AudioPlayerView(
+                isPlaying: isPlaying,
+                currentTime: currentTime,
+                duration: audioPlayer?.duration ?? 0,
+                format: outputFormat,
+                fileSize: audioData?.count,
+                sampleRate: sampleRate,
+                onPlayPause: { togglePlayback() },
+                onStop: { stopPlayback() },
+                onSeek: { time in seekTo(time) }
+            )
+            .onReceive(playbackTick) { _ in
+                guard isPlaying, let player = audioPlayer else { return }
+                currentTime = player.currentTime
+                if !player.isPlaying {
+                    isPlaying = false
+                    currentTime = 0
                 }
+            }
 
-                if let data = audioData {
-                    HStack(spacing: AppTheme.Spacing.md) {
-                        ToolStatusItem(
-                            title: outputFormat.uppercased(),
-                            systemImage: "waveform"
-                        ).asLabel
-
-                        ToolStatusItem(
-                            title: ByteCountFormatter.string(
-                                fromByteCount: Int64(data.count), countStyle: .file),
-                            systemImage: "internaldrive"
-                        ).asLabel
-
-                        ToolStatusItem(
-                            title: "\(sampleRate / 1000)kHz",
-                            systemImage: "metronome"
-                        ).asLabel
-                    }
-                }
+            if !lyricsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ScrollingLyricsView(
+                    text: lyricsText,
+                    title: "Lyrics",
+                    highlightedLine: $highlightedLyricLine
+                )
+                .frame(minHeight: 200)
             }
         }
     }
+
+    private let playbackTick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     // MARK: - Empty State
 
@@ -452,6 +444,13 @@ public struct AIMusicView: View {
         audioPlayer?.stop()
         audioPlayer?.currentTime = 0
         isPlaying = false
+        currentTime = 0
+    }
+
+    private func seekTo(_ time: TimeInterval) {
+        guard let player = audioPlayer else { return }
+        player.currentTime = min(max(0, time), player.duration)
+        currentTime = player.currentTime
     }
 
     private func saveAudio() {
@@ -486,6 +485,8 @@ public struct AIMusicView: View {
         errorMessage = ""
         latestReferenceID = ""
         isInstrumental = false
+        currentTime = 0
+        highlightedLyricLine = nil
     }
 
     // MARK: - History
@@ -541,20 +542,6 @@ public struct AIMusicView: View {
             try? await HistoryStore.shared.clear(category: .music)
             await MainActor.run { musicHistory = [] }
         }
-    }
-}
-
-// MARK: - ToolStatusItem Label Helper
-
-extension ToolStatusItem {
-    fileprivate var asLabel: some View {
-        HStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.system(size: 11))
-            Text(title)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-        }
-        .foregroundStyle(AppTheme.textMuted)
     }
 }
 

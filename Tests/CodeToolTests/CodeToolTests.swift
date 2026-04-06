@@ -3,6 +3,7 @@ import XCTest
 
 @testable import CodeToolCore
 @testable import CodeToolFoundation
+@testable import CodeToolUI
 
 #if canImport(AppKit)
     import AppKit
@@ -10,6 +11,48 @@ import XCTest
 
 #if canImport(SwiftUI)
     import SwiftUI
+
+    private final class StyledTextEditorTestModel: ObservableObject {
+        @Published var text = ""
+    }
+
+    private struct StyledTextEditorTestContainer: View {
+        @ObservedObject var model: StyledTextEditorTestModel
+
+        var body: some View {
+            StyledTextEditor(
+                text: Binding(
+                    get: { model.text },
+                    set: { model.text = $0 }
+                ),
+                placeholder: "Type here"
+            )
+        }
+    }
+#endif
+
+#if canImport(AppKit)
+    private func firstTextView(in view: NSView) -> NSTextView? {
+        if let textView = view as? NSTextView {
+            return textView
+        }
+
+        for subview in view.subviews {
+            if let textView = firstTextView(in: subview) {
+                return textView
+            }
+        }
+
+        return nil
+    }
+
+    private let appKitTextBehaviorKeys = [
+        "NSAutomaticSpellingCorrectionEnabled",
+        "NSAutomaticTextCompletionEnabled",
+        "NSAutomaticQuoteSubstitutionEnabled",
+        "NSAutomaticDashSubstitutionEnabled",
+        "NSAutomaticTextReplacementEnabled",
+    ]
 #endif
 
 private final class MockURLProtocol: URLProtocol {
@@ -330,6 +373,62 @@ final class CodeToolTests: XCTestCase {
         XCTAssertEqual(store.permissionMode, .bypassPermissions)
     }
 
+    func testClaudeCLISettingsDraftDoesNotMutateStoreUntilApplied() {
+        let store = ClaudeCLISettingsStore.shared
+        store.claudePath = "/usr/bin/claude"
+        store.apiKey = "original-api-key"
+        store.systemPrompt = "original prompt"
+
+        var draft = ClaudeCLISettingsDraft(store: store)
+        draft.claudePath = "/tmp/custom-claude"
+        draft.apiKey = "draft-api-key"
+        draft.systemPrompt = "draft prompt"
+
+        XCTAssertEqual(store.claudePath, "/usr/bin/claude")
+        XCTAssertEqual(store.apiKey, "original-api-key")
+        XCTAssertEqual(store.systemPrompt, "original prompt")
+
+        draft.apply(to: store)
+
+        XCTAssertEqual(store.claudePath, "/tmp/custom-claude")
+        XCTAssertEqual(store.apiKey, "draft-api-key")
+        XCTAssertEqual(store.systemPrompt, "draft prompt")
+    }
+
+    func testMiniMaxSettingsDraftDoesNotMutateStoreUntilApplied() {
+        let store = MiniMaxSettingsStore.shared
+        store.apiKey = "original-api-key"
+        store.baseURL = "https://example.com/v1"
+        store.chatModel = "chat-original"
+        store.speechModel = "speech-original"
+        store.imageModel = "image-original"
+        store.musicModel = "music-original"
+
+        var draft = MiniMaxSettingsDraft(store: store)
+        draft.apiKey = "draft-api-key"
+        draft.baseURL = "https://draft.example.com/v1"
+        draft.chatModel = "chat-draft"
+        draft.speechModel = "speech-draft"
+        draft.imageModel = "image-draft"
+        draft.musicModel = "music-draft"
+
+        XCTAssertEqual(store.apiKey, "original-api-key")
+        XCTAssertEqual(store.baseURL, "https://example.com/v1")
+        XCTAssertEqual(store.chatModel, "chat-original")
+        XCTAssertEqual(store.speechModel, "speech-original")
+        XCTAssertEqual(store.imageModel, "image-original")
+        XCTAssertEqual(store.musicModel, "music-original")
+
+        draft.apply(to: store)
+
+        XCTAssertEqual(store.apiKey, "draft-api-key")
+        XCTAssertEqual(store.baseURL, "https://draft.example.com/v1")
+        XCTAssertEqual(store.chatModel, "chat-draft")
+        XCTAssertEqual(store.speechModel, "speech-draft")
+        XCTAssertEqual(store.imageModel, "image-draft")
+        XCTAssertEqual(store.musicModel, "music-draft")
+    }
+
     func testClaudeChatHistoryRecordCodable() throws {
         let record = ClaudeChatHistoryRecord(
             workingDirectory: "/tmp/demo-project",
@@ -602,6 +701,37 @@ final class CodeToolTests: XCTestCase {
             selectedToolID: nil
         )
         XCTAssertEqual(retainedToolIDs, [.jsonTool, .imageConverter])
+    }
+
+    func testToolStatusItemPreservesExplicitStableID() {
+        let item = ToolStatusItem(
+            id: "current-time",
+            title: "123 s",
+            systemImage: "clock"
+        )
+
+        XCTAssertEqual(item.id, "current-time")
+    }
+
+    func testToolStatusItemDefaultIDRemainsUnique() {
+        let first = ToolStatusItem(title: "A", systemImage: "clock")
+        let second = ToolStatusItem(title: "B", systemImage: "globe")
+
+        XCTAssertNotEqual(first.id, second.id)
+    }
+
+    func testToolVisibilityStateMarksOnlySelectedToolVisible() {
+        let state = ToolVisibilityState(selectedToolID: .timestampConverter)
+
+        XCTAssertTrue(state.isVisible(toolID: .timestampConverter))
+        XCTAssertFalse(state.isVisible(toolID: .jsonTool))
+        XCTAssertFalse(state.isVisible(toolID: nil))
+    }
+
+    func testToolVisibilityStateHandlesNoSelection() {
+        let state = ToolVisibilityState(selectedToolID: nil)
+
+        XCTAssertFalse(state.isVisible(toolID: .timestampConverter))
     }
 
     #if canImport(SwiftUI)
@@ -1808,6 +1938,130 @@ final class CodeToolTests: XCTestCase {
     }
 
     #if canImport(AppKit)
+        @MainActor
+        func testCodeToolTextInputConfigurationRegistersAppTextDefaults() {
+            let suiteName = "CodeToolTests-\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suiteName)!
+            defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+
+            defaults.set(true, forKey: "NSAutomaticSpellingCorrectionEnabled")
+            defaults.set(true, forKey: "NSAutomaticTextCompletionEnabled")
+            defaults.set(true, forKey: "NSAutomaticQuoteSubstitutionEnabled")
+            defaults.set(true, forKey: "NSAutomaticDashSubstitutionEnabled")
+            defaults.set(true, forKey: "NSAutomaticTextReplacementEnabled")
+
+            CodeToolTextInputConfiguration.registerAppDefaults(in: defaults)
+
+            for key in appKitTextBehaviorKeys {
+                XCTAssertEqual(defaults.object(forKey: key) as? Bool, false, "\(key) should default to false")
+            }
+        }
+
+        @MainActor
+        func testStyledTextEditorDisablesCommitTimeTextCheckingFeatures() {
+            let defaults = UserDefaults.standard
+            let savedValues = Dictionary(uniqueKeysWithValues: appKitTextBehaviorKeys.map { key in
+                (key, defaults.object(forKey: key))
+            })
+            defer {
+                for (key, value) in savedValues {
+                    if let value {
+                        defaults.set(value, forKey: key)
+                    } else {
+                        defaults.removeObject(forKey: key)
+                    }
+                }
+            }
+
+            for key in appKitTextBehaviorKeys {
+                defaults.set(true, forKey: key)
+            }
+
+            let draft = StyledTextEditorTestModel()
+            let host = NSHostingView(rootView: StyledTextEditorTestContainer(model: draft))
+            host.frame = NSRect(x: 0, y: 0, width: 480, height: 240)
+            host.layoutSubtreeIfNeeded()
+
+            guard let textView = firstTextView(in: host) else {
+                XCTFail("Expected StyledTextEditor to contain an NSTextView")
+                return
+            }
+
+            XCTAssertFalse(textView.isAutomaticSpellingCorrectionEnabled)
+            XCTAssertFalse(textView.isContinuousSpellCheckingEnabled)
+            XCTAssertFalse(textView.isGrammarCheckingEnabled)
+            XCTAssertFalse(textView.isAutomaticTextCompletionEnabled)
+            XCTAssertFalse(textView.isAutomaticQuoteSubstitutionEnabled)
+            XCTAssertFalse(textView.isAutomaticDashSubstitutionEnabled)
+            XCTAssertFalse(textView.isAutomaticTextReplacementEnabled)
+        }
+
+        @MainActor
+        func testStyledTextEditorUsesSharedInputFontSize() {
+            let draft = StyledTextEditorTestModel()
+            let host = NSHostingView(rootView: StyledTextEditorTestContainer(model: draft))
+            host.frame = NSRect(x: 0, y: 0, width: 480, height: 240)
+            host.layoutSubtreeIfNeeded()
+
+            guard let textView = firstTextView(in: host) else {
+                XCTFail("Expected StyledTextEditor to contain an NSTextView")
+                return
+            }
+
+            XCTAssertEqual(textView.font?.pointSize, AppTheme.Typography.textInput)
+        }
+
+        @MainActor
+        func testStyledTextEditorDoesNotCommitMarkedTextToBinding() {
+            let draft = StyledTextEditorTestModel()
+            let host = NSHostingView(rootView: StyledTextEditorTestContainer(model: draft))
+            host.frame = NSRect(x: 0, y: 0, width: 480, height: 240)
+            host.layoutSubtreeIfNeeded()
+
+            guard let textView = firstTextView(in: host) else {
+                XCTFail("Expected StyledTextEditor to contain an NSTextView")
+                return
+            }
+
+            textView.setMarkedText(
+                "ni",
+                selectedRange: NSRange(location: 2, length: 0),
+                replacementRange: NSRange(location: NSNotFound, length: 0)
+            )
+            textView.delegate?.textDidChange?(
+                Notification(name: NSText.didChangeNotification, object: textView)
+            )
+
+            XCTAssertEqual(draft.text, "")
+            XCTAssertEqual(textView.string, "ni")
+        }
+
+        @MainActor
+        func testStyledTextEditorDoesNotOverwriteMarkedTextDuringViewUpdates() {
+            let draft = StyledTextEditorTestModel()
+            let host = NSHostingView(rootView: StyledTextEditorTestContainer(model: draft))
+            host.frame = NSRect(x: 0, y: 0, width: 480, height: 240)
+            host.layoutSubtreeIfNeeded()
+
+            guard let textView = firstTextView(in: host) else {
+                XCTFail("Expected StyledTextEditor to contain an NSTextView")
+                return
+            }
+
+            textView.setMarkedText(
+                "ni",
+                selectedRange: NSRange(location: 2, length: 0),
+                replacementRange: NSRange(location: NSNotFound, length: 0)
+            )
+            XCTAssertTrue(textView.hasMarkedText())
+
+            draft.text = "external update"
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+            host.layoutSubtreeIfNeeded()
+
+            XCTAssertEqual(textView.string, "ni")
+        }
+
         func testClaudeChatComposerConfiguresBothDelegates() {
             var text = ""
             let composer = ClaudeChatComposer(
@@ -1827,6 +2081,41 @@ final class CodeToolTests: XCTestCase {
 
             XCTAssertTrue(textView.delegate === coordinator)
             XCTAssertTrue(textView.composerDelegate === coordinator)
+            XCTAssertEqual(textView.font?.pointSize, AppTheme.Typography.composerInput)
+        }
+
+        func testClaudeChatComposerDisablesCommitTimeTextCheckingFeatures() {
+            var text = ""
+            let composer = ClaudeChatComposer(
+                text: Binding(
+                    get: { text },
+                    set: { text = $0 }
+                ),
+                isStreaming: false,
+                onSubmit: {},
+                onPasteImages: { _ in },
+                onEscape: {}
+            )
+            let coordinator = composer.makeCoordinator()
+            let textView = ComposerTextView()
+
+            textView.isAutomaticSpellingCorrectionEnabled = true
+            textView.isContinuousSpellCheckingEnabled = true
+            textView.isGrammarCheckingEnabled = true
+            textView.isAutomaticTextCompletionEnabled = true
+            textView.isAutomaticQuoteSubstitutionEnabled = true
+            textView.isAutomaticDashSubstitutionEnabled = true
+            textView.isAutomaticTextReplacementEnabled = true
+
+            ClaudeChatComposer.configureTextView(textView, coordinator: coordinator)
+
+            XCTAssertFalse(textView.isAutomaticSpellingCorrectionEnabled)
+            XCTAssertFalse(textView.isContinuousSpellCheckingEnabled)
+            XCTAssertFalse(textView.isGrammarCheckingEnabled)
+            XCTAssertFalse(textView.isAutomaticTextCompletionEnabled)
+            XCTAssertFalse(textView.isAutomaticQuoteSubstitutionEnabled)
+            XCTAssertFalse(textView.isAutomaticDashSubstitutionEnabled)
+            XCTAssertFalse(textView.isAutomaticTextReplacementEnabled)
         }
 
         func testClaudeChatComposerReportsVisibleTextForMarkedText() {

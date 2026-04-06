@@ -716,7 +716,7 @@ public struct ClaudeChatView: View {
                     hasImages: !composerImages.isEmpty
                 ) {
                     Text("Use Claude to inspect the repo, debug an issue, or shape the next change...")
-                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .font(.system(size: AppTheme.Typography.composerInput, weight: .regular))
                         .foregroundColor(AppTheme.textMuted)
                         .padding(.horizontal, AppTheme.Spacing.md)
                         .padding(.vertical, AppTheme.Spacing.sm + 2)

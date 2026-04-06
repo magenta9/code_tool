@@ -3,6 +3,10 @@ import CodeToolCore
 import CodeToolUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        CodeToolTextInputConfiguration.registerAppDefaults()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         ObservabilitySystem.shared.bootstrap()
         NSApp.setActivationPolicy(.regular)

@@ -78,6 +78,13 @@ public enum AppTheme {
         public static let xl: CGFloat = 24
     }
 
+    // MARK: Typography
+
+    public enum Typography {
+        public static let textInput: CGFloat = 13
+        public static let composerInput: CGFloat = 16
+    }
+
     // MARK: Animations
 
     public enum Anim {

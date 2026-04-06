@@ -8,6 +8,7 @@ import SwiftUI
 public struct ClaudeCLISettingsView: View {
     @Bindable private var settings = ClaudeCLISettingsStore.shared
     @State private var showAPIKey = false
+    @State private var draft = ClaudeCLISettingsDraft(store: ClaudeCLISettingsStore.shared)
 
     public init() {}
 
@@ -21,9 +22,10 @@ public struct ClaudeCLISettingsView: View {
         ) {
             StyledButton("Reset Defaults", systemImage: "arrow.counterclockwise", variant: .ghost) {
                 settings.resetToDefaults()
+                draft.reload(from: settings)
             }
             StyledButton("Detect CLI", systemImage: "magnifyingglass", variant: .primary) {
-                settings.discoverCLI()
+                commitDraft(discoverCLI: true)
             }
         } content: {
             ScrollView {
@@ -41,11 +43,15 @@ public struct ClaudeCLISettingsView: View {
             }
         }
         .onAppear {
+            draft.reload(from: settings)
             settings.discoverCLI()
             settings.refreshAvailableModels()
         }
-        .onChange(of: settings.claudePath) { _, _ in
-            settings.discoverCLI()
+        .onSubmit {
+            commitDraft(discoverCLI: true)
+        }
+        .onDisappear {
+            commitDraft()
         }
     }
 
@@ -76,7 +82,7 @@ public struct ClaudeCLISettingsView: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
 
-                TextField("/opt/homebrew/bin/claude", text: $settings.claudePath)
+                TextField("/opt/homebrew/bin/claude", text: $draft.claudePath)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -109,9 +115,9 @@ public struct ClaudeCLISettingsView: View {
                 HStack(spacing: AppTheme.Spacing.sm) {
                     Group {
                         if showAPIKey {
-                            TextField("sk-ant-...", text: $settings.apiKey)
+                            TextField("sk-ant-...", text: $draft.apiKey)
                         } else {
-                            SecureField("sk-ant-...", text: $settings.apiKey)
+                            SecureField("sk-ant-...", text: $draft.apiKey)
                         }
                     }
                     .textFieldStyle(.plain)
@@ -259,7 +265,7 @@ public struct ClaudeCLISettingsView: View {
                     .foregroundStyle(AppTheme.textSecondary)
 
                 StyledTextEditor(
-                    text: $settings.systemPrompt,
+                    text: $draft.systemPrompt,
                     placeholder: "Be concise, inspect the repository before editing, and explain tool use briefly."
                 )
                 .frame(height: 120)
@@ -267,6 +273,47 @@ public struct ClaudeCLISettingsView: View {
         }
     }
 
+    private func commitDraft(discoverCLI: Bool = false) {
+        let shouldDiscoverCLI = discoverCLI || settings.claudePath != draft.claudePath
+        draft.apply(to: settings)
+        if shouldDiscoverCLI {
+            settings.discoverCLI()
+        }
+    }
+}
+
+struct ClaudeCLISettingsDraft: Equatable {
+    var claudePath: String
+    var apiKey: String
+    var systemPrompt: String
+
+    init(
+        claudePath: String = "",
+        apiKey: String = "",
+        systemPrompt: String = ""
+    ) {
+        self.claudePath = claudePath
+        self.apiKey = apiKey
+        self.systemPrompt = systemPrompt
+    }
+
+    init(store: ClaudeCLISettingsStore) {
+        self.init(
+            claudePath: store.claudePath,
+            apiKey: store.apiKey,
+            systemPrompt: store.systemPrompt
+        )
+    }
+
+    mutating func reload(from store: ClaudeCLISettingsStore) {
+        self = ClaudeCLISettingsDraft(store: store)
+    }
+
+    func apply(to store: ClaudeCLISettingsStore) {
+        store.claudePath = claudePath
+        store.apiKey = apiKey
+        store.systemPrompt = systemPrompt
+    }
 }
 
 #if DEBUG

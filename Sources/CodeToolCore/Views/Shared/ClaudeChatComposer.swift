@@ -1,4 +1,5 @@
 import AppKit
+import CodeToolUI
 import SwiftUI
 
 /// A chat composer backed by NSTextView for precise key event handling.
@@ -33,6 +34,7 @@ public struct ClaudeChatComposer: NSViewRepresentable {
     }
 
     static func configureTextView(_ textView: ComposerTextView, coordinator: Coordinator) {
+        CodeToolTextInputConfiguration.configure(textView)
         textView.composerDelegate = coordinator
         textView.delegate = coordinator
         textView.isRichText = false
@@ -40,7 +42,7 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         textView.isEditable = true
         textView.isSelectable = true
         textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 16, weight: .regular)
+        textView.font = .systemFont(ofSize: AppTheme.Typography.composerInput, weight: .regular)
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
         textView.isVerticallyResizable = true

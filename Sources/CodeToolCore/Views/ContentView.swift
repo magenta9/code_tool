@@ -486,6 +486,10 @@ private struct ToolDetailCacheView: View {
     @Binding var selectedTool: Tool?
     let retainedToolIDs: [ToolID]
 
+    private var visibilityState: ToolVisibilityState {
+        ToolVisibilityState(selectedToolID: selectedTool?.toolID)
+    }
+
     var body: some View {
         ZStack {
             WelcomeView(tools: tools, selectedTool: $selectedTool)
@@ -494,6 +498,7 @@ private struct ToolDetailCacheView: View {
 
             ForEach(cachedTools) { tool in
                 ToolDetailView(tool: tool)
+                    .environment(\.isToolVisible, visibilityState.isVisible(toolID: tool.toolID))
                     .opacity(selectedTool == tool ? 1 : 0)
                     .allowsHitTesting(selectedTool == tool)
             }

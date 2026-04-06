@@ -1,15 +1,47 @@
 import CodeToolUI
 import SwiftUI
 
+@MainActor
+private enum TimestampFormatterCache {
+    static let utcTimeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+
+    static let iso8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    static let localFullDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .long
+        formatter.timeZone = .autoupdatingCurrent
+        return formatter
+    }()
+
+    static let utcFullDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .long
+        formatter.timeZone = utcTimeZone
+        return formatter
+    }()
+
+    static let relative: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
+}
+
 /// A tool view that converts between Unix timestamps and human-readable dates.
 public struct TimestampConverterView: View {
+    @Environment(\.isToolVisible) private var isToolVisible
     @State private var timestampInput = ""
     @State private var selectedDate = Date()
     @State private var currentTimestamp: TimeInterval = Date().timeIntervalSince1970
     @State private var showHistory = false
     @State private var timestampHistory: [TimestampHistoryRecord] = []
-
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     public init() {}
 
@@ -34,7 +66,7 @@ public struct TimestampConverterView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
                     CurrentTimeSection(currentTimestamp: currentTimestamp)
-                    TimestampToDateSection(timestampInput: $timestampInput, currentTimestamp: currentTimestamp)
+                    TimestampToDateSection(timestampInput: $timestampInput)
                     DateToTimestampSection(selectedDate: $selectedDate)
                 }
                 .padding(.horizontal, AppTheme.Spacing.xxl)
@@ -42,8 +74,26 @@ public struct TimestampConverterView: View {
                 .padding(.bottom, AppTheme.Spacing.xxl)
             }
         }
-        .onReceive(timer) { _ in
-            currentTimestamp = Date().timeIntervalSince1970
+        .task(id: isToolVisible) {
+            guard isToolVisible else {
+                return
+            }
+
+            refreshCurrentTimestamp()
+
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    break
+                }
+
+                guard !Task.isCancelled else {
+                    break
+                }
+
+                refreshCurrentTimestamp()
+            }
         }
         .overlay {
             if showHistory {
@@ -61,8 +111,18 @@ public struct TimestampConverterView: View {
 
     private var statusItems: [ToolStatusItem] {
         [
-            ToolStatusItem(title: "\(Int(currentTimestamp)) s", systemImage: "clock.arrow.circlepath", tint: AppTheme.accent),
-            ToolStatusItem(title: TimeZone.current.identifier, systemImage: "globe", tint: AppTheme.accentWarm)
+            ToolStatusItem(
+                id: "current-time",
+                title: "\(Int(currentTimestamp)) s",
+                systemImage: "clock.arrow.circlepath",
+                tint: AppTheme.accent
+            ),
+            ToolStatusItem(
+                id: "time-zone",
+                title: TimeZone.autoupdatingCurrent.identifier,
+                systemImage: "globe",
+                tint: AppTheme.accentWarm
+            )
         ]
     }
 
@@ -80,15 +140,8 @@ public struct TimestampConverterView: View {
             date = selectedDate
         }
 
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        iso8601 = isoFormatter.string(from: date)
-
-        let localFormatter = DateFormatter()
-        localFormatter.dateStyle = .full
-        localFormatter.timeStyle = .long
-        localFormatter.timeZone = .current
-        local = localFormatter.string(from: date)
+        iso8601 = formatISO8601(date)
+        local = formatDate(date, timeZone: .autoupdatingCurrent)
 
         timestamp = "\(Int(date.timeIntervalSince1970))"
 
@@ -125,9 +178,7 @@ public struct TimestampConverterView: View {
         if record.direction == "timestampToDate" {
             timestampInput = record.inputValue
         } else if let iso = record.selectedDateISO8601 {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: iso) {
+            if let date = TimestampFormatterCache.iso8601.date(from: iso) {
                 selectedDate = date
             }
         }
@@ -147,6 +198,10 @@ public struct TimestampConverterView: View {
             await MainActor.run { timestampHistory = [] }
         }
     }
+
+    private func refreshCurrentTimestamp() {
+        currentTimestamp = Date().timeIntervalSince1970
+    }
 }
 
 // MARK: - Current Time Section
@@ -155,6 +210,8 @@ private struct CurrentTimeSection: View {
     let currentTimestamp: TimeInterval
 
     var body: some View {
+        let currentDate = Date(timeIntervalSince1970: currentTimestamp)
+
         StyledPanel(title: "Current Time") {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 StyledSectionHeader("Live Clock", systemImage: "clock")
@@ -166,7 +223,7 @@ private struct CurrentTimeSection: View {
 
                 ToolMessageBanner(
                     systemImage: "calendar",
-                    message: formatDate(Date(), timeZone: .current),
+                    message: formatDate(currentDate, timeZone: .autoupdatingCurrent),
                     tint: AppTheme.accentWarm
                 )
             }
@@ -178,7 +235,6 @@ private struct CurrentTimeSection: View {
 
 private struct TimestampToDateSection: View {
     @Binding var timestampInput: String
-    let currentTimestamp: TimeInterval
 
     var body: some View {
         StyledPanel(title: "Timestamp to Date") {
@@ -196,7 +252,7 @@ private struct TimestampToDateSection: View {
                         .overlay(RoundedRectangle(cornerRadius: AppTheme.Radius.md).strokeBorder(AppTheme.border))
 
                     StyledButton("Now", variant: .secondary) {
-                        timestampInput = "\(Int(currentTimestamp))"
+                        timestampInput = "\(Int(Date().timeIntervalSince1970))"
                     }
 
                     StyledIconButton("xmark.circle.fill", help: "Clear") {
@@ -211,8 +267,8 @@ private struct TimestampToDateSection: View {
 
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                         ThemedConversionRow(label: "ISO 8601", value: formatISO8601(result.date))
-                        ThemedConversionRow(label: "UTC", value: formatDate(result.date, timeZone: TimeZone(identifier: "UTC")!))
-                        ThemedConversionRow(label: "Local (\(TimeZone.current.abbreviation() ?? ""))", value: formatDate(result.date, timeZone: .current))
+                        ThemedConversionRow(label: "UTC", value: formatDate(result.date, timeZone: TimestampFormatterCache.utcTimeZone))
+                        ThemedConversionRow(label: "Local (\(TimeZone.autoupdatingCurrent.abbreviation() ?? ""))", value: formatDate(result.date, timeZone: .autoupdatingCurrent))
                         ThemedConversionRow(label: "Relative", value: formatRelative(result.date))
                     }
                     .padding(AppTheme.Spacing.md)
@@ -255,8 +311,8 @@ private struct DateToTimestampSection: View {
 
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                     ThemedConversionRow(label: "ISO 8601", value: formatISO8601(selectedDate))
-                    ThemedConversionRow(label: "UTC", value: formatDate(selectedDate, timeZone: TimeZone(identifier: "UTC")!))
-                    ThemedConversionRow(label: "Local (\(TimeZone.current.abbreviation() ?? ""))", value: formatDate(selectedDate, timeZone: .current))
+                    ThemedConversionRow(label: "UTC", value: formatDate(selectedDate, timeZone: TimestampFormatterCache.utcTimeZone))
+                    ThemedConversionRow(label: "Local (\(TimeZone.autoupdatingCurrent.abbreviation() ?? ""))", value: formatDate(selectedDate, timeZone: .autoupdatingCurrent))
                 }
                 .padding(AppTheme.Spacing.md)
                 .background(AppTheme.surface.opacity(0.66))
@@ -290,24 +346,23 @@ private func parseTimestamp(_ input: String) -> ParsedTimestamp? {
     return ParsedTimestamp(date: Date(timeIntervalSince1970: seconds), isMilliseconds: isMilliseconds)
 }
 
+@MainActor
 private func formatISO8601(_ date: Date) -> String {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.string(from: date)
+    TimestampFormatterCache.iso8601.string(from: date)
 }
 
+@MainActor
 private func formatDate(_ date: Date, timeZone: TimeZone) -> String {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .full
-    formatter.timeStyle = .long
-    formatter.timeZone = timeZone
-    return formatter.string(from: date)
+    if timeZone.secondsFromGMT(for: date) == TimestampFormatterCache.utcTimeZone.secondsFromGMT(for: date) {
+        return TimestampFormatterCache.utcFullDate.string(from: date)
+    }
+
+    return TimestampFormatterCache.localFullDate.string(from: date)
 }
 
+@MainActor
 private func formatRelative(_ date: Date) -> String {
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .full
-    return formatter.localizedString(for: date, relativeTo: Date())
+    TimestampFormatterCache.relative.localizedString(for: date, relativeTo: Date())
 }
 
 // MARK: - Previews

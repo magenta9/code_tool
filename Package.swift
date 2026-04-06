@@ -42,7 +42,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CodeToolTests",
-            dependencies: ["CodeToolCore", "CodeToolFoundation"],
+            dependencies: ["CodeToolCore", "CodeToolFoundation", "CodeToolUI"],
             path: "Tests/CodeToolTests"
         )
     ]

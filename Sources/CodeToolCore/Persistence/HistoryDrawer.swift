@@ -1,6 +1,15 @@
 import CodeToolUI
 import SwiftUI
 
+@MainActor
+private enum HistoryDrawerFormatterCache {
+    static let relativeTime: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+}
+
 // MARK: - HistoryDrawerItem Protocol
 
 /// Protocol for items displayed in the HistoryDrawer.
@@ -396,8 +405,6 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
     }
 
     private func relativeTimeString(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        HistoryDrawerFormatterCache.relativeTime.localizedString(for: date, relativeTo: Date())
     }
 }

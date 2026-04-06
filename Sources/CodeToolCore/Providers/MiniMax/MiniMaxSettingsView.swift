@@ -6,6 +6,7 @@ public struct MiniMaxSettingsView: View {
     @Bindable private var settings = MiniMaxSettingsStore.shared
     @State private var showAPIKey = false
     @State private var testStatus: TestStatus = .idle
+    @State private var draft = MiniMaxSettingsDraft(store: MiniMaxSettingsStore.shared)
 
     private enum TestStatus: Equatable {
         case idle
@@ -26,14 +27,16 @@ public struct MiniMaxSettingsView: View {
         ) {
             StyledButton("Reset Defaults", systemImage: "arrow.counterclockwise", variant: .ghost) {
                 settings.resetToDefaults()
+                draft.reload(from: settings)
             }
             StyledButton(
                 "Test Connection", systemImage: "antenna.radiowaves.left.and.right",
                 variant: .primary
             ) {
+                commitDraft()
                 testConnection()
             }
-            .disabled(!settings.isConfigured || testStatus == .testing)
+            .disabled(!draft.isConfigured || testStatus == .testing)
         } content: {
             ScrollView {
                 VStack(spacing: AppTheme.Spacing.xl) {
@@ -46,6 +49,15 @@ public struct MiniMaxSettingsView: View {
                 .padding(.top, AppTheme.Spacing.xl)
                 .padding(.bottom, AppTheme.Spacing.xxl)
             }
+        }
+        .onAppear {
+            draft.reload(from: settings)
+        }
+        .onSubmit {
+            commitDraft()
+        }
+        .onDisappear {
+            commitDraft()
         }
     }
 
@@ -61,9 +73,9 @@ public struct MiniMaxSettingsView: View {
                 HStack(spacing: AppTheme.Spacing.sm) {
                     Group {
                         if showAPIKey {
-                            TextField("sk-...", text: $settings.apiKey)
+                            TextField("sk-...", text: $draft.apiKey)
                         } else {
-                            SecureField("sk-...", text: $settings.apiKey)
+                            SecureField("sk-...", text: $draft.apiKey)
                         }
                     }
                     .textFieldStyle(.plain)
@@ -93,7 +105,7 @@ public struct MiniMaxSettingsView: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
 
-                TextField("https://api.minimaxi.com/v1", text: $settings.baseURL)
+                TextField("https://api.minimaxi.com/v1", text: $draft.baseURL)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -112,17 +124,17 @@ public struct MiniMaxSettingsView: View {
         StyledPanel(title: "Models") {
             VStack(spacing: AppTheme.Spacing.lg) {
                 modelField(
-                    label: "Chat Model", value: $settings.chatModel,
+                    label: "Chat Model", value: $draft.chatModel,
                     placeholder: MiniMaxConfig.defaults.chatModel,
                     icon: "bubble.left.and.bubble.right")
                 modelField(
-                    label: "Speech Model", value: $settings.speechModel,
+                    label: "Speech Model", value: $draft.speechModel,
                     placeholder: MiniMaxConfig.defaults.speechModel, icon: "waveform")
                 modelField(
-                    label: "Image Model", value: $settings.imageModel,
+                    label: "Image Model", value: $draft.imageModel,
                     placeholder: MiniMaxConfig.defaults.imageModel, icon: "photo.artframe")
                 modelField(
-                    label: "Music Model", value: $settings.musicModel,
+                    label: "Music Model", value: $draft.musicModel,
                     placeholder: MiniMaxConfig.defaults.musicModel, icon: "music.note")
             }
         }
@@ -160,7 +172,7 @@ public struct MiniMaxSettingsView: View {
     // MARK: - Status
 
     private var statusItems: [ToolStatusItem] {
-        if settings.isConfigured {
+        if draft.isConfigured {
             return [
                 ToolStatusItem(
                     title: "API Key configured", systemImage: "checkmark.circle.fill",
@@ -178,7 +190,7 @@ public struct MiniMaxSettingsView: View {
     private var statusBanner: some View {
         switch testStatus {
         case .idle:
-            if !settings.isConfigured {
+            if !draft.isConfigured {
                 ToolMessageBanner(
                     systemImage: "key.fill",
                     message:
@@ -207,6 +219,10 @@ public struct MiniMaxSettingsView: View {
 
     // MARK: - Actions
 
+    private func commitDraft() {
+        draft.apply(to: settings)
+    }
+
     private func testConnection() {
         testStatus = .testing
         Task {
@@ -219,5 +235,58 @@ public struct MiniMaxSettingsView: View {
                 await MainActor.run { testStatus = .failure(error.localizedDescription) }
             }
         }
+    }
+}
+
+struct MiniMaxSettingsDraft: Equatable {
+    var apiKey: String
+    var baseURL: String
+    var chatModel: String
+    var speechModel: String
+    var imageModel: String
+    var musicModel: String
+
+    init(
+        apiKey: String = "",
+        baseURL: String = MiniMaxConfig.defaults.baseURL,
+        chatModel: String = MiniMaxConfig.defaults.chatModel,
+        speechModel: String = MiniMaxConfig.defaults.speechModel,
+        imageModel: String = MiniMaxConfig.defaults.imageModel,
+        musicModel: String = MiniMaxConfig.defaults.musicModel
+    ) {
+        self.apiKey = apiKey
+        self.baseURL = baseURL
+        self.chatModel = chatModel
+        self.speechModel = speechModel
+        self.imageModel = imageModel
+        self.musicModel = musicModel
+    }
+
+    var isConfigured: Bool {
+        !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    init(store: MiniMaxSettingsStore) {
+        self.init(
+            apiKey: store.apiKey,
+            baseURL: store.baseURL,
+            chatModel: store.chatModel,
+            speechModel: store.speechModel,
+            imageModel: store.imageModel,
+            musicModel: store.musicModel
+        )
+    }
+
+    mutating func reload(from store: MiniMaxSettingsStore) {
+        self = MiniMaxSettingsDraft(store: store)
+    }
+
+    func apply(to store: MiniMaxSettingsStore) {
+        store.apiKey = apiKey
+        store.baseURL = baseURL
+        store.chatModel = chatModel
+        store.speechModel = speechModel
+        store.imageModel = imageModel
+        store.musicModel = musicModel
     }
 }

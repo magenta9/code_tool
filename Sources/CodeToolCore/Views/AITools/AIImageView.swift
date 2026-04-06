@@ -1409,7 +1409,7 @@ private struct ReferencePromptEditor: View {
 
             if text.isEmpty {
                 Text(placeholder)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.system(size: AppTheme.Typography.textInput, weight: .medium))
                     .foregroundStyle(AppTheme.textMuted)
                     .padding(AppTheme.Spacing.md)
                     .padding(.leading, 4)
@@ -1448,16 +1448,14 @@ private struct ReferencePromptTextView: NSViewRepresentable {
         textView.isEditable = true
         textView.isSelectable = true
         textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 13, weight: .medium)
+        textView.font = .systemFont(ofSize: AppTheme.Typography.textInput, weight: .medium)
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.textContainerInset = NSSize(width: 4, height: 6)
         textView.textContainer?.widthTracksTextView = true
-        textView.isAutomaticQuoteSubstitutionEnabled = false
-        textView.isAutomaticDashSubstitutionEnabled = false
-        textView.isAutomaticTextReplacementEnabled = false
+        CodeToolTextInputConfiguration.configure(textView)
 
         scrollView.documentView = textView
         context.coordinator.textView = textView

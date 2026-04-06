@@ -3,6 +3,18 @@ import SwiftUI
 #if canImport(AppKit)
     import AppKit
 
+    private enum StyledTextEditorTypography {
+        static let font = Font.system(
+            size: AppTheme.Typography.textInput,
+            weight: .regular,
+            design: .monospaced
+        )
+        static let nsFont = NSFont.monospacedSystemFont(
+            ofSize: AppTheme.Typography.textInput,
+            weight: .regular
+        )
+    }
+
     // A plain NSTextView wrapper that disables macOS smart-quote / smart-dash substitution.
     private struct PlainNSTextEditor: NSViewRepresentable {
         @Binding var text: String
@@ -12,14 +24,12 @@ import SwiftUI
         func makeNSView(context: Context) -> NSScrollView {
             let scrollView = NSTextView.scrollableTextView()
             guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
-            textView.isAutomaticQuoteSubstitutionEnabled = false
-            textView.isAutomaticDashSubstitutionEnabled = false
-            textView.isAutomaticTextReplacementEnabled = false
+            CodeToolTextInputConfiguration.configure(textView)
             textView.isRichText = false
             textView.isVerticallyResizable = true
             textView.isHorizontallyResizable = false
             textView.textContainer?.widthTracksTextView = true
-            textView.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            textView.font = StyledTextEditorTypography.nsFont
             textView.textColor = NSColor.labelColor
             textView.backgroundColor = .clear
             textView.drawsBackground = false
@@ -29,19 +39,51 @@ import SwiftUI
 
         func updateNSView(_ nsView: NSScrollView, context: Context) {
             guard let textView = nsView.documentView as? NSTextView else { return }
-            if textView.string != text {
+            let hasMarkedText = textView.hasMarkedText()
+
+            context.coordinator.parent = self
+            context.coordinator.isUpdating = true
+            if textView.string != text && !hasMarkedText {
                 textView.string = text
+                context.coordinator.lastCommittedText = text
+            } else if !hasMarkedText {
+                context.coordinator.lastCommittedText = textView.string
             }
+            context.coordinator.isUpdating = false
         }
 
         class Coordinator: NSObject, NSTextViewDelegate {
             var parent: PlainNSTextEditor
-            init(_ parent: PlainNSTextEditor) { self.parent = parent }
+            var isUpdating = false
+            var lastCommittedText: String
+
+            init(_ parent: PlainNSTextEditor) {
+                self.parent = parent
+                self.lastCommittedText = parent.text
+            }
+
             func textDidChange(_ notification: Notification) {
+                guard !isUpdating else { return }
                 guard let tv = notification.object as? NSTextView else { return }
-                parent.text = tv.string
+                guard !tv.hasMarkedText() else { return }
+
+                let committedText = tv.string
+                guard committedText != lastCommittedText else { return }
+
+                lastCommittedText = committedText
+                parent.text = committedText
             }
         }
+    }
+#endif
+
+#if !canImport(AppKit)
+    private enum StyledTextEditorTypography {
+        static let font = Font.system(
+            size: AppTheme.Typography.textInput,
+            weight: .regular,
+            design: .monospaced
+        )
     }
 #endif
 
@@ -320,7 +362,7 @@ public struct StyledTextEditor: View {
                     .padding(AppTheme.Spacing.md)
                 #else
                 TextEditor(text: $text)
-                    .font(.system(.body, design: .monospaced))
+                    .font(StyledTextEditorTypography.font)
                     .foregroundStyle(AppTheme.textPrimary)
                     .scrollContentBackground(.hidden)
                     .padding(AppTheme.Spacing.md)
@@ -328,7 +370,7 @@ public struct StyledTextEditor: View {
             } else {
                 ScrollView {
                     Text(text)
-                        .font(.system(.body, design: .monospaced))
+                        .font(StyledTextEditorTypography.font)
                         .foregroundStyle(AppTheme.textPrimary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -338,7 +380,7 @@ public struct StyledTextEditor: View {
 
             if text.isEmpty && !placeholder.isEmpty {
                 Text(placeholder)
-                    .font(.system(.body, design: .monospaced))
+                    .font(StyledTextEditorTypography.font)
                     .foregroundStyle(AppTheme.textMuted)
                     .padding(AppTheme.Spacing.md)
                     .padding(.leading, isEditable ? 4 : 0)

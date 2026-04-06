@@ -1,7 +1,7 @@
 import SwiftUI
 
 public struct ToolStatusItem: Identifiable {
-    public let id = UUID()
+    public let id: String
     public let title: String
     public let systemImage: String
     public let tint: Color
@@ -10,6 +10,7 @@ public struct ToolStatusItem: Identifiable {
     public let action: (() -> Void)?
 
     public init(
+        id: String = UUID().uuidString,
         title: String,
         systemImage: String,
         tint: Color = AppTheme.accent,
@@ -17,6 +18,7 @@ public struct ToolStatusItem: Identifiable {
         accessibilityLabel: String? = nil,
         action: (() -> Void)? = nil
     ) {
+        self.id = id
         self.title = title
         self.systemImage = systemImage
         self.tint = tint

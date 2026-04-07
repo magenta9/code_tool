@@ -21,8 +21,10 @@ last_updated_by: zhang
 
 ### 现状
 
-AI Chat 当前基于 MiniMax M2.7 模型：
-- `AIChatView.swift` → UI 层，消息气泡 + 输入框 + system prompt
+注：当前产品中的活动 AI Chat 路由已经切到 `ClaudeChatView`。本文中的 `AIChatView` 描述仅作为迁移背景保留，应按 legacy 路径理解。
+
+AI Chat 在该迁移 spec 编写时基于 MiniMax M2.7 模型：
+- `AIChatView.swift` → 当时的 UI 层，消息气泡 + 输入框 + system prompt（现已移除）
 - `MiniMaxAPIClient.chatCompletionStream()` → SSE 流式请求到 `/chat/completions`
 - `MiniMaxProvider.swift` → API Key + 模型配置（UserDefaults 持久化）
 - `HistoryStore.swift` → JSON 文件持久化对话历史
@@ -222,7 +224,7 @@ struct ChatMessageRecord: Codable {
 #### FR8: ToolRegistry 和 ContentView 路由更新
 
 - `ToolRegistry.defaults` 中 "AI Chat" 条目保持名称不变，更新描述
-- `ContentView.swift` 中 `case "AI Chat"` 路由到新的 view（`ClaudeChatView()` 或重构后的 `AIChatView()`）
+- `ContentView.swift` 中 `case "AI Chat"` 路由到新的 view（`ClaudeChatView()`）
 - 侧边栏中展示名称不变为 "AI Chat"
 
 ### Non-functional Requirements
@@ -260,7 +262,7 @@ Sources/CodeToolCore/
 ├── ClaudeCLIClient.swift         # 核心：Process 封装 + NDJSON 解析
 ├── ClaudeCLISettingsStore.swift   # 设置持久化（UserDefaults）
 ├── ClaudeCLISettingsView.swift    # 设置 UI（可能合入 MiniMaxSettingsView 作为 tab）
-└── ClaudeChatView.swift           # 新 Chat UI（或原地重构 AIChatView）
+└── ClaudeChatView.swift           # 新 Chat UI
 ```
 
 ### 修改文件
@@ -268,7 +270,7 @@ Sources/CodeToolCore/
 ```
 Sources/CodeToolCore/
 ├── ContentView.swift      # 路由更新："AI Chat" → ClaudeChatView
-├── AIChatView.swift       # 如果原地重构则大幅修改；如果新建则可保留作 legacy
+├── AIChatView.swift       # 迁移阶段的旧路径说明；当前仓库已移除该 UI 文件
 ├── HistoryStore.swift     # ChatHistoryRecord/ChatMessageRecord 扩展
 ├── Tool.swift             # "AI Chat" 描述更新
 Tests/CodeToolTests/

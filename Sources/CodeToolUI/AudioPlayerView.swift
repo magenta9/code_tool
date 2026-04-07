@@ -3,6 +3,8 @@ import SwiftUI
 // MARK: - AudioPlayerView
 
 public struct AudioPlayerView: View {
+    @Environment(\.toolUIActivity) private var toolUIActivity
+
     let isPlaying: Bool
     let currentTime: TimeInterval
     let duration: TimeInterval
@@ -108,7 +110,7 @@ public struct AudioPlayerView: View {
         }
         .buttonStyle(.plain)
         .scaleEffect(isHoveredPlay ? 1.04 : 1.0)
-        .onHover { h in withAnimation(AppTheme.Anim.fast) { isHoveredPlay = h } }
+        .toolHoverTracking($isHoveredPlay)
     }
 
     private var stopButton: some View {
@@ -124,7 +126,7 @@ public struct AudioPlayerView: View {
         .buttonStyle(.plain)
         .disabled(!isPlaying)
         .opacity(isPlaying ? 1.0 : 0.5)
-        .onHover { h in withAnimation(AppTheme.Anim.fast) { isHoveredStop = h } }
+        .toolHoverTracking($isHoveredStop)
     }
 
     private var timeDisplay: some View {
@@ -153,8 +155,15 @@ public struct AudioPlayerView: View {
                     .opacity(shimmerPhase ? (i == 0 ? 1.0 : i == 1 ? 0.6 : 0.3) : (i == 0 ? 0.3 : i == 1 ? 0.6 : 1.0))
             }
         }
-        .onAppear { shimmerPhase = true }
-        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: shimmerPhase)
+        .onAppear { updateShimmerPhase() }
+        .onChange(of: toolUIActivity.isVisible) { _, _ in
+            updateShimmerPhase()
+        }
+        .animation(
+            toolUIActivity.allowsDecorativeAnimations
+                ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : nil,
+            value: shimmerPhase
+        )
     }
 
     // MARK: - Progress Section
@@ -183,8 +192,15 @@ public struct AudioPlayerView: View {
         }
         .frame(height: 4)
         .clipShape(Capsule())
-        .onAppear { shimmerPhase = true }
-        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: shimmerPhase)
+        .onAppear { updateShimmerPhase() }
+        .onChange(of: toolUIActivity.isVisible) { _, _ in
+            updateShimmerPhase()
+        }
+        .animation(
+            toolUIActivity.allowsDecorativeAnimations
+                ? .easeInOut(duration: 1.5).repeatForever(autoreverses: true) : nil,
+            value: shimmerPhase
+        )
     }
 
     private var seekableProgressBar: some View {
@@ -213,7 +229,7 @@ public struct AudioPlayerView: View {
             }
             .frame(height: 20)
             .contentShape(Rectangle())
-            .onHover { h in isHoveredTrack = h }
+            .toolHoverTracking($isHoveredTrack, animation: nil)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
@@ -286,6 +302,10 @@ public struct AudioPlayerView: View {
         let minutes = totalSeconds / 60
         let seconds = totalSeconds % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func updateShimmerPhase() {
+        shimmerPhase = isStreaming && toolUIActivity.allowsDecorativeAnimations
     }
 }
 

@@ -25,7 +25,8 @@ last_updated_by: zhang
 
 1. `ContentView` 会把访问过的工具页长期保留在缓存 `ZStack` 中，未选中页面仅通过 `opacity` 和 `allowsHitTesting` 隐藏，而不是移出视图树。
 2. AI 工具页自己持有大块本地状态，并直接驱动高频更新：
-   - `ClaudeChatView` / `AIChatView`：流式 text/thinking/tool-call 增量、自动滚动、Markdown 渲染
+   - `ClaudeChatView`：流式 text/thinking/tool-call 增量、自动滚动、Markdown 渲染
+   - `AIChatView`：legacy 路径，保留在仓库历史中但不再是当前活动页面
    - `AISpeechView` / `AIMusicView`：100ms tick 的播放状态更新
    - `AIImageView`：大图 hero + thumbnail/contact sheet 双重渲染
 3. 若干重型子树在主线程渲染路径中做重复工作：
@@ -92,7 +93,8 @@ last_updated_by: zhang
 - restore / history 打开路径是 eager 的，而不是渐进或惰性的
 
 **页面特定热点**
-- `ClaudeChatView` / `AIChatView`：streaming + markdown + auto-scroll
+- `ClaudeChatView`：streaming + markdown + auto-scroll
+- `AIChatView`：legacy 历史路径，后续不再作为当前性能治理主路径
 - `ClaudeChatView`：附件缩略图同步解码
 - `AIImageView`：多处图像重复渲染与 restore 后的全量解码
 - `AISpeechView` / `AIMusicView`：timer 驱动下的父视图刷新与歌词重建
@@ -235,7 +237,7 @@ last_updated_by: zhang
 - `ContentView.swift`
 - `ToolVisibility.swift`
 - `ClaudeChatView.swift`
-- `AIChatView.swift`
+- `AIChatView.swift`（legacy archived path）
 - `AIImageView.swift`
 - `AISpeechView.swift`
 - `AIMusicView.swift`

@@ -694,13 +694,25 @@ final class CodeToolTests: XCTestCase {
             current: retainedToolIDs,
             selectedToolID: .jsonTool
         )
-        XCTAssertEqual(retainedToolIDs, [.jsonTool, .imageConverter])
+        XCTAssertEqual(retainedToolIDs, [.imageConverter, .jsonTool])
 
         retainedToolIDs = ToolViewCache.retainedToolIDs(
             current: retainedToolIDs,
             selectedToolID: nil
         )
-        XCTAssertEqual(retainedToolIDs, [.jsonTool, .imageConverter])
+        XCTAssertEqual(retainedToolIDs, [.imageConverter, .jsonTool])
+    }
+
+    func testToolViewCacheCapsRetainedTools() {
+        var retainedToolIDs: [ToolID] = []
+
+        retainedToolIDs = ToolViewCache.retainedToolIDs(current: retainedToolIDs, selectedToolID: .jsonTool)
+        retainedToolIDs = ToolViewCache.retainedToolIDs(current: retainedToolIDs, selectedToolID: .imageConverter)
+        retainedToolIDs = ToolViewCache.retainedToolIDs(current: retainedToolIDs, selectedToolID: .jsonDiff)
+        retainedToolIDs = ToolViewCache.retainedToolIDs(current: retainedToolIDs, selectedToolID: .timestampConverter)
+
+        XCTAssertEqual(retainedToolIDs.count, ToolViewCache.maximumRetainedToolCount)
+        XCTAssertEqual(retainedToolIDs, [.imageConverter, .jsonDiff, .timestampConverter])
     }
 
     func testToolStatusItemPreservesExplicitStableID() {
@@ -732,6 +744,20 @@ final class CodeToolTests: XCTestCase {
         let state = ToolVisibilityState(selectedToolID: nil)
 
         XCTAssertFalse(state.isVisible(toolID: .timestampConverter))
+    }
+
+    func testToolUIActivityDisablesInteractiveEffectsWhenHidden() {
+        let activity = ToolUIActivity(isVisible: false)
+
+        XCTAssertFalse(activity.allowsInteractiveEffects)
+        XCTAssertFalse(activity.allowsDecorativeAnimations)
+    }
+
+    func testToolUIActivityKeepsInteractiveEffectsWhenVisible() {
+        let activity = ToolUIActivity(isVisible: true)
+
+        XCTAssertTrue(activity.allowsInteractiveEffects)
+        XCTAssertTrue(activity.allowsDecorativeAnimations)
     }
 
     #if canImport(SwiftUI)
@@ -2245,6 +2271,58 @@ final class CodeToolTests: XCTestCase {
         )
     }
 
+    func testClaudeConversationRenderStateIgnoresDraftChanges() {
+        let base = ClaudeConversationRenderState.make(
+            isStreaming: false,
+            workingDirectoryTitle: "repo",
+            hasSystemPrompt: false,
+            composerImageCount: 0,
+            draftText: "",
+            hasVisibleDraftText: false,
+            isToolVisible: true,
+            streamingScrollRevision: 0
+        )
+
+        let draftChanged = ClaudeConversationRenderState.make(
+            isStreaming: false,
+            workingDirectoryTitle: "repo",
+            hasSystemPrompt: false,
+            composerImageCount: 0,
+            draftText: "hello",
+            hasVisibleDraftText: true,
+            isToolVisible: true,
+            streamingScrollRevision: 0
+        )
+
+        XCTAssertEqual(base, draftChanged)
+    }
+
+    func testClaudeConversationRenderStateTracksConversationChanges() {
+        let base = ClaudeConversationRenderState.make(
+            isStreaming: false,
+            workingDirectoryTitle: "repo",
+            hasSystemPrompt: false,
+            composerImageCount: 0,
+            draftText: "",
+            hasVisibleDraftText: false,
+            isToolVisible: true,
+            streamingScrollRevision: 0
+        )
+
+        let updated = ClaudeConversationRenderState.make(
+            isStreaming: true,
+            workingDirectoryTitle: "repo",
+            hasSystemPrompt: false,
+            composerImageCount: 0,
+            draftText: "",
+            hasVisibleDraftText: false,
+            isToolVisible: true,
+            streamingScrollRevision: 1
+        )
+
+        XCTAssertNotEqual(base, updated)
+    }
+
     // MARK: - AppUnifiedLogSink formatting tests
 
     func testUnifiedLogSinkFormatsEventAndReferenceIDAndMessage() {
@@ -2502,6 +2580,58 @@ final class CodeToolTests: XCTestCase {
     func testDiagnosticsCaseServiceConformsToServicingProtocol() {
         let service: any DiagnosticsCaseServicing = DiagnosticsCaseService.shared
         XCTAssertNotNil(service)
+    }
+
+    func testRenderingPerformanceDashboardSummarizesCacheAndLagMetrics() {
+        let metrics = [
+            DiagnosticsMetricSummary(
+                createdAt: Date(timeIntervalSince1970: 30),
+                kind: RenderingPerformance.metricKind,
+                metadata: [
+                    "event": RenderingPerformanceEvent.toolCacheSnapshot.rawValue,
+                    "selectedToolID": ToolID.aiChat.rawValue,
+                    "retainedCount": "3",
+                    "mountedCount": "3",
+                    "hiddenMountedCount": "2"
+                ]
+            ),
+            DiagnosticsMetricSummary(
+                createdAt: Date(timeIntervalSince1970: 20),
+                kind: RenderingPerformance.metricKind,
+                metadata: [
+                    "event": RenderingPerformanceEvent.toolSwitchFinished.rawValue,
+                    "durationMs": "96"
+                ]
+            ),
+            DiagnosticsMetricSummary(
+                createdAt: Date(timeIntervalSince1970: 10),
+                kind: RenderingPerformance.metricKind,
+                metadata: [
+                    "event": RenderingPerformanceEvent.interactionLagObserved.rawValue,
+                    "durationMs": "41"
+                ]
+            ),
+            DiagnosticsMetricSummary(
+                createdAt: Date(timeIntervalSince1970: 5),
+                kind: "metrickit_payload",
+                metadata: ["payloadCount": "1"]
+            )
+        ]
+
+        let dashboard = RenderingPerformance.makeDashboard(from: metrics, captureEnabled: true)
+
+        XCTAssertTrue(dashboard.isCaptureEnabled)
+        XCTAssertEqual(dashboard.latestSelectedToolID, ToolID.aiChat.rawValue)
+        XCTAssertEqual(dashboard.latestRetainedCount, 3)
+        XCTAssertEqual(dashboard.latestMountedCount, 3)
+        XCTAssertEqual(dashboard.latestHiddenMountedCount, 2)
+        XCTAssertEqual(dashboard.maxRetainedCount, 3)
+        XCTAssertEqual(dashboard.maxHiddenMountedCount, 2)
+        XCTAssertEqual(dashboard.interactionLagSampleCount, 1)
+        XCTAssertEqual(dashboard.maxInteractionLagMs, 41)
+        XCTAssertEqual(dashboard.slowToolSwitchCount, 1)
+        XCTAssertEqual(dashboard.maxToolSwitchDurationMs, 96)
+        XCTAssertEqual(dashboard.recentEntries.count, 3)
     }
 
     // MARK: - Unified History Repository Tests

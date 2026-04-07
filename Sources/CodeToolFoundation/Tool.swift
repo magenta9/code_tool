@@ -16,7 +16,7 @@ public enum ToolCategory: String, CaseIterable, Hashable {
 }
 
 /// Stable identity for bundled tools, independent of display text.
-public enum ToolID: String, CaseIterable, Codable, Hashable {
+public enum ToolID: String, CaseIterable, Codable, Hashable, Sendable {
     case jsonTool
     case imageConverter
     case jsonDiff

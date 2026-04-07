@@ -5,6 +5,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AISpeechView: View {
+    @Environment(\.toolVisibilityContext) private var toolVisibilityContext
+
     private enum SpeechStreamPhase: Equatable {
         case idle
         case buffering
@@ -33,10 +35,15 @@ public struct AISpeechView: View {
     @State private var activeGenerationReferenceID: String? = nil
     @State private var showHistory = false
     @State private var speechHistory: [SpeechHistoryRecord] = []
+    @State private var speechHistoryHasMore = false
+    @State private var historyDrawerOpenedAt: Date?
     @State private var generationTask: Task<Void, Never>? = nil
     @State private var didConfigurePlaybackController = false
     @State private var currentTime: TimeInterval = 0
     @State private var highlightedTextLine: Int? = nil
+    @State private var playbackTickSampleCount = 0
+
+    private let historyPageSize = 20
 
     private let voices: [(id: String, name: String)] = [
         ("male-qn-qingse", "青涩青年"),
@@ -113,7 +120,8 @@ public struct AISpeechView: View {
             }
 
             StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
-                loadHistory()
+                historyDrawerOpenedAt = Date()
+                loadHistory(reset: true)
                 showHistory = true
             }
 
@@ -145,12 +153,36 @@ public struct AISpeechView: View {
                     items: speechHistory,
                     onSelect: { record in restoreSpeech(record) },
                     onDelete: { record in deleteSpeechRecord(record) },
-                    onClearAll: { clearSpeechHistory() }
+                    onClearAll: { clearSpeechHistory() },
+                    toolID: .aiSpeech,
+                    openedAt: historyDrawerOpenedAt,
+                    pageSize: historyPageSize,
+                    hasMore: speechHistoryHasMore,
+                    onLoadMore: { loadHistory(reset: false) }
                 )
             }
         }
         .onAppear {
             configurePlaybackControllerIfNeeded()
+        }
+        .onChange(of: toolVisibilityContext.isVisible) { _, isVisible in
+            if isVisible {
+                currentTime = playbackController.currentTime
+            } else if isPlaying {
+                RenderingPerformance.record(
+                    .playbackTickObserved,
+                    toolID: .aiSpeech,
+                    referenceID: latestReferenceID.isEmpty ? nil : latestReferenceID,
+                    metadata: [
+                        "visibility": "hidden",
+                        "tickCount": "0",
+                        "isPlaying": String(isPlaying)
+                    ]
+                )
+            }
+        }
+        .task(id: playbackTickTaskKey) {
+            await runPlaybackTickLoop()
         }
     }
 
@@ -344,10 +376,6 @@ public struct AISpeechView: View {
                 onStop: { stopPlayback() },
                 onSeek: { time in playbackController.seek(to: time); currentTime = time }
             )
-            .onReceive(playbackTick) { _ in
-                guard isPlaying else { return }
-                currentTime = playbackController.currentTime
-            }
 
             if !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ScrollingLyricsView(
@@ -671,10 +699,19 @@ public struct AISpeechView: View {
 
     // MARK: - History
 
-    private func loadHistory() {
+    private func loadHistory(reset: Bool) {
         Task {
-            let records = (try? await HistoryStore.shared.listSpeech()) ?? []
-            await MainActor.run { speechHistory = records }
+            let offset = reset ? 0 : speechHistory.count
+            let records = (try? await HistoryStore.shared.listSpeech(limit: historyPageSize, offset: offset)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .speech)) ?? 0
+            await MainActor.run {
+                if reset {
+                    speechHistory = records
+                } else {
+                    speechHistory.append(contentsOf: records)
+                }
+                speechHistoryHasMore = offset + records.count < totalCount
+            }
         }
     }
 
@@ -735,21 +772,76 @@ public struct AISpeechView: View {
     private func deleteSpeechRecord(_ record: SpeechHistoryRecord) {
         Task {
             try? await HistoryStore.shared.deleteSpeech(id: record.id)
-            let records = (try? await HistoryStore.shared.listSpeech()) ?? []
-            await MainActor.run { speechHistory = records }
+            let records = (try? await HistoryStore.shared.listSpeech(limit: historyPageSize, offset: 0)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .speech)) ?? 0
+            await MainActor.run {
+                speechHistory = records
+                speechHistoryHasMore = records.count < totalCount
+            }
         }
     }
 
     private func clearSpeechHistory() {
         Task {
             try? await HistoryStore.shared.clear(category: .speech)
-            await MainActor.run { speechHistory = [] }
+            await MainActor.run {
+                speechHistory = []
+                speechHistoryHasMore = false
+            }
         }
     }
+
+    private var playbackTickTaskKey: String {
+        "\(toolVisibilityContext.isVisible)-\(isPlaying)"
+    }
+
+    private var shouldRunPlaybackTick: Bool {
+        toolVisibilityContext.isVisible && isPlaying
+    }
+
+    @MainActor
+    private func runPlaybackTickLoop() async {
+        guard shouldRunPlaybackTick else {
+            return
+        }
+
+        playbackTickSampleCount = 0
+
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                break
+            }
+
+            guard !Task.isCancelled else {
+                break
+            }
+
+            guard shouldRunPlaybackTick else {
+                break
+            }
+
+            currentTime = playbackController.currentTime
+            playbackTickSampleCount += 1
+
+            if playbackTickSampleCount >= 10 {
+                RenderingPerformance.record(
+                    .playbackTickObserved,
+                    toolID: .aiSpeech,
+                    referenceID: latestReferenceID.isEmpty ? nil : latestReferenceID,
+                    metadata: [
+                        "visibility": "visible",
+                        "tickCount": String(playbackTickSampleCount),
+                        "isPlaying": String(isPlaying)
+                    ]
+                )
+                playbackTickSampleCount = 0
+            }
+        }
+    }
+
 }
-
-// MARK: - Preview
-
 #if DEBUG
     struct AISpeechView_Previews: PreviewProvider {
         static var previews: some View {

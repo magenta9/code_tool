@@ -3,28 +3,20 @@ import SwiftUI
 // MARK: - ScrollingLyricsView
 
 public struct ScrollingLyricsView: View {
+    @Environment(\.toolUIActivity) private var toolUIActivity
+
     let text: String
     let title: String?
     @Binding var highlightedLine: Int?
 
     @State private var hoveredLine: Int? = nil
+    @State private var lines: [LyricLine]
 
     public init(text: String, title: String? = nil, highlightedLine: Binding<Int?>) {
         self.text = text
         self.title = title
         self._highlightedLine = highlightedLine
-    }
-
-    private var lines: [LyricLine] {
-        let rawLines = text.components(separatedBy: .newlines)
-        return rawLines.enumerated().map { index, content in
-            LyricLine(
-                id: index,
-                text: content,
-                isSectionTag: Self.isSectionTag(content),
-                isEmpty: content.trimmingCharacters(in: .whitespaces).isEmpty
-            )
-        }
+        self._lines = State(initialValue: Self.buildLines(from: text))
     }
 
     private static func isSectionTag(_ text: String) -> Bool {
@@ -32,6 +24,17 @@ public struct ScrollingLyricsView: View {
         guard trimmed.hasPrefix("[") && trimmed.hasSuffix("]") else { return false }
         let inner = trimmed.dropFirst().dropLast().trimmingCharacters(in: .whitespaces)
         return !inner.isEmpty
+    }
+
+    private static func buildLines(from text: String) -> [LyricLine] {
+        text.components(separatedBy: .newlines).enumerated().map { index, content in
+            LyricLine(
+                id: index,
+                text: content,
+                isSectionTag: isSectionTag(content),
+                isEmpty: content.trimmingCharacters(in: .whitespaces).isEmpty
+            )
+        }
     }
 
     public var body: some View {
@@ -72,6 +75,14 @@ public struct ScrollingLyricsView: View {
                 .strokeBorder(AppTheme.border, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.14), radius: 18, y: 10)
+        .task(id: text) {
+            lines = Self.buildLines(from: text)
+        }
+        .onChange(of: toolUIActivity.isVisible) { _, isVisible in
+            if !isVisible {
+                hoveredLine = nil
+            }
+        }
     }
 
     // MARK: - Line Row
@@ -142,6 +153,11 @@ public struct ScrollingLyricsView: View {
             }
         }
         .onHover { h in
+            guard toolUIActivity.allowsInteractiveEffects else {
+                hoveredLine = nil
+                return
+            }
+
             withAnimation(AppTheme.Anim.hover) { hoveredLine = h ? line.id : nil }
         }
     }

@@ -4,6 +4,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AIImageView: View {
+    @Environment(\.toolVisibilityContext) private var toolVisibilityContext
+
     private enum GenerationMode: String, CaseIterable {
         case textOnly
         case referenceGuided
@@ -105,12 +107,15 @@ public struct AIImageView: View {
     @State private var latestReferenceID = ""
     @State private var showHistory = false
     @State private var imageHistory: [ImageHistoryRecord] = []
+    @State private var imageHistoryHasMore = false
+    @State private var historyDrawerOpenedAt: Date?
     @State private var referenceImages: [AIImageReferenceItem] = []
     @State private var selectedReferenceImageID: UUID?
     @State private var selectedOutputIndex = 0
     @State private var isReferenceDropTargeted = false
 
     private let aspectRatios = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"]
+    private let historyPageSize = 20
 
     public init() {}
 
@@ -138,7 +143,8 @@ public struct AIImageView: View {
             .disabled(promptText.isEmpty && generatedImages.isEmpty && referenceImages.isEmpty && errorMessage.isEmpty && warningMessage.isEmpty)
 
             StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
-                loadHistory()
+                historyDrawerOpenedAt = Date()
+                loadHistory(reset: true)
                 showHistory = true
             }
         } content: {
@@ -190,7 +196,12 @@ public struct AIImageView: View {
                     items: imageHistory,
                     onSelect: { record in restoreImage(record) },
                     onDelete: { record in deleteImageRecord(record) },
-                    onClearAll: { clearImageHistory() }
+                    onClearAll: { clearImageHistory() },
+                    toolID: .aiImage,
+                    openedAt: historyDrawerOpenedAt,
+                    pageSize: historyPageSize,
+                    hasMore: imageHistoryHasMore,
+                    onLoadMore: { loadHistory(reset: false) }
                 )
             }
         }
@@ -1270,14 +1281,26 @@ public struct AIImageView: View {
 
     // MARK: - History
 
-    private func loadHistory() {
+    private func loadHistory(reset: Bool) {
         Task {
-            let records = (try? await HistoryStore.shared.listImage()) ?? []
-            await MainActor.run { imageHistory = records }
+            let offset = reset ? 0 : imageHistory.count
+            let records = (try? await HistoryStore.shared.listImage(limit: historyPageSize, offset: offset)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .image)) ?? 0
+            await MainActor.run {
+                if reset {
+                    imageHistory = records
+                } else {
+                    imageHistory.append(contentsOf: records)
+                }
+                imageHistoryHasMore = offset + records.count < totalCount
+            }
         }
     }
 
     private func restoreImage(_ record: ImageHistoryRecord) {
+        let restoreStartedAt = Date()
+        let shouldApplyIncrementalUpdates = toolVisibilityContext.isVisible || !toolVisibilityContext.isPausedWhileHidden
+
         promptText = record.prompt
         aspectRatio = record.aspectRatio ?? "1:1"
         customWidthText = record.width.map(String.init) ?? customWidthText
@@ -1290,12 +1313,38 @@ public struct AIImageView: View {
         latestReferenceID = record.referenceID
         errorMessage = ""
         warningMessage = ""
+        referenceImages = []
+        selectedReferenceImageID = nil
+        generatedImages = []
+        selectedOutputIndex = 0
 
         Task {
             var restoredReferenceImages: [AIImageReferenceItem] = []
             var restoredOutputs: [NSImage] = []
             var missingReferenceCount = 0
             var missingOutputCount = 0
+            var didReportFirstPreview = false
+
+            func reportFirstPreviewIfNeeded() {
+                guard !didReportFirstPreview,
+                      !restoredReferenceImages.isEmpty || !restoredOutputs.isEmpty
+                else {
+                    return
+                }
+
+                didReportFirstPreview = true
+                RenderingPerformance.record(
+                    .imageRestoreFirstPreviewReady,
+                    toolID: .aiImage,
+                    referenceID: record.referenceID,
+                    durationMs: max(0, Int(Date().timeIntervalSince(restoreStartedAt) * 1000)),
+                    metadata: [
+                        "referenceCount": String(restoredReferenceImages.count),
+                        "outputCount": String(restoredOutputs.count),
+                        "incremental": String(shouldApplyIncrementalUpdates)
+                    ]
+                )
+            }
 
             for referenceRecord in record.referenceImages {
                 guard let data = try? await HistoryStore.shared.loadData(category: .image, fileName: referenceRecord.fileName),
@@ -1314,12 +1363,31 @@ public struct AIImageView: View {
                         sizeBytes: referenceRecord.sizeBytes
                     )
                 )
+
+                reportFirstPreviewIfNeeded()
+
+                if shouldApplyIncrementalUpdates {
+                    let snapshot = restoredReferenceImages
+                    await MainActor.run {
+                        referenceImages = snapshot
+                        selectedReferenceImageID = snapshot.first?.id
+                    }
+                }
             }
 
             for fileName in record.outputImageFileNames {
                 if let data = try? await HistoryStore.shared.loadData(category: .image, fileName: fileName),
                    let image = NSImage(data: data) {
                     restoredOutputs.append(image)
+                    reportFirstPreviewIfNeeded()
+
+                    if shouldApplyIncrementalUpdates {
+                        let snapshot = restoredOutputs
+                        await MainActor.run {
+                            generatedImages = snapshot
+                            selectedOutputIndex = 0
+                        }
+                    }
                 } else {
                     missingOutputCount += 1
                 }
@@ -1339,6 +1407,20 @@ public struct AIImageView: View {
                     warningMessage = restoreWarnings
                 }
             }
+
+            RenderingPerformance.record(
+                .imageRestoreCompleted,
+                toolID: .aiImage,
+                referenceID: record.referenceID,
+                durationMs: max(0, Int(Date().timeIntervalSince(restoreStartedAt) * 1000)),
+                metadata: [
+                    "referenceCount": String(restoredReferenceImages.count),
+                    "outputCount": String(restoredOutputs.count),
+                    "missingReferenceCount": String(missingReferenceCount),
+                    "missingOutputCount": String(missingOutputCount),
+                    "incremental": String(shouldApplyIncrementalUpdates)
+                ]
+            )
         }
     }
 
@@ -1363,15 +1445,22 @@ public struct AIImageView: View {
     private func deleteImageRecord(_ record: ImageHistoryRecord) {
         Task {
             try? await HistoryStore.shared.deleteImage(id: record.id)
-            let records = (try? await HistoryStore.shared.listImage()) ?? []
-            await MainActor.run { imageHistory = records }
+            let records = (try? await HistoryStore.shared.listImage(limit: historyPageSize, offset: 0)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .image)) ?? 0
+            await MainActor.run {
+                imageHistory = records
+                imageHistoryHasMore = records.count < totalCount
+            }
         }
     }
 
     private func clearImageHistory() {
         Task {
             try? await HistoryStore.shared.clear(category: .image)
-            await MainActor.run { imageHistory = [] }
+            await MainActor.run {
+                imageHistory = []
+                imageHistoryHasMore = false
+            }
         }
     }
 }

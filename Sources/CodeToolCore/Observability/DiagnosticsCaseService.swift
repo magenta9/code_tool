@@ -266,4 +266,9 @@ public actor DiagnosticsCaseService: DiagnosticsCaseServicing {
     func recentSummary(issuesLimit: Int = 12, metricsLimit: Int = 6) async throws -> DiagnosticsEventStoreData {
         try await eventStore.caseData(referenceID: nil, issuesLimit: issuesLimit, metricsLimit: metricsLimit)
     }
+
+    func recentRenderingPerformance(limit: Int = 40) async throws -> RenderingPerformanceDashboard {
+        let storeData = try await eventStore.caseData(referenceID: nil, issuesLimit: 0, metricsLimit: limit)
+        return RenderingPerformance.makeDashboard(from: storeData.metricSummaries)
+    }
 }

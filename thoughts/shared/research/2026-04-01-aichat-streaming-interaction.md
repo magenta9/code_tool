@@ -277,7 +277,7 @@ var arguments = [
 
 ### 5. 仓库中仍然保留旧的 MiniMax 流式实现
 
-旧版 `AIChatView` 仍然存在，且它本身也是流式实现：
+旧版 `AIChatView` 在研究时仍然存在，且它本身也是流式实现；当前仓库已删除该 UI 文件，这里仅保留历史分析背景：
 
 - `Sources/CodeToolCore/AIChatView.swift:307-386`
 
@@ -378,7 +378,7 @@ var arguments = [
 
 旧的 MiniMax 架构仍保留在仓库中：
 
-`AIChatView` → `MiniMaxAPIClient.chatCompletionStream()`
+历史路径：`AIChatView` → `MiniMaxAPIClient.chatCompletionStream()`
 
 但目前不在主路由上。
 

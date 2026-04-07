@@ -797,26 +797,26 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
     // MARK: - Query
 
     /// List all records for a category, newest first.
-    public func listChat() throws -> [ChatHistoryRecord] {
-        try loadRecords(category: .chat)
+    public func listChat(limit: Int? = nil, offset: Int = 0) throws -> [ChatHistoryRecord] {
+        try loadRecords(category: .chat, limit: limit, offset: offset)
     }
 
-    public func listSpeech() throws -> [SpeechHistoryRecord] {
-        try loadRecords(category: .speech)
+    public func listSpeech(limit: Int? = nil, offset: Int = 0) throws -> [SpeechHistoryRecord] {
+        try loadRecords(category: .speech, limit: limit, offset: offset)
     }
 
-    public func listImage() throws -> [ImageHistoryRecord] {
-        try loadRecords(category: .image)
+    public func listImage(limit: Int? = nil, offset: Int = 0) throws -> [ImageHistoryRecord] {
+        try loadRecords(category: .image, limit: limit, offset: offset)
     }
 
-    public func listMusic() throws -> [MusicHistoryRecord] {
-        try loadRecords(category: .music)
+    public func listMusic(limit: Int? = nil, offset: Int = 0) throws -> [MusicHistoryRecord] {
+        try loadRecords(category: .music, limit: limit, offset: offset)
     }
 
     // MARK: - Dev Tool List
 
-    public func listClaudeChat() throws -> [ClaudeChatHistoryRecord] {
-        try loadRecords(category: .claudeChat)
+    public func listClaudeChat(limit: Int? = nil, offset: Int = 0) throws -> [ClaudeChatHistoryRecord] {
+        try loadRecords(category: .claudeChat, limit: limit, offset: offset)
     }
 
     public func listJSONTool() throws -> [JSONToolHistoryRecord] {
@@ -843,13 +843,16 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         try loadRecords(category: .wordCloud)
     }
 
-    private func loadRecords<T: HistoryRecord>(category: HistoryCategory) throws -> [T] {
-        let dir = try categoryURL(category)
-        let urls = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "json" }
+    private func loadRecords<T: HistoryRecord>(
+        category: HistoryCategory,
+        limit: Int? = nil,
+        offset: Int = 0
+    ) throws -> [T] {
+        let urls = try sortedRecordURLs(category: category)
+        let pagedURLs = Array(urls.dropFirst(offset).prefix(limit ?? Int.max))
 
         var records: [T] = []
-        for url in urls {
+        for url in pagedURLs {
             do {
                 let data = try Data(contentsOf: url)
                 let record = try decoder.decode(T.self, from: data)
@@ -861,6 +864,27 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         }
 
         return records.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private func sortedRecordURLs(category: HistoryCategory) throws -> [URL] {
+        let dir = try categoryURL(category)
+        let urls = try fileManager.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        )
+        .filter { $0.pathExtension == "json" }
+
+        return urls.sorted { lhs, rhs in
+            let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+
+            if lhsDate == rhsDate {
+                return lhs.lastPathComponent > rhs.lastPathComponent
+            }
+
+            return lhsDate > rhsDate
+        }
     }
 
     /// Load binary data (audio / image) for a given category and filename.

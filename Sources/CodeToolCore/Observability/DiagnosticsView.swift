@@ -7,8 +7,12 @@ import SwiftUI
 #endif
 
 public struct DiagnosticsView: View {
+    @AppStorage(RenderingPerformance.captureEnabledDefaultsKey)
+    private var isPerformanceCaptureEnabled = RenderingPerformance.defaultCaptureEnabled
+
     @State private var recentIssues: [AppLogEntry] = []
     @State private var recentMetrics: [DiagnosticsMetricSummary] = []
+    @State private var renderingPerformance = RenderingPerformance.makeDashboard(from: [])
     @State private var relatedEvents: [AppLogEntry] = []
     @State private var historyMatches: [DiagnosticsHistoryMatch] = []
     @State private var traceSummary: DiagnosticsTraceSummary?
@@ -47,6 +51,7 @@ public struct DiagnosticsView: View {
 
                     searchPanel
                     recentIssuesPanel
+                    renderingPerformancePanel
                     detailPanels
                     recentMetricsPanel
                 }
@@ -56,6 +61,11 @@ public struct DiagnosticsView: View {
             }
         }
         .onAppear {
+            RenderingPerformance.configureCaptureIfNeeded()
+            reload()
+        }
+        .onChange(of: isPerformanceCaptureEnabled) { _, isEnabled in
+            RenderingPerformance.setCaptureEnabled(isEnabled)
             reload()
         }
     }
@@ -171,6 +181,97 @@ public struct DiagnosticsView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled((entry.referenceID ?? "").isEmpty)
+                    }
+                }
+            }
+        }
+    }
+
+    private var renderingPerformancePanel: some View {
+        StyledPanel(title: "Rendering Performance") {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                Toggle("Capture rendering performance samples", isOn: $isPerformanceCaptureEnabled)
+                    .toggleStyle(.switch)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+
+                Text("Stores tool-cache snapshots, switch timings, and main-thread interaction lag samples in local diagnostics so repeated page switching can be traced after the fact.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                HStack(spacing: AppTheme.Spacing.md) {
+                    metricPill(
+                        title: "Retained",
+                        value: renderingPerformance.latestRetainedCount.map(String.init) ?? "-",
+                        tint: AppTheme.accent
+                    )
+                    metricPill(
+                        title: "Hidden Mounted",
+                        value: renderingPerformance.latestHiddenMountedCount.map(String.init) ?? "-",
+                        tint: AppTheme.warning
+                    )
+                    metricPill(
+                        title: "Lag Samples",
+                        value: String(renderingPerformance.interactionLagSampleCount),
+                        tint: AppTheme.error
+                    )
+                    metricPill(
+                        title: "Slow Switches",
+                        value: String(renderingPerformance.slowToolSwitchCount),
+                        tint: AppTheme.success
+                    )
+                }
+
+                let selectedLabel = renderingPerformance.latestSelectedToolID ?? "none"
+                let mountedLabel = renderingPerformance.latestMountedCount.map(String.init) ?? "-"
+                let maxLagLabel = renderingPerformance.maxInteractionLagMs.map(String.init) ?? "-"
+                let maxSwitchLabel = renderingPerformance.maxToolSwitchDurationMs.map(String.init) ?? "-"
+
+                Text(
+                    [
+                        "selected=\(selectedLabel)",
+                        "mounted=\(mountedLabel)",
+                        "maxRetained=\(renderingPerformance.maxRetainedCount)",
+                        "maxHiddenMounted=\(renderingPerformance.maxHiddenMountedCount)",
+                        "maxLagMs=\(maxLagLabel)",
+                        "maxSwitchMs=\(maxSwitchLabel)"
+                    ].joined(separator: " · ")
+                )
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(AppTheme.textMuted)
+
+                if renderingPerformance.recentEntries.isEmpty {
+                    Text(
+                        renderingPerformance.isCaptureEnabled
+                            ? "No rendering performance samples captured yet. Reproduce the lag once, then refresh this page."
+                            : "Capture is currently off. Turn it on, reproduce the lag, then refresh this page."
+                    )
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+                } else {
+                    ForEach(renderingPerformance.recentEntries) { metric in
+                        VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+                            HStack {
+                                Text(metric.metadata["event"] ?? metric.kind)
+                                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                Spacer()
+                                Text(Self.absoluteDateLabel(for: metric.createdAt))
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(AppTheme.textMuted)
+                            }
+
+                            Text(metric.metadata.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: " · "))
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(AppTheme.Spacing.md)
+                        .background(AppTheme.surface.opacity(0.82))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                                .strokeBorder(AppTheme.border, lineWidth: 1)
+                        )
                     }
                 }
             }
@@ -301,7 +402,7 @@ public struct DiagnosticsView: View {
         StyledPanel(title: "Recent Metric Summaries") {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                 if recentMetrics.isEmpty {
-                    Text("No MetricKit payload summaries were captured yet.")
+                    Text("No metric summaries were captured yet.")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.textMuted)
                 } else {
@@ -338,10 +439,12 @@ public struct DiagnosticsView: View {
     private func reload() {
         Task {
             let summary = try? await DiagnosticsCaseService.shared.recentSummary(issuesLimit: 12, metricsLimit: 6)
+            let performance = try? await DiagnosticsCaseService.shared.recentRenderingPerformance(limit: 40)
 
             await MainActor.run {
                 recentIssues = summary?.recentIssues ?? []
                 recentMetrics = summary?.metricSummaries ?? []
+                renderingPerformance = performance ?? RenderingPerformance.makeDashboard(from: [])
                 bannerMessage = "Diagnostics index refreshed."
             }
 
@@ -419,6 +522,25 @@ public struct DiagnosticsView: View {
         formatter.dateStyle = .short
         formatter.timeStyle = .medium
         return formatter.string(from: date)
+    }
+
+    private func metricPill(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xxs) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
+            Text(value)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AppTheme.Spacing.md)
+        .background(AppTheme.surface.opacity(0.82))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
+        )
     }
 }
 

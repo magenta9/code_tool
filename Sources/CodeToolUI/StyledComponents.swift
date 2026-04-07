@@ -154,7 +154,7 @@ public struct StyledButton: View {
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.01 : 1.0)
-        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
+        .toolHoverTracking($isHovered)
     }
 
     private var foregroundColor: Color {
@@ -233,7 +233,7 @@ public struct StyledIconButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
-        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
+        .toolHoverTracking($isHovered)
     }
 }
 
@@ -300,7 +300,7 @@ public struct HoverCopyOverlay: ViewModifier {
                                 with: .scale(scale: 0.9, anchor: .bottomTrailing)))
                 }
             }
-            .onHover { isHovered = $0 }
+            .toolHoverTracking($isHovered, animation: nil)
             .animation(AppTheme.Anim.fast, value: isHovered)
     }
 }

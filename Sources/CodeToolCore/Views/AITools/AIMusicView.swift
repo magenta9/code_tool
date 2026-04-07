@@ -6,6 +6,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct AIMusicView: View {
+    @Environment(\.toolVisibilityContext) private var toolVisibilityContext
 
     private var settings = MiniMaxSettingsStore.shared
 
@@ -25,6 +26,11 @@ public struct AIMusicView: View {
     @State private var latestReferenceID: String = ""
     @State private var showHistory = false
     @State private var musicHistory: [MusicHistoryRecord] = []
+    @State private var musicHistoryHasMore = false
+    @State private var historyDrawerOpenedAt: Date?
+    @State private var playbackTickSampleCount = 0
+
+    private let historyPageSize = 20
 
     public init() {}
 
@@ -76,7 +82,8 @@ public struct AIMusicView: View {
             }
 
             StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
-                loadHistory()
+                historyDrawerOpenedAt = Date()
+                loadHistory(reset: true)
                 showHistory = true
             }
         } content: {
@@ -98,9 +105,33 @@ public struct AIMusicView: View {
                     items: musicHistory,
                     onSelect: { record in restoreMusic(record) },
                     onDelete: { record in deleteMusicRecord(record) },
-                    onClearAll: { clearMusicHistory() }
+                    onClearAll: { clearMusicHistory() },
+                    toolID: .aiMusic,
+                    openedAt: historyDrawerOpenedAt,
+                    pageSize: historyPageSize,
+                    hasMore: musicHistoryHasMore,
+                    onLoadMore: { loadHistory(reset: false) }
                 )
             }
+        }
+        .onChange(of: toolVisibilityContext.isVisible) { _, isVisible in
+            if isVisible {
+                currentTime = audioPlayer?.currentTime ?? 0
+            } else if isPlaying {
+                RenderingPerformance.record(
+                    .playbackTickObserved,
+                    toolID: .aiMusic,
+                    referenceID: latestReferenceID.isEmpty ? nil : latestReferenceID,
+                    metadata: [
+                        "visibility": "hidden",
+                        "tickCount": "0",
+                        "isPlaying": String(isPlaying)
+                    ]
+                )
+            }
+        }
+        .task(id: playbackTickTaskKey) {
+            await runPlaybackTickLoop()
         }
     }
 
@@ -277,14 +308,6 @@ public struct AIMusicView: View {
                 onStop: { stopPlayback() },
                 onSeek: { time in seekTo(time) }
             )
-            .onReceive(playbackTick) { _ in
-                guard isPlaying, let player = audioPlayer else { return }
-                currentTime = player.currentTime
-                if !player.isPlaying {
-                    isPlaying = false
-                    currentTime = 0
-                }
-            }
 
             if !lyricsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 ScrollingLyricsView(
@@ -297,7 +320,61 @@ public struct AIMusicView: View {
         }
     }
 
-    private let playbackTick = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+    private var playbackTickTaskKey: String {
+        "\(toolVisibilityContext.isVisible)-\(isPlaying)"
+    }
+
+    private var shouldRunPlaybackTick: Bool {
+        toolVisibilityContext.isVisible && isPlaying
+    }
+
+    @MainActor
+    private func runPlaybackTickLoop() async {
+        guard shouldRunPlaybackTick else {
+            return
+        }
+
+        playbackTickSampleCount = 0
+
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                break
+            }
+
+            guard !Task.isCancelled else {
+                break
+            }
+
+            guard shouldRunPlaybackTick, let player = audioPlayer else {
+                break
+            }
+
+            currentTime = player.currentTime
+            playbackTickSampleCount += 1
+
+            if !player.isPlaying {
+                isPlaying = false
+                currentTime = 0
+                break
+            }
+
+            if playbackTickSampleCount >= 10 {
+                RenderingPerformance.record(
+                    .playbackTickObserved,
+                    toolID: .aiMusic,
+                    referenceID: latestReferenceID.isEmpty ? nil : latestReferenceID,
+                    metadata: [
+                        "visibility": "visible",
+                        "tickCount": String(playbackTickSampleCount),
+                        "isPlaying": String(isPlaying)
+                    ]
+                )
+                playbackTickSampleCount = 0
+            }
+        }
+    }
 
     // MARK: - Empty State
 
@@ -491,10 +568,19 @@ public struct AIMusicView: View {
 
     // MARK: - History
 
-    private func loadHistory() {
+    private func loadHistory(reset: Bool) {
         Task {
-            let records = (try? await HistoryStore.shared.listMusic()) ?? []
-            await MainActor.run { musicHistory = records }
+            let offset = reset ? 0 : musicHistory.count
+            let records = (try? await HistoryStore.shared.listMusic(limit: historyPageSize, offset: offset)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .music)) ?? 0
+            await MainActor.run {
+                if reset {
+                    musicHistory = records
+                } else {
+                    musicHistory.append(contentsOf: records)
+                }
+                musicHistoryHasMore = offset + records.count < totalCount
+            }
         }
     }
 
@@ -532,15 +618,22 @@ public struct AIMusicView: View {
     private func deleteMusicRecord(_ record: MusicHistoryRecord) {
         Task {
             try? await HistoryStore.shared.deleteMusic(id: record.id)
-            let records = (try? await HistoryStore.shared.listMusic()) ?? []
-            await MainActor.run { musicHistory = records }
+            let records = (try? await HistoryStore.shared.listMusic(limit: historyPageSize, offset: 0)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .music)) ?? 0
+            await MainActor.run {
+                musicHistory = records
+                musicHistoryHasMore = records.count < totalCount
+            }
         }
     }
 
     private func clearMusicHistory() {
         Task {
             try? await HistoryStore.shared.clear(category: .music)
-            await MainActor.run { musicHistory = [] }
+            await MainActor.run {
+                musicHistory = []
+                musicHistoryHasMore = false
+            }
         }
     }
 }

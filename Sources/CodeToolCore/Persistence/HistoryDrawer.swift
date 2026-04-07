@@ -1,3 +1,4 @@
+import CodeToolFoundation
 import CodeToolUI
 import SwiftUI
 
@@ -167,15 +168,23 @@ extension WordCloudHistoryRecord: HistoryDrawerItem {
 // MARK: - HistoryDrawer
 
 public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
+    @Environment(\.toolUIActivity) private var toolUIActivity
+
     @Binding var isPresented: Bool
     let title: String
     let items: [Item]
     let onSelect: (Item) -> Void
     let onDelete: (Item) -> Void
     let onClearAll: () -> Void
+    let toolID: ToolID?
+    let openedAt: Date?
+    let pageSize: Int
+    let hasMore: Bool
+    let onLoadMore: (() -> Void)?
 
     @State private var hoveredItemID: UUID?
     @State private var appeared = false
+    @State private var didReportOpen = false
 
     public init(
         isPresented: Binding<Bool>,
@@ -183,7 +192,12 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
         items: [Item],
         onSelect: @escaping (Item) -> Void,
         onDelete: @escaping (Item) -> Void,
-        onClearAll: @escaping () -> Void
+        onClearAll: @escaping () -> Void,
+        toolID: ToolID? = nil,
+        openedAt: Date? = nil,
+        pageSize: Int = 20,
+        hasMore: Bool = false,
+        onLoadMore: (() -> Void)? = nil
     ) {
         self._isPresented = isPresented
         self.title = title
@@ -191,6 +205,11 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
         self.onSelect = onSelect
         self.onDelete = onDelete
         self.onClearAll = onClearAll
+        self.toolID = toolID
+        self.openedAt = openedAt
+        self.pageSize = pageSize
+        self.hasMore = hasMore
+        self.onLoadMore = onLoadMore
     }
 
     public var body: some View {
@@ -208,7 +227,18 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
                 .offset(x: appeared ? 0 : 380)
         }
         .animation(.spring(duration: 0.38, bounce: 0.14), value: appeared)
-        .onAppear { appeared = true }
+        .onAppear {
+            appeared = true
+            reportDrawerOpenedIfNeeded()
+        }
+        .onChange(of: items.count) {
+            reportDrawerOpenedIfNeeded()
+        }
+        .onChange(of: toolUIActivity.isVisible) { _, isVisible in
+            if !isVisible {
+                hoveredItemID = nil
+            }
+        }
     }
 
     // MARK: - Drawer Content
@@ -254,6 +284,26 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                             historyCard(item: item, index: index, isLast: index == items.count - 1)
+                        }
+
+                        if hasMore, let onLoadMore {
+                            Button {
+                                onLoadMore()
+                            } label: {
+                                HStack(spacing: AppTheme.Spacing.xs) {
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Text("Load More")
+                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                }
+                                .foregroundStyle(AppTheme.accent)
+                                .padding(.horizontal, AppTheme.Spacing.md)
+                                .padding(.vertical, AppTheme.Spacing.sm)
+                                .background(AppTheme.accent.opacity(0.10))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, AppTheme.Spacing.md)
                         }
                     }
                     .padding(.vertical, AppTheme.Spacing.md)
@@ -372,6 +422,11 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
         )
         .animation(AppTheme.Anim.hover, value: hoveredItemID)
         .onHover { hovering in
+            guard toolUIActivity.allowsInteractiveEffects else {
+                hoveredItemID = nil
+                return
+            }
+
             hoveredItemID = hovering ? item.id : nil
         }
     }
@@ -406,5 +461,23 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
 
     private func relativeTimeString(_ date: Date) -> String {
         HistoryDrawerFormatterCache.relativeTime.localizedString(for: date, relativeTo: Date())
+    }
+
+    private func reportDrawerOpenedIfNeeded() {
+        guard !didReportOpen, let openedAt, !items.isEmpty else {
+            return
+        }
+
+        didReportOpen = true
+        RenderingPerformance.record(
+            .historyDrawerOpened,
+            toolID: toolID,
+            durationMs: max(0, Int(Date().timeIntervalSince(openedAt) * 1000)),
+            metadata: [
+                "itemCount": String(items.count),
+                "pageSize": String(pageSize),
+                "hasMore": String(hasMore)
+            ]
+        )
     }
 }

@@ -78,31 +78,83 @@ public struct ContentView: View {
         .onAppear {
             ClaudeCLISettingsStore.shared.discoverCLI()
             ObservabilitySystem.shared.rootViewReady()
+            RenderingPerformance.configureCaptureIfNeeded()
             retainedToolIDs = ToolViewCache.retainedToolIDs(
                 current: retainedToolIDs,
                 selectedToolID: selectedTool?.toolID
             )
+            RenderingPerformance.toolCacheSnapshot(
+                selectedToolID: selectedTool?.toolID,
+                retainedToolIDs: retainedToolIDs
+            )
         }
-        .onChange(of: selectedTool?.toolID) { _, selectedToolID in
+        .onChange(of: selectedTool?.toolID) { previousToolID, selectedToolID in
+            let existingRetainedIDs = retainedToolIDs
+            let cacheHit = selectedToolID.map(existingRetainedIDs.contains) ?? false
+            let startedAt = Date()
+
+            RenderingPerformance.toolSwitchStarted(
+                from: previousToolID,
+                to: selectedToolID,
+                retainedCount: existingRetainedIDs.count,
+                cacheHit: cacheHit
+            )
+
+            if let previousToolID {
+                RenderingPerformance.toolVisibilityChanged(
+                    toolID: previousToolID,
+                    isVisible: false,
+                    policy: ToolVisibilityPolicyRegistry.policy(for: previousToolID),
+                    retained: existingRetainedIDs.contains(previousToolID)
+                )
+            }
+
+            if let selectedToolID {
+                RenderingPerformance.toolVisibilityChanged(
+                    toolID: selectedToolID,
+                    isVisible: true,
+                    policy: ToolVisibilityPolicyRegistry.policy(for: selectedToolID),
+                    retained: true
+                )
+            }
+
             retainedToolIDs = ToolViewCache.retainedToolIDs(
                 current: retainedToolIDs,
                 selectedToolID: selectedToolID
             )
+            RenderingPerformance.toolCacheSnapshot(
+                selectedToolID: selectedToolID,
+                retainedToolIDs: retainedToolIDs
+            )
+
+            DispatchQueue.main.async {
+                RenderingPerformance.toolSwitchFinished(
+                    from: previousToolID,
+                    to: selectedToolID,
+                    retainedCount: retainedToolIDs.count,
+                    durationMs: max(0, Int(Date().timeIntervalSince(startedAt) * 1000))
+                )
+            }
         }
     }
 }
 
 enum ToolViewCache {
+    static let maximumRetainedToolCount = 3
+
     static func retainedToolIDs(current: [ToolID], selectedToolID: ToolID?) -> [ToolID] {
         guard let selectedToolID else {
             return current
         }
 
-        guard !current.contains(selectedToolID) else {
-            return current
+        var updated = current.filter { $0 != selectedToolID }
+        updated.append(selectedToolID)
+
+        while updated.count > maximumRetainedToolCount {
+            updated.removeFirst()
         }
 
-        return current + [selectedToolID]
+        return updated
     }
 }
 
@@ -492,23 +544,56 @@ private struct ToolDetailCacheView: View {
 
     var body: some View {
         ZStack {
-            WelcomeView(tools: tools, selectedTool: $selectedTool)
-                .opacity(selectedTool == nil ? 1 : 0)
-                .allowsHitTesting(selectedTool == nil)
+            if selectedTool == nil {
+                WelcomeView(tools: tools, selectedTool: $selectedTool)
+            }
 
             ForEach(cachedTools) { tool in
+                let visibilityContext = visibilityState.context(for: tool.toolID)
+                let isSelected = selectedTool == tool
+
                 ToolDetailView(tool: tool)
-                    .environment(\.isToolVisible, visibilityState.isVisible(toolID: tool.toolID))
-                    .opacity(selectedTool == tool ? 1 : 0)
-                    .allowsHitTesting(selectedTool == tool)
+                    .environment(\.toolVisibilityContext, visibilityContext)
+                    .environment(
+                        \.toolUIActivity,
+                        ToolUIActivity(isVisible: visibilityContext.isVisible)
+                    )
+                    .modifier(CachedToolPresentationModifier(isVisible: isSelected))
             }
         }
     }
 
     private var cachedTools: [Tool] {
         retainedToolIDs.compactMap { retainedID in
-            tools.first { $0.toolID == retainedID }
+            guard let tool = tools.first(where: { $0.toolID == retainedID }) else {
+                return nil
+            }
+
+            let context = visibilityState.context(for: tool.toolID)
+            if context.shouldUnloadWhenHidden {
+                return nil
+            }
+
+            return tool
         }
+    }
+}
+
+private struct CachedToolPresentationModifier: ViewModifier {
+    let isVisible: Bool
+
+    func body(content: Content) -> some View {
+        Group {
+            if isVisible {
+                content
+            } else {
+                content
+                    .hidden()
+            }
+        }
+        .allowsHitTesting(isVisible)
+        .accessibilityHidden(!isVisible)
+        .zIndex(isVisible ? 1 : 0)
     }
 }
 

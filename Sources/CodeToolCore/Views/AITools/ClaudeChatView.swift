@@ -4,8 +4,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct ClaudeChatView: View {
+    @Environment(\.toolVisibilityContext) private var toolVisibilityContext
     @Bindable private var settings = ClaudeCLISettingsStore.shared
     private static let defaultWorkingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
+    private static let streamingCommitIntervalNs: UInt64 = 50_000_000
 
     @State private var client = ClaudeCLIClient()
     @State private var messages: [ClaudeChatMessage] = []
@@ -26,8 +28,16 @@ public struct ClaudeChatView: View {
     @State private var toolNamesByUseID: [String: String] = [:]
     @State private var showHistory = false
     @State private var chatHistory: [ClaudeChatHistoryRecord] = []
+    @State private var chatHistoryHasMore = false
+    @State private var historyDrawerOpenedAt: Date?
     @State private var cancellationRequested = false
     @State private var workingDirectory: String = Self.defaultWorkingDirectory
+    @State private var pendingStreamingText: String = ""
+    @State private var pendingStreamingThinking: String = ""
+    @State private var streamingFlushTask: Task<Void, Never>?
+    @State private var streamingScrollRevision = 0
+
+    private let historyPageSize = 20
 
     // Stable ID for the streaming message placeholder (avoids view recreation on each delta)
     private static let streamingMessageID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
@@ -41,7 +51,7 @@ public struct ClaudeChatView: View {
     @State private var composerHasVisibleText = false
     @State private var attachmentWarning: String = ""
 
-    private let starterPrompts: [ClaudeStarterPrompt] = [
+    private static let starterPrompts: [ClaudeStarterPrompt] = [
         ClaudeStarterPrompt(
             title: "Review my latest changes",
             detail: "Inspect the current diff and surface only the risky bugs or regressions.",
@@ -75,7 +85,8 @@ public struct ClaudeChatView: View {
             statusItems: statusItems
         ) {
             StyledButton("History", systemImage: "clock.arrow.circlepath", variant: .secondary) {
-                loadHistory()
+                historyDrawerOpenedAt = Date()
+                loadHistory(reset: true)
                 showHistory = true
             }
             StyledButton("Clear Chat", systemImage: "trash", variant: .ghost) {
@@ -101,7 +112,12 @@ public struct ClaudeChatView: View {
                     items: chatHistory,
                     onSelect: { record in restoreChat(record) },
                     onDelete: { record in deleteChat(record) },
-                    onClearAll: { clearChatHistory() }
+                    onClearAll: { clearChatHistory() },
+                    toolID: .aiChat,
+                    openedAt: historyDrawerOpenedAt,
+                    pageSize: historyPageSize,
+                    hasMore: chatHistoryHasMore,
+                    onLoadMore: { loadHistory(reset: false) }
                 )
             }
         }
@@ -112,6 +128,13 @@ public struct ClaudeChatView: View {
             if currentModel.isEmpty {
                 currentModel = settings.model
             }
+        }
+        .onChange(of: toolVisibilityContext.isVisible) { _, isVisible in
+            guard isVisible else {
+                return
+            }
+
+            flushPendingStreamingBuffers(triggerScroll: true)
         }
         .background {
             // Cmd+Shift+O: New chat
@@ -210,48 +233,30 @@ public struct ClaudeChatView: View {
     }
 
     private var messageListView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
-                    if messages.isEmpty && streamingMessage == nil && !isStreaming {
-                        emptyStateView
-                    } else {
-                        conversationLeadIn
+        ClaudeConversationPane(
+            state: conversationRenderState,
+            leadIn: { conversationLeadIn },
+            emptyState: { emptyStateView },
+            messageView: { message in messageView(for: message) }
+        )
+        .equatable()
+    }
 
-                        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
-                            ForEach(messages) { message in
-                                messageView(for: message)
-                            }
-
-                            if let streamingMessage {
-                                messageView(for: streamingMessage)
-                            }
-                        }
-                    }
-
-                    Color.clear
-                        .frame(height: composerReservedSpace)
-                        .id("bottom")
-                }
-                .frame(maxWidth: messageColumnWidth)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, AppTheme.Spacing.xxl)
-                .padding(.top, AppTheme.Spacing.xl)
-                .padding(.bottom, AppTheme.Spacing.md)
-            }
-            .onChange(of: messages.count) {
-                withAnimation(AppTheme.Anim.fast) {
-                    proxy.scrollTo("bottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: streamingText) {
-                proxy.scrollTo("bottom", anchor: .bottom)
-            }
-            .onChange(of: streamingThinking) {
-                proxy.scrollTo("bottom", anchor: .bottom)
-            }
-        }
-        .frame(minHeight: 220, maxHeight: .infinity)
+    private var conversationRenderState: ClaudeConversationRenderState {
+        ClaudeConversationRenderState.make(
+            messages: messages,
+            streamingMessage: streamingMessage,
+            isStreaming: isStreaming,
+            workingDirectoryTitle: workingDirectoryTitle,
+            hasSystemPrompt: normalizedSystemPrompt != nil,
+            expandedThinkingIDs: showThinking,
+            expandedToolDetailIDs: showToolDetails,
+            composerImageCount: composerImages.count,
+            draftText: inputText,
+            hasVisibleDraftText: composerHasVisibleText,
+            isToolVisible: toolVisibilityContext.isVisible,
+            streamingScrollRevision: streamingScrollRevision
+        )
     }
 
     private var conversationLeadIn: some View {
@@ -316,7 +321,7 @@ public struct ClaudeChatView: View {
                 ],
                 spacing: AppTheme.Spacing.md
             ) {
-                ForEach(starterPrompts) { prompt in
+                ForEach(Self.starterPrompts) { prompt in
                     Button {
                         inputText = prompt.prompt
                         composerHasVisibleText = !prompt.prompt.isEmpty
@@ -422,46 +427,10 @@ public struct ClaudeChatView: View {
 
     @ViewBuilder
     private func attachmentChip(_ attachment: ClaudeChatAttachmentRecord) -> some View {
-        Group {
-            if let url = try? HistoryStore.syncClaudeChatAttachmentURL(fileName: attachment.fileName),
-               let image = NSImage(contentsOf: url) {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 86, height: 74)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
-
-                    Text(attachmentDisplayName(attachment))
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(1)
-                }
-                .padding(6)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                        .fill(AppTheme.surface.opacity(0.72))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                        .strokeBorder(AppTheme.border, lineWidth: 1)
-                )
-            } else {
-                HStack(spacing: 4) {
-                    Image(systemName: "photo")
-                        .font(.system(size: 10))
-                    Text(attachmentDisplayName(attachment))
-                        .font(.system(size: 10, design: .monospaced))
-                        .lineLimit(1)
-                }
-                .foregroundStyle(AppTheme.textMuted)
-                .padding(.horizontal, AppTheme.Spacing.sm)
-                .padding(.vertical, AppTheme.Spacing.xs)
-                .background(
-                    Capsule().fill(AppTheme.surface)
-                )
-            }
-        }
+        ClaudeAttachmentThumbnailView(
+            attachment: attachment,
+            displayName: attachmentDisplayName(attachment)
+        )
     }
 
     @ViewBuilder
@@ -680,28 +649,7 @@ public struct ClaudeChatView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppTheme.Spacing.sm) {
                         ForEach(composerImages) { img in
-                            ZStack(alignment: .topTrailing) {
-                                Image(nsImage: img.image)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 76, height: 76)
-                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                                            .strokeBorder(AppTheme.border, lineWidth: 1)
-                                    )
-
-                                Button {
-                                    composerImages.removeAll { $0.id == img.id }
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(AppTheme.textMuted)
-                                        .background(Circle().fill(AppTheme.surface))
-                                }
-                                .buttonStyle(.plain)
-                                .offset(x: 4, y: -4)
-                            }
+                            composerImagePreview(img)
                         }
                     }
                     .padding(.horizontal, AppTheme.Spacing.xs)
@@ -715,12 +663,7 @@ public struct ClaudeChatView: View {
                     hasVisibleDraftText: composerHasVisibleText,
                     hasImages: !composerImages.isEmpty
                 ) {
-                    Text("Use Claude to inspect the repo, debug an issue, or shape the next change...")
-                        .font(.system(size: AppTheme.Typography.composerInput, weight: .regular))
-                        .foregroundColor(AppTheme.textMuted)
-                        .padding(.horizontal, AppTheme.Spacing.md)
-                        .padding(.vertical, AppTheme.Spacing.sm + 2)
-                        .allowsHitTesting(false)
+                    composerPlaceholder
                 }
 
                 ClaudeChatComposer(
@@ -763,7 +706,8 @@ public struct ClaudeChatView: View {
                     .help("Choose working directory")
 
                     ClaudeComposerAccessoryButton(systemImage: "clock.arrow.circlepath") {
-                        loadHistory()
+                        historyDrawerOpenedAt = Date()
+                        loadHistory(reset: true)
                         showHistory = true
                     }
                     .help("Open chat history")
@@ -873,15 +817,18 @@ public struct ClaudeChatView: View {
     }
 
     private var streamingMessage: ClaudeChatMessage? {
-        guard !streamingText.isEmpty || !streamingThinking.isEmpty else {
+        let currentStreamingText = streamingText + pendingStreamingText
+        let currentStreamingThinking = streamingThinking + pendingStreamingThinking
+
+        guard !currentStreamingText.isEmpty || !currentStreamingThinking.isEmpty else {
             return nil
         }
 
         return ClaudeChatMessage(
             id: Self.streamingMessageID,
             role: .assistant,
-            content: streamingText,
-            thinkingContent: streamingThinking.isEmpty ? nil : streamingThinking,
+            content: currentStreamingText,
+            thinkingContent: currentStreamingThinking.isEmpty ? nil : currentStreamingThinking,
             toolName: nil,
             toolInput: nil,
             isStreaming: true
@@ -959,8 +906,11 @@ public struct ClaudeChatView: View {
         attachmentWarning = ""
         errorMessage = ""
         isStreaming = true
+        streamingFlushTask?.cancel()
         streamingText = ""
         streamingThinking = ""
+        pendingStreamingText = ""
+        pendingStreamingThinking = ""
         cancellationRequested = false
         let requestReferenceID = AppLogger.makeReferenceID()
         activeReferenceID = requestReferenceID
@@ -982,6 +932,42 @@ public struct ClaudeChatView: View {
                 }
             }
         }
+    }
+
+    private func composerImagePreview(_ image: ClaudeComposerImage) -> some View {
+        let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+
+        return ZStack(alignment: .topTrailing) {
+            Image(nsImage: image.image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 76, height: 76)
+                .clipShape(shape)
+                .overlay(
+                    shape
+                        .strokeBorder(AppTheme.border, lineWidth: 1)
+                )
+
+            Button {
+                composerImages.removeAll { $0.id == image.id }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .background(Circle().fill(AppTheme.surface))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 4, y: -4)
+        }
+    }
+
+    private var composerPlaceholder: some View {
+        Text("Use Claude to inspect the repo, debug an issue, or shape the next change...")
+            .font(.system(size: AppTheme.Typography.composerInput, weight: .regular))
+            .foregroundColor(AppTheme.textMuted)
+            .padding(.horizontal, AppTheme.Spacing.md)
+            .padding(.vertical, AppTheme.Spacing.sm + 2)
+            .allowsHitTesting(false)
     }
 
     /// Build the prompt string sent to Claude CLI, injecting image paths when present.
@@ -1015,10 +1001,12 @@ public struct ClaudeChatView: View {
             currentModel = model
 
         case .thinkingDelta(let text):
-            streamingThinking += text
+            pendingStreamingThinking += text
+            scheduleStreamingFlushIfNeeded()
 
         case .textDelta(let text):
-            streamingText += text
+            pendingStreamingText += text
+            scheduleStreamingFlushIfNeeded()
 
         case .toolUseStart(let id, let name):
             finalizeStreamingAssistantIfNeeded()
@@ -1112,13 +1100,19 @@ public struct ClaudeChatView: View {
     }
 
     private func finalizeStreamingAssistantIfNeeded() {
-        guard !streamingText.isEmpty || !streamingThinking.isEmpty else { return }
+        streamingFlushTask?.cancel()
+        streamingFlushTask = nil
+
+        let finalStreamingText = streamingText + pendingStreamingText
+        let finalStreamingThinking = streamingThinking + pendingStreamingThinking
+
+        guard !finalStreamingText.isEmpty || !finalStreamingThinking.isEmpty else { return }
 
         let message = ClaudeChatMessage(
             id: UUID(),
             role: .assistant,
-            content: streamingText,
-            thinkingContent: streamingThinking.isEmpty ? nil : streamingThinking,
+            content: finalStreamingText,
+            thinkingContent: finalStreamingThinking.isEmpty ? nil : finalStreamingThinking,
             toolName: nil,
             toolInput: nil,
             isStreaming: false
@@ -1126,6 +1120,71 @@ public struct ClaudeChatView: View {
         messages.append(message)
         streamingText = ""
         streamingThinking = ""
+        pendingStreamingText = ""
+        pendingStreamingThinking = ""
+
+        if toolVisibilityContext.isVisible {
+            streamingScrollRevision += 1
+        }
+    }
+
+    private var shouldPauseStreamingCommitsWhileHidden: Bool {
+        toolVisibilityContext.isPausedWhileHidden
+    }
+
+    private func scheduleStreamingFlushIfNeeded() {
+        guard streamingFlushTask == nil else {
+            return
+        }
+
+        guard !(shouldPauseStreamingCommitsWhileHidden && !toolVisibilityContext.isVisible) else {
+            return
+        }
+
+        streamingFlushTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: Self.streamingCommitIntervalNs)
+            } catch {
+                return
+            }
+
+            await MainActor.run {
+                flushPendingStreamingBuffers(triggerScroll: true)
+            }
+        }
+    }
+
+    @MainActor
+    private func flushPendingStreamingBuffers(triggerScroll: Bool) {
+        streamingFlushTask?.cancel()
+        streamingFlushTask = nil
+
+        guard !pendingStreamingText.isEmpty || !pendingStreamingThinking.isEmpty else {
+            return
+        }
+
+        let textDeltaLength = pendingStreamingText.count
+        let thinkingDeltaLength = pendingStreamingThinking.count
+
+        streamingText += pendingStreamingText
+        streamingThinking += pendingStreamingThinking
+        pendingStreamingText = ""
+        pendingStreamingThinking = ""
+
+        RenderingPerformance.record(
+            .claudeStreamBatchCommitted,
+            toolID: .aiChat,
+            referenceID: activeReferenceID.isEmpty ? nil : activeReferenceID,
+            metadata: [
+                "isVisible": String(toolVisibilityContext.isVisible),
+                "textDeltaLength": String(textDeltaLength),
+                "thinkingDeltaLength": String(thinkingDeltaLength)
+            ]
+        )
+
+        if triggerScroll && toolVisibilityContext.isVisible {
+            streamingScrollRevision += 1
+        }
     }
 
     private func ensureConversationRecordIdentity() {
@@ -1181,8 +1240,11 @@ public struct ClaudeChatView: View {
         inputText = ""
         composerHasVisibleText = false
         isStreaming = false
+        streamingFlushTask?.cancel()
         streamingText = ""
         streamingThinking = ""
+        pendingStreamingText = ""
+        pendingStreamingThinking = ""
         errorMessage = ""
         sessionId = ""
         currentModel = settings.model
@@ -1219,11 +1281,18 @@ public struct ClaudeChatView: View {
         composerImages.append(contentsOf: pastedImages)
     }
 
-    private func loadHistory() {
+    private func loadHistory(reset: Bool) {
         Task {
-            let records = (try? await HistoryStore.shared.listClaudeChat()) ?? []
+            let offset = reset ? 0 : chatHistory.count
+            let records = (try? await HistoryStore.shared.listClaudeChat(limit: historyPageSize, offset: offset)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .claudeChat)) ?? 0
             await MainActor.run {
-                chatHistory = records
+                if reset {
+                    chatHistory = records
+                } else {
+                    chatHistory.append(contentsOf: records)
+                }
+                chatHistoryHasMore = offset + records.count < totalCount
             }
         }
     }
@@ -1266,9 +1335,11 @@ public struct ClaudeChatView: View {
     private func deleteChat(_ record: ClaudeChatHistoryRecord) {
         Task {
             try? await HistoryStore.shared.deleteClaudeChat(id: record.id)
-            let records = (try? await HistoryStore.shared.listClaudeChat()) ?? []
+            let records = (try? await HistoryStore.shared.listClaudeChat(limit: historyPageSize, offset: 0)) ?? []
+            let totalCount = (try? await HistoryStore.shared.count(category: .claudeChat)) ?? 0
             await MainActor.run {
                 chatHistory = records
+                chatHistoryHasMore = records.count < totalCount
             }
         }
     }
@@ -1278,6 +1349,7 @@ public struct ClaudeChatView: View {
             try? await HistoryStore.shared.clear(category: .claudeChat)
             await MainActor.run {
                 chatHistory = []
+                chatHistoryHasMore = false
             }
         }
     }
@@ -1312,14 +1384,14 @@ public struct ClaudeChatView: View {
     }
 }
 
-private enum ClaudeChatMessageRole: String {
+enum ClaudeChatMessageRole: String {
     case user
     case assistant
     case toolUse
     case toolResult
 }
 
-private struct ClaudeChatMessage: Identifiable {
+struct ClaudeChatMessage: Identifiable, Equatable {
     let id: UUID
     let role: ClaudeChatMessageRole
     var content: String
@@ -1350,6 +1422,57 @@ private struct ClaudeChatMessage: Identifiable {
     }
 }
 
+extension ClaudeChatAttachmentRecord: Equatable {
+    public static func ==(lhs: ClaudeChatAttachmentRecord, rhs: ClaudeChatAttachmentRecord) -> Bool {
+        lhs.id == rhs.id
+            && lhs.type == rhs.type
+            && lhs.fileName == rhs.fileName
+            && lhs.mimeType == rhs.mimeType
+            && lhs.sizeBytes == rhs.sizeBytes
+    }
+}
+
+struct ClaudeConversationRenderState: Equatable {
+    let messages: [ClaudeChatMessage]
+    let streamingMessage: ClaudeChatMessage?
+    let isStreaming: Bool
+    let workingDirectoryTitle: String
+    let hasSystemPrompt: Bool
+    let expandedThinkingIDs: Set<UUID>
+    let expandedToolDetailIDs: Set<UUID>
+    let composerReservedSpace: CGFloat
+    let isToolVisible: Bool
+    let streamingScrollRevision: Int
+
+    static func make(
+        messages: [ClaudeChatMessage] = [],
+        streamingMessage: ClaudeChatMessage? = nil,
+        isStreaming: Bool,
+        workingDirectoryTitle: String,
+        hasSystemPrompt: Bool,
+        expandedThinkingIDs: Set<UUID> = [],
+        expandedToolDetailIDs: Set<UUID> = [],
+        composerImageCount: Int,
+        draftText: String,
+        hasVisibleDraftText: Bool,
+        isToolVisible: Bool,
+        streamingScrollRevision: Int
+    ) -> ClaudeConversationRenderState {
+        ClaudeConversationRenderState(
+            messages: messages,
+            streamingMessage: streamingMessage,
+            isStreaming: isStreaming,
+            workingDirectoryTitle: workingDirectoryTitle,
+            hasSystemPrompt: hasSystemPrompt,
+            expandedThinkingIDs: expandedThinkingIDs,
+            expandedToolDetailIDs: expandedToolDetailIDs,
+            composerReservedSpace: composerImageCount == 0 ? 220 : 292,
+            isToolVisible: isToolVisible,
+            streamingScrollRevision: streamingScrollRevision
+        )
+    }
+}
+
 /// An image staged in the composer, not yet sent.
 struct ClaudeComposerImage: Identifiable {
     let id = UUID()
@@ -1364,6 +1487,70 @@ private struct ClaudeStarterPrompt: Identifiable {
     let title: String
     let detail: String
     let prompt: String
+}
+
+private struct ClaudeConversationPane<LeadIn: View, EmptyState: View, MessageContent: View>: View, Equatable {
+    let state: ClaudeConversationRenderState
+    let leadIn: () -> LeadIn
+    let emptyState: () -> EmptyState
+    let messageView: (ClaudeChatMessage) -> MessageContent
+
+    static func ==(
+        lhs: ClaudeConversationPane<LeadIn, EmptyState, MessageContent>,
+        rhs: ClaudeConversationPane<LeadIn, EmptyState, MessageContent>
+    ) -> Bool {
+        lhs.state == rhs.state
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
+                    if state.messages.isEmpty && state.streamingMessage == nil && !state.isStreaming {
+                        emptyState()
+                    } else {
+                        leadIn()
+
+                        LazyVStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
+                            ForEach(state.messages) { message in
+                                messageView(message)
+                            }
+
+                            if let streamingMessage = state.streamingMessage {
+                                messageView(streamingMessage)
+                            }
+                        }
+                    }
+
+                    Color.clear
+                        .frame(height: state.composerReservedSpace)
+                        .id("bottom")
+                }
+                .frame(maxWidth: 920)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, AppTheme.Spacing.xxl)
+                .padding(.top, AppTheme.Spacing.xl)
+                .padding(.bottom, AppTheme.Spacing.md)
+            }
+            .onChange(of: state.messages.count) {
+                guard state.isToolVisible else {
+                    return
+                }
+
+                withAnimation(AppTheme.Anim.fast) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: state.streamingScrollRevision) {
+                guard state.isToolVisible else {
+                    return
+                }
+
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
+        }
+        .frame(minHeight: 220, maxHeight: .infinity)
+    }
 }
 
 private struct ClaudeStarterCard: View {
@@ -1406,11 +1593,7 @@ private struct ClaudeStarterCard: View {
         )
         .shadow(color: Color.black.opacity(isHovered ? 0.16 : 0.08), radius: 16, y: 10)
         .scaleEffect(isHovered ? 1.01 : 1.0)
-        .onHover { hovering in
-            withAnimation(AppTheme.Anim.fast) {
-                isHovered = hovering
-            }
-        }
+        .toolHoverTracking($isHovered)
     }
 }
 
@@ -1459,11 +1642,7 @@ private struct ClaudeComposerAccessoryButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(AppTheme.Anim.fast) {
-                isHovered = hovering
-            }
-        }
+        .toolHoverTracking($isHovered)
     }
 }
 
@@ -1493,31 +1672,33 @@ private struct ClaudeSendButton: View {
         .disabled(disabled)
         .opacity(disabled ? 0.45 : 1)
         .scaleEffect(disabled ? 1 : (isHovered ? 1.03 : 1.0))
-        .onHover { hovering in
-            withAnimation(AppTheme.Anim.fast) {
-                isHovered = hovering
-            }
-        }
+        .toolHoverTracking($isHovered)
     }
 }
 
 private struct PulseModifier: ViewModifier {
+    @Environment(\.toolUIActivity) private var toolUIActivity
     @State private var isPulsing = false
 
     func body(content: Content) -> some View {
         content
             .opacity(isPulsing ? 0.3 : 1.0)
             .animation(
-                .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+                toolUIActivity.allowsDecorativeAnimations
+                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : nil,
                 value: isPulsing
             )
             .onAppear {
-                isPulsing = true
+                isPulsing = toolUIActivity.allowsDecorativeAnimations
+            }
+            .onChange(of: toolUIActivity.isVisible) { _, isVisible in
+                isPulsing = isVisible
             }
     }
 }
 
 private struct BreathingModifier: ViewModifier {
+    @Environment(\.toolUIActivity) private var toolUIActivity
     let isActive: Bool
     @State private var isBreathing = false
 
@@ -1525,15 +1706,19 @@ private struct BreathingModifier: ViewModifier {
         content
             .opacity(isActive && isBreathing ? 0.4 : 1.0)
             .animation(
-                isActive
+                isActive && toolUIActivity.allowsDecorativeAnimations
                     ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
-                    : .default,
+                    : nil,
                 value: isBreathing
             )
             .onAppear {
-                if isActive {
-                    isBreathing = true
-                }
+                isBreathing = isActive && toolUIActivity.allowsDecorativeAnimations
+            }
+            .onChange(of: isActive) { _, newValue in
+                isBreathing = newValue && toolUIActivity.allowsDecorativeAnimations
+            }
+            .onChange(of: toolUIActivity.isVisible) { _, isVisible in
+                isBreathing = isVisible && isActive
             }
     }
 }

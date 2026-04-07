@@ -13,6 +13,7 @@ enum ToolDestinationRegistry {
         .jwtTool: { AnyView(JWTToolView()) },
         .wordCloud: { AnyView(WordCloudView()) },
         .aiChat: { AnyView(ClaudeChatView()) },
+        .hermesAgent: { AnyView(HermesAgentView()) },
         .aiSpeech: { AnyView(AISpeechView()) },
         .aiImage: { AnyView(AIImageView()) },
         .aiMusic: { AnyView(AIMusicView()) },
@@ -36,6 +37,8 @@ public struct ContentView: View {
     @State private var selectedTool: Tool?
     @State private var retainedToolIDs: [ToolID] = []
     @State private var sidebarCollapsed = false
+    @State private var showSettings = false
+    @State private var selectedSettingsTab: ToolSettingsTab = .minimax
     private let tools = ToolRegistry.defaults
 
     private enum Layout {
@@ -47,8 +50,14 @@ public struct ContentView: View {
     public init() {}
 
     public var body: some View {
+        let settingsPresenter = ToolSettingsPresenter { tab in
+            selectedSettingsTab = tab
+            showSettings = true
+        }
+
         HStack(spacing: 0) {
             SidebarView(tools: tools, selectedTool: $selectedTool, collapsed: $sidebarCollapsed)
+                .environment(\.toolSettingsPresenter, settingsPresenter)
                 .frame(width: sidebarCollapsed ? Layout.sidebarCollapsedWidth : Layout.sidebarWidth)
 
             SidebarDivider(collapsed: $sidebarCollapsed)
@@ -59,6 +68,7 @@ public struct ContentView: View {
                 selectedTool: $selectedTool,
                 retainedToolIDs: retainedToolIDs
             )
+            .environment(\.toolSettingsPresenter, settingsPresenter)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppTheme.background)
         }
@@ -77,6 +87,7 @@ public struct ContentView: View {
         }
         .onAppear {
             ClaudeCLISettingsStore.shared.discoverCLI()
+            HermesSettingsStore.shared.discoverCLI()
             ObservabilitySystem.shared.rootViewReady()
             RenderingPerformance.configureCaptureIfNeeded()
             retainedToolIDs = ToolViewCache.retainedToolIDs(
@@ -135,6 +146,9 @@ public struct ContentView: View {
                     durationMs: max(0, Int(Date().timeIntervalSince(startedAt) * 1000))
                 )
             }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsSheet(selectedTab: $selectedSettingsTab)
         }
     }
 }
@@ -209,8 +223,9 @@ private struct SidebarView: View {
     @Binding var selectedTool: Tool?
     @Binding var collapsed: Bool
 
+    @Environment(\.toolSettingsPresenter) private var toolSettingsPresenter
+
     @State private var logoHovered = false
-    @State private var showSettings = false
 
     private var groupedTools: [(category: ToolCategory, tools: [Tool])] {
         ToolCategory.allCases.compactMap { category in
@@ -368,7 +383,7 @@ private struct SidebarView: View {
             if collapsed {
                 // Collapsed: show only settings gear
                 Button {
-                    showSettings = true
+                    toolSettingsPresenter.open(.minimax)
                 } label: {
                     Image(systemName: "gearshape")
                         .font(.system(size: 16, weight: .semibold))
@@ -394,7 +409,7 @@ private struct SidebarView: View {
                             .foregroundStyle(AppTheme.textPrimary)
                         Spacer()
                         Button {
-                            showSettings = true
+                            toolSettingsPresenter.open(.minimax)
                         } label: {
                             Image(systemName: "gearshape")
                                 .font(.system(size: 14, weight: .semibold))
@@ -423,9 +438,6 @@ private struct SidebarView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AppTheme.sidebarBackground)
-        .sheet(isPresented: $showSettings) {
-            SettingsSheet()
-        }
     }
 }
 
@@ -671,7 +683,7 @@ private struct WelcomeView: View {
                 toolGroupSection(
                     eyebrow: "Intelligence",
                     title: "AI Tools",
-                    subtitle: "Claude chat plus MiniMax speech, image, and music in one deck.",
+                    subtitle: "Claude chat, Hermes Agent, and MiniMax speech, image, and music in one deck.",
                     icon: "cpu",
                     accentColor: AppTheme.accentWarm,
                     tools: aiTools,
@@ -976,18 +988,18 @@ private struct LandingToolCard: View {
 
 private struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedTab = "minimax"
+    @Binding var selectedTab: ToolSettingsTab
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Picker("", selection: $selectedTab) {
-                    Text("MiniMax").tag("minimax")
-                    Text("Claude CLI").tag("claude")
-                    Text("Diagnostics").tag("diagnostics")
+                    ForEach(ToolSettingsTab.allCases, id: \.self) { tab in
+                        Text(tab.title).tag(tab)
+                    }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 380)
+                .frame(width: 500)
 
                 Spacer()
                 Button {
@@ -1001,10 +1013,12 @@ private struct SettingsSheet: View {
                 .padding(AppTheme.Spacing.md)
             }
 
-            if selectedTab == "minimax" {
+            if selectedTab == .minimax {
                 MiniMaxSettingsView()
-            } else if selectedTab == "claude" {
+            } else if selectedTab == .claude {
                 ClaudeCLISettingsView()
+            } else if selectedTab == .hermes {
+                HermesSettingsView()
             } else {
                 DiagnosticsView()
             }

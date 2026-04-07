@@ -11,6 +11,7 @@ A macOS developer toolkit built with Swift and SwiftUI, providing a collection o
 - **JWT Tool** – Encode and decode JWT tokens
 - **Word Cloud** – Generate word cloud visualizations from text
 - **AI Chat** – Chat with Claude through the local CLI agent harness
+- **Hermes Agent** – Use the local Hermes CLI with file references, session resume, and diagnostics-aware execution
 - **AI Speech** – Stream text-to-speech with MiniMax Speech 2.8
 - **AI Image** – Generate images with MiniMax image-01 using text alone or reference images via drag-and-drop, file selection, or paste
 - **AI Music** – Generate music with MiniMax Music-2.5
@@ -30,20 +31,21 @@ CodeTool/
 ├── Package.swift                        # Swift Package Manager manifest
 ├── Sources/
 │   ├── CodeToolApp/                     # App entry point & lifecycle
-│   │   ├── CodeToolApp.swift            # @main SwiftUI App struct
-│   │   └── AppDelegate.swift            # NSApplicationDelegate
-│   └── CodeToolCore/                    # Reusable core library
-│       ├── Tool.swift                   # ToolID, Tool model & ToolRegistry catalog
-│       ├── ContentView.swift            # Main SwiftUI view hierarchy
-│       ├── JSONToolView.swift           # JSON formatter/validator/minifier
-│       ├── ImageConverterView.swift     # Image ↔ Base64 converter
-│       ├── JSONDiffView.swift           # JSON comparison tool
-│       ├── TimestampConverterView.swift # Timestamp ↔ date converter
-│       ├── JWTToolView.swift            # JWT encoder/decoder
-│       └── WordCloudView.swift          # Word cloud generator
+│   ├── CodeToolCore/                    # Providers, views, persistence, observability
+│   │   ├── Execution/
+│   │   ├── Observability/
+│   │   ├── Persistence/
+│   │   ├── Providers/
+│   │   │   ├── Claude/
+│   │   │   ├── Hermes/
+│   │   │   └── MiniMax/
+│   │   └── Views/
+│   ├── CodeToolFoundation/              # Shared models, settings, tool catalog
+│   └── CodeToolUI/                      # Shared SwiftUI shell and styling
 └── Tests/
     └── CodeToolTests/
-        └── CodeToolTests.swift          # Unit tests for CodeToolCore
+        ├── CodeToolTests.swift          # Core regression coverage
+        └── HermesAgentTests.swift       # Hermes CLI wrapper coverage
 ```
 
 ## Getting Started
@@ -79,10 +81,12 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 
 ## Architecture
 
-The project is split into two targets:
+The project is split into four targets:
 
-- **`CodeToolCore`** – A reusable library that contains the data models, view hierarchy, and business logic. This can be imported and tested independently.
-- **`CodeToolApp`** – The executable entry point that wires up the SwiftUI `App` lifecycle and `AppDelegate`.
+- **`CodeToolApp`** – The macOS executable entry point that wires up the SwiftUI app lifecycle.
+- **`CodeToolCore`** – Feature views, provider integrations, persistence, and observability.
+- **`CodeToolFoundation`** – Shared models, settings wrappers, tool metadata, and user-facing error types.
+- **`CodeToolUI`** – Shared styling, layout shells, and reusable UI primitives.
 
 ### Tool Catalog Routing
 

@@ -16,5 +16,6 @@ public enum AppLogCategory: String, Codable, Sendable {
     case aiimage
     case aichat
     case claudechat
+    case hermesagent
     case observability
 }

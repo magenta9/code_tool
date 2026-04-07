@@ -321,6 +321,7 @@ extension ClaudeChatHistoryRecord: HistoryRecord {}
 public enum HistoryCategory: String, CaseIterable {
     case chat
     case claudeChat = "claude-chat"
+    case hermesAgent = "hermes-agent"
     case speech
     case image
     case music
@@ -627,6 +628,12 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
     }
 
+    public func save(_ record: HermesAgentDiagnosticsRecord) throws {
+        let dir = try categoryURL(.hermesAgent)
+        let data = try encoder.encode(record)
+        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
+    }
+
     public func save(_ record: JSONToolHistoryRecord) throws {
         let dir = try categoryURL(.jsonTool)
         let data = try encoder.encode(record)
@@ -819,6 +826,10 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         try loadRecords(category: .claudeChat, limit: limit, offset: offset)
     }
 
+    public func listHermesAgent(limit: Int? = nil, offset: Int = 0) throws -> [HermesAgentDiagnosticsRecord] {
+        try loadRecords(category: .hermesAgent, limit: limit, offset: offset)
+    }
+
     public func listJSONTool() throws -> [JSONToolHistoryRecord] {
         try loadRecords(category: .jsonTool)
     }
@@ -982,6 +993,11 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         }
 
         try? fileManager.removeItem(at: jsonURL)
+    }
+
+    public func deleteHermesAgent(id: UUID) throws {
+        let dir = try categoryURL(.hermesAgent)
+        try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
     }
 
     public func deleteJSONTool(id: UUID) throws {

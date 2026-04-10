@@ -14,6 +14,7 @@ public struct ClaudeChatComposer: NSViewRepresentable {
     let isStreaming: Bool
     let onSubmit: () -> Void
     let onPasteImages: ([NSImage]) -> Void
+    let onPasteFileURLs: (([URL]) -> Void)?
     let onEscape: () -> Void
     let onVisibleTextChange: (Bool) -> Void
 
@@ -22,6 +23,7 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         isStreaming: Bool,
         onSubmit: @escaping () -> Void,
         onPasteImages: @escaping ([NSImage]) -> Void,
+        onPasteFileURLs: (([URL]) -> Void)? = nil,
         onEscape: @escaping () -> Void,
         onVisibleTextChange: @escaping (Bool) -> Void = { _ in }
     ) {
@@ -29,6 +31,7 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         self.isStreaming = isStreaming
         self.onSubmit = onSubmit
         self.onPasteImages = onPasteImages
+        self.onPasteFileURLs = onPasteFileURLs
         self.onEscape = onEscape
         self.onVisibleTextChange = onVisibleTextChange
     }
@@ -98,6 +101,10 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         var lastCommittedText: String
         var lastReportedHasVisibleText: Bool?
 
+        var composerHandlesFileURLPaste: Bool {
+            parent.onPasteFileURLs != nil
+        }
+
         init(_ parent: ClaudeChatComposer) {
             self.parent = parent
             self.lastCommittedText = parent.text
@@ -149,15 +156,21 @@ public struct ClaudeChatComposer: NSViewRepresentable {
         func composerDidPasteImages(_ images: [NSImage]) {
             parent.onPasteImages(images)
         }
+
+        func composerDidPasteFileURLs(_ urls: [URL]) {
+            parent.onPasteFileURLs?(urls)
+        }
     }
 }
 
 // MARK: - ComposerTextViewDelegate Protocol
 
 protocol ComposerTextViewDelegate: AnyObject {
+    var composerHandlesFileURLPaste: Bool { get }
     func composerDidPressEnter()
     func composerDidPressEscape()
     func composerDidPasteImages(_ images: [NSImage])
+    func composerDidPasteFileURLs(_ urls: [URL])
 }
 
 // MARK: - ComposerTextView
@@ -217,6 +230,16 @@ final class ComposerTextView: NSTextView {
         if !images.isEmpty {
             composerDelegate?.composerDidPasteImages(images)
             return
+        }
+
+        if composerDelegate?.composerHandlesFileURLPaste == true,
+           let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
+        {
+            let fileURLs = urls.filter(\.isFileURL)
+            if !fileURLs.isEmpty {
+                composerDelegate?.composerDidPasteFileURLs(fileURLs)
+                return
+            }
         }
 
         // Fallback to default text paste

@@ -13,7 +13,6 @@ enum ToolDestinationRegistry {
         .jwtTool: { AnyView(JWTToolView()) },
         .wordCloud: { AnyView(WordCloudView()) },
         .aiChat: { AnyView(ClaudeChatView()) },
-        .hermesAgent: { AnyView(HermesAgentView()) },
         .aiSpeech: { AnyView(AISpeechView()) },
         .aiImage: { AnyView(AIImageView()) },
         .aiMusic: { AnyView(AIMusicView()) },
@@ -27,27 +26,61 @@ enum ToolDestinationRegistry {
         factories[toolID]?()
     }
 
-    /// Registers a view factory for a tool ID. Idempotent — overwrites existing registration.
     static func register(_ factory: @escaping Factory, for toolID: ToolID) {
         factories[toolID] = factory
     }
 }
 
+private struct ToolGroup: Identifiable {
+    let category: ToolCategory
+    let tools: [Tool]
+
+    var id: ToolCategory { category }
+}
+
 public struct ContentView: View {
     @State private var selectedTool: Tool?
     @State private var retainedToolIDs: [ToolID] = []
-    @State private var sidebarCollapsed = false
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var showSettings = false
     @State private var selectedSettingsTab: ToolSettingsTab = .minimax
+    @State private var searchText = ""
+
     private let tools = ToolRegistry.defaults
 
-    private enum Layout {
-        static let sidebarWidth: CGFloat = 240
-        static let sidebarCollapsedWidth: CGFloat = 64
-        static let dividerWidth: CGFloat = 10
+    public init() {}
+
+    private var filteredGroups: [ToolGroup] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredTools: [Tool]
+
+        if query.isEmpty {
+            filteredTools = tools
+        } else {
+            filteredTools = tools.filter { tool in
+                [tool.name, tool.description, tool.routeSlug, tool.category.displayName]
+                    .joined(separator: " ")
+                    .localizedCaseInsensitiveContains(query)
+            }
+        }
+
+        return ToolCategory.allCases.compactMap { category in
+            let categoryTools = filteredTools.filter { $0.category == category }
+            return categoryTools.isEmpty ? nil : ToolGroup(category: category, tools: categoryTools)
+        }
     }
 
-    public init() {}
+    private var activeToolTitle: String {
+        selectedTool?.name ?? "CodeTool"
+    }
+
+    private var activeToolSubtitle: String {
+        if let selectedTool {
+            return selectedTool.description
+        }
+
+        return "A calmer desktop deck for daily dev utilities and AI workflows."
+    }
 
     public var body: some View {
         let settingsPresenter = ToolSettingsPresenter { tab in
@@ -55,39 +88,68 @@ public struct ContentView: View {
             showSettings = true
         }
 
-        HStack(spacing: 0) {
-            SidebarView(tools: tools, selectedTool: $selectedTool, collapsed: $sidebarCollapsed)
-                .environment(\.toolSettingsPresenter, settingsPresenter)
-                .frame(width: sidebarCollapsed ? Layout.sidebarCollapsedWidth : Layout.sidebarWidth)
-
-            SidebarDivider(collapsed: $sidebarCollapsed)
-                .frame(width: Layout.dividerWidth)
-
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
+            SidebarPane(
+                groups: filteredGroups,
+                selectedTool: $selectedTool,
+                totalToolCount: tools.count,
+                searchText: searchText,
+                openSettings: {
+                    selectedSettingsTab = .minimax
+                    showSettings = true
+                }
+            )
+        } detail: {
             ToolDetailCacheView(
                 tools: tools,
                 selectedTool: $selectedTool,
                 retainedToolIDs: retainedToolIDs
             )
             .environment(\.toolSettingsPresenter, settingsPresenter)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(AppTheme.background)
         }
-        .frame(minWidth: 800, minHeight: 600)
-        .background(AppTheme.background)
-        .background {
-            // Invisible button to capture ⌘\ keyboard shortcut
-            Button("") {
-                withAnimation(AppTheme.Anim.normal) {
-                    sidebarCollapsed.toggle()
+        .navigationSplitViewStyle(.balanced)
+        .searchable(text: $searchText, placement: .toolbar, prompt: "Search tools")
+        .environment(\.toolSettingsPresenter, settingsPresenter)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: toggleSidebar) {
+                    Image(systemName: "sidebar.leading")
                 }
+                .help("切换侧边栏 (⌘\\)")
+            }
+
+            ToolbarItem(placement: .principal) {
+                ToolbarTitleView(title: activeToolTitle, subtitle: activeToolSubtitle)
+            }
+
+            ToolbarItemGroup {
+                Button {
+                    selectedTool = nil
+                } label: {
+                    Label("Home", systemImage: "square.grid.2x2")
+                }
+                .help("返回工作台首页")
+
+                Button {
+                    selectedSettingsTab = .minimax
+                    showSettings = true
+                } label: {
+                    Label("Settings", systemImage: "slider.horizontal.3")
+                }
+                .help("打开 Provider 设置")
+            }
+        }
+        .frame(minWidth: 980, minHeight: 680)
+        .background(AppBackdrop())
+        .background {
+            Button("") {
+                toggleSidebar()
             }
             .keyboardShortcut("\\", modifiers: .command)
-            .opacity(0)
-            .allowsHitTesting(false)
+            .hidden()
         }
         .onAppear {
             ClaudeCLISettingsStore.shared.discoverCLI()
-            HermesSettingsStore.shared.discoverCLI()
             ObservabilitySystem.shared.rootViewReady()
             RenderingPerformance.configureCaptureIfNeeded()
             retainedToolIDs = ToolViewCache.retainedToolIDs(
@@ -151,6 +213,12 @@ public struct ContentView: View {
             SettingsSheet(selectedTab: $selectedSettingsTab)
         }
     }
+
+    private func toggleSidebar() {
+        withAnimation(AppTheme.Anim.settle) {
+            sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
+        }
+    }
 }
 
 enum ToolViewCache {
@@ -172,378 +240,227 @@ enum ToolViewCache {
     }
 }
 
-private struct SidebarDivider: View {
-    @Binding var collapsed: Bool
-    @State private var isHovered = false
+private struct ToolbarTitleView: View {
+    let title: String
+    let subtitle: String
 
     var body: some View {
-        ZStack {
-            AppTheme.sidebarBackground.opacity(0.92)
+        VStack(spacing: 2) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1)
 
-            AppTheme.border
-                .frame(width: 1)
-
-            AppTheme.accent.opacity(0.08)
-                .frame(width: 1)
-                .blur(radius: 3)
-
-            // Toggle button overlay
-            if isHovered {
-                Button {
-                    withAnimation(AppTheme.Anim.normal) {
-                        collapsed.toggle()
-                    }
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.surfaceRaised)
-                            .frame(width: 24, height: 24)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(AppTheme.borderHover, lineWidth: 1)
-                            )
-                        Image(systemName: collapsed ? "chevron.right" : "chevron.left")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity)
-            }
+            Text(subtitle)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textMuted)
+                .lineLimit(1)
         }
-        .animation(AppTheme.Anim.hover, value: isHovered)
-        .onHover { isHovered = $0 }
+        .frame(maxWidth: 360)
     }
 }
 
-// MARK: - Sidebar
-
-private struct SidebarView: View {
-    let tools: [Tool]
+private struct SidebarPane: View {
+    let groups: [ToolGroup]
     @Binding var selectedTool: Tool?
-    @Binding var collapsed: Bool
-
-    @Environment(\.toolSettingsPresenter) private var toolSettingsPresenter
-
-    @State private var logoHovered = false
-
-    private var groupedTools: [(category: ToolCategory, tools: [Tool])] {
-        ToolCategory.allCases.compactMap { category in
-            let matched = tools.filter { $0.category == category }
-            return matched.isEmpty ? nil : (category, matched)
-        }
-    }
-
-    @State private var toggleHovered = false
+    let totalToolCount: Int
+    let searchText: String
+    let openSettings: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            // Logo / Home button + toggle
-            HStack(spacing: 0) {
-                Button {
-                    selectedTool = nil
-                } label: {
-                    if collapsed {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .fill(AppTheme.accentGradient)
-                            .frame(width: 36, height: 36)
-                            .overlay {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(AppTheme.background)
-                            }
-                            .scaleEffect(logoHovered ? 1.06 : 1.0)
-                    } else {
-                        HStack(spacing: AppTheme.Spacing.md) {
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                                .fill(AppTheme.accentGradient)
-                                .frame(width: 40, height: 40)
-                                .overlay {
-                                    Image(systemName: "slider.horizontal.3")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundStyle(AppTheme.background)
-                                }
-                                .scaleEffect(logoHovered ? 1.06 : 1.0)
+            SidebarHeroCard(
+                totalToolCount: totalToolCount,
+                selectedTool: selectedTool,
+                searchText: searchText
+            )
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.top, AppTheme.Spacing.lg)
+            .padding(.bottom, AppTheme.Spacing.sm)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("CodeTool")
-                                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                                Text("Developer utility deck")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                            }
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .onHover { logoHovered = $0 }
-                .animation(AppTheme.Anim.hover, value: logoHovered)
-
-                if !collapsed {
-                    Spacer(minLength: 0)
-                }
-
-                // Sidebar toggle button
-                if !collapsed {
-                    Button {
-                        withAnimation(AppTheme.Anim.normal) {
-                            collapsed.toggle()
-                        }
-                    } label: {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(toggleHovered ? AppTheme.accent : AppTheme.textMuted)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                                    .fill(toggleHovered ? AppTheme.surface.opacity(0.72) : Color.clear)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                                    .strokeBorder(toggleHovered ? AppTheme.borderHover : Color.clear, lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .animation(AppTheme.Anim.hover, value: toggleHovered)
-                    .onHover { toggleHovered = $0 }
-                    .help("收起侧边栏 (⌘\\)")
-                    .transition(.opacity)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: collapsed ? .center : .leading)
-            .padding(.horizontal, collapsed ? AppTheme.Spacing.sm : AppTheme.Spacing.lg)
-            .padding(.top, AppTheme.Spacing.xxl)
-            .padding(.bottom, AppTheme.Spacing.lg)
-
-            // Collapsed: show expand button
-            if collapsed {
-                Button {
-                    withAnimation(AppTheme.Anim.normal) {
-                        collapsed.toggle()
-                    }
-                } label: {
-                    Image(systemName: "sidebar.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(toggleHovered ? AppTheme.accent : AppTheme.textMuted)
-                        .frame(width: 36, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                                .fill(toggleHovered ? AppTheme.surface.opacity(0.72) : AppTheme.surface.opacity(0.32))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                                .strokeBorder(toggleHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .animation(AppTheme.Anim.hover, value: toggleHovered)
-                .onHover { toggleHovered = $0 }
-                .help("展开侧边栏 (⌘\\)")
-                .padding(.bottom, AppTheme.Spacing.sm)
-            }
-
-            ScrollView {
-                VStack(spacing: AppTheme.Spacing.lg) {
-                    ForEach(groupedTools, id: \.category) { group in
-                        VStack(alignment: collapsed ? .center : .leading, spacing: AppTheme.Spacing.sm) {
-                            if collapsed {
-                                Divider()
-                                    .background(AppTheme.border)
-                                    .padding(.horizontal, AppTheme.Spacing.sm)
-                            } else {
-                                HStack(spacing: AppTheme.Spacing.sm) {
-                                    Image(systemName: group.category.systemImage)
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(AppTheme.textMuted)
-                                    Text(group.category.displayName)
-                                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                                        .foregroundStyle(AppTheme.textMuted)
-                                        .textCase(.uppercase)
-                                        .tracking(1.2)
-                                }
-                                .padding(.horizontal, AppTheme.Spacing.md + 4)
-                            }
-
-                            ForEach(group.tools) { tool in
-                                SidebarRow(
-                                    tool: tool,
-                                    isSelected: selectedTool == tool,
-                                    collapsed: collapsed,
-                                    action: { selectedTool = tool }
-                                )
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, collapsed ? AppTheme.Spacing.xs : AppTheme.Spacing.md)
-                .padding(.bottom, AppTheme.Spacing.lg)
-            }
-
-            if collapsed {
-                // Collapsed: show only settings gear
-                Button {
-                    toolSettingsPresenter.open(.minimax)
-                } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .frame(width: 36, height: 36)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                                .fill(AppTheme.surface.opacity(0.62))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                                .strokeBorder(AppTheme.border, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .help("Provider Settings")
-                .padding(.bottom, AppTheme.Spacing.lg)
-            } else {
-                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                    HStack {
-                        Text("Unified surfaces")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
-                        Spacer()
-                        Button {
-                            toolSettingsPresenter.open(.minimax)
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Provider Settings")
-                    }
-                    Text(
-                        "Consistent actions, panels, status chips, and editor treatments across every tool."
-                    )
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(AppTheme.Spacing.lg)
-                .background(AppTheme.surface.opacity(0.62))
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                        .strokeBorder(AppTheme.border, lineWidth: 1)
+            if groups.isEmpty {
+                ContentUnavailableView(
+                    "No Matching Tools",
+                    systemImage: "magnifyingglass",
+                    description: Text("Try a broader keyword or clear the current search.")
                 )
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.bottom, AppTheme.Spacing.lg)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(selection: $selectedTool) {
+                    ForEach(groups) { group in
+                        Section {
+                            ForEach(group.tools) { tool in
+                                SidebarRow(tool: tool, isSelected: selectedTool == tool)
+                                    .tag(tool as Tool?)
+                                    .listRowInsets(
+                                        EdgeInsets(
+                                            top: 5,
+                                            leading: AppTheme.Spacing.md,
+                                            bottom: 5,
+                                            trailing: AppTheme.Spacing.md
+                                        )
+                                    )
+                                    .listRowBackground(Color.clear)
+                                    .listRowSeparator(.hidden)
+                            }
+                        } header: {
+                            Label(group.category.displayName, systemImage: group.category.systemImage)
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.textMuted)
+                                .textCase(.uppercase)
+                                .tracking(1.0)
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+                .scrollContentBackground(.hidden)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(AppTheme.sidebarBackground)
+        .safeAreaInset(edge: .bottom) {
+            SidebarFooterCard(openSettings: openSettings)
+                .padding(.horizontal, AppTheme.Spacing.lg)
+                .padding(.top, AppTheme.Spacing.sm)
+                .padding(.bottom, AppTheme.Spacing.lg)
+        }
     }
 }
 
-// MARK: - Sidebar Row
+private struct SidebarHeroCard: View {
+    let totalToolCount: Int
+    let selectedTool: Tool?
+    let searchText: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack(spacing: AppTheme.Spacing.md) {
+                RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                    .fill(AppTheme.accentGradient)
+                    .frame(width: 44, height: 44)
+                    .overlay {
+                        Image(systemName: selectedTool?.systemImage ?? "square.grid.2x2")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Color.black.opacity(0.78))
+                    }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(selectedTool?.name ?? "CodeTool")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Text(selectedTool?.routeSlug ?? "Desktop utility deck")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textMuted)
+                        .textCase(.uppercase)
+                        .tracking(1.1)
+                }
+            }
+
+            Text(selectedTool?.description ?? "Elegant utility workflows built around consistent surfaces, lighter chrome, and a calmer reading rhythm.")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: AppTheme.Spacing.sm) {
+                infoCapsule(title: "\(totalToolCount) tools", tint: AppTheme.accent)
+
+                if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    infoCapsule(title: "Filtered", tint: AppTheme.accentWarm)
+                } else {
+                    infoCapsule(title: "Ready", tint: AppTheme.success)
+                }
+            }
+        }
+        .padding(AppTheme.Spacing.lg)
+        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong)
+    }
+
+    private func infoCapsule(title: String, tint: Color) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundStyle(tint)
+            .padding(.horizontal, AppTheme.Spacing.sm + 2)
+            .padding(.vertical, AppTheme.Spacing.xs + 2)
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule().fill(tint.opacity(0.10))
+                    }
+            }
+            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1))
+    }
+}
+
+private struct SidebarFooterCard: View {
+    let openSettings: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.md) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Provider Settings")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                Text("Tune your model providers without leaving the current workspace.")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+
+            StyledButton("Open", systemImage: "slider.horizontal.3", variant: .secondary, action: openSettings)
+        }
+        .padding(AppTheme.Spacing.lg)
+        .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTint)
+    }
+}
 
 private struct SidebarRow: View {
     let tool: Tool
     let isSelected: Bool
-    var collapsed: Bool = false
-    let action: () -> Void
-
-    @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            if collapsed {
-                // Collapsed: icon only
-                Image(systemName: tool.systemImage)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? AppTheme.background : AppTheme.textSecondary)
-                    .frame(width: 40, height: 40)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .fill(
-                                isSelected
-                                    ? AnyShapeStyle(AppTheme.accentGradient)
-                                    : AnyShapeStyle(
-                                        isHovered ? AppTheme.surface.opacity(0.72) : AppTheme.surfaceRaised))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .strokeBorder(
-                                isSelected
-                                    ? AppTheme.borderHover : AppTheme.border.opacity(isHovered ? 1 : 0),
-                                lineWidth: 1)
-                    )
-            } else {
-                HStack(spacing: AppTheme.Spacing.md) {
-                    Image(systemName: tool.systemImage)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isSelected ? AppTheme.background : AppTheme.textSecondary)
-                        .frame(width: 34, height: 34)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                                .fill(
-                                    isSelected
-                                        ? AnyShapeStyle(AppTheme.accentGradient)
-                                        : AnyShapeStyle(AppTheme.surfaceRaised))
-                        )
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(tool.name)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .lineLimit(1)
-                        Text(tool.routeSlug)
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(isSelected ? AppTheme.accentWarm : AppTheme.textMuted)
-                            .textCase(.uppercase)
-                            .tracking(0.9)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(
-                            isSelected ? AppTheme.accentWarm : AppTheme.textMuted.opacity(0.7))
+        HStack(spacing: AppTheme.Spacing.md) {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .frame(width: 34, height: 34)
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                        .fill(isSelected ? AppTheme.accentGradient : AppTheme.heroGradient)
+                        .padding(2)
+                        .overlay {
+                            Image(systemName: tool.systemImage)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(isSelected ? Color.black.opacity(0.78) : AppTheme.textSecondary)
+                        }
                 }
-                .padding(.horizontal, AppTheme.Spacing.md)
-                .padding(.vertical, AppTheme.Spacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                        .fill(
-                            isSelected
-                                ? AnyShapeStyle(AppTheme.selectionGradient)
-                                : AnyShapeStyle(
-                                    isHovered ? AppTheme.surface.opacity(0.72) : Color.clear))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                        .strokeBorder(
-                            isSelected
-                                ? AppTheme.borderHover : AppTheme.border.opacity(isHovered ? 1 : 0),
-                            lineWidth: 1)
-                )
-                .overlay(alignment: .leading) {
-                    if isSelected {
-                        Capsule()
-                            .fill(AppTheme.accentGradient)
-                            .frame(width: 4, height: 28)
-                            .offset(x: -6)
-                    }
-                }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tool.name)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+
+                Text(tool.description)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
             }
+
+            Spacer(minLength: 0)
+
+            Text(tool.routeSlug)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(isSelected ? AppTheme.accentWarm : AppTheme.textMuted)
+                .textCase(.uppercase)
+                .tracking(0.8)
         }
-        .buttonStyle(.plain)
-        .help(collapsed ? tool.name : "")
-        .animation(AppTheme.Anim.hover, value: isHovered)
-        .onHover { isHovered = $0 }
-        .animation(AppTheme.Anim.fast, value: isSelected)
+        .padding(.horizontal, AppTheme.Spacing.sm)
+        .padding(.vertical, AppTheme.Spacing.sm)
+        .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous))
     }
 }
-
-// MARK: - Tool Detail
 
 private struct ToolDetailCacheView: View {
     let tools: [Tool]
@@ -599,8 +516,7 @@ private struct CachedToolPresentationModifier: ViewModifier {
             if isVisible {
                 content
             } else {
-                content
-                    .hidden()
+                content.hidden()
             }
         }
         .allowsHitTesting(isVisible)
@@ -627,209 +543,122 @@ private struct ToolDetailView: View {
     }
 
     private var placeholderView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: AppTheme.Spacing.lg) {
             Image(systemName: tool.systemImage)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 60, height: 60)
+                .font(.system(size: 44, weight: .semibold))
                 .foregroundStyle(AppTheme.accent)
+
             Text(tool.name)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(AppTheme.textPrimary)
+
             Text(tool.description)
                 .font(.system(size: 14, weight: .medium, design: .rounded))
                 .foregroundStyle(AppTheme.textSecondary)
         }
+        .padding(AppTheme.Spacing.xxxl)
+        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackdrop())
     }
 }
-
-// MARK: - Welcome / Landing Page
 
 private struct WelcomeView: View {
     let tools: [Tool]
     @Binding var selectedTool: Tool?
 
     @State private var appeared = false
-    @State private var heroAnimated = false
-    @State private var cardsAnimated = false
 
     private var devTools: [Tool] { tools.filter { $0.category == .devTools } }
     private var aiTools: [Tool] { tools.filter { $0.category == .aiTools } }
-    private var categoryCount: Int { Set(tools.map(\.category)).count }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
-                // Hero Section
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
                 heroSection
-                    .padding(.bottom, AppTheme.Spacing.xxxl)
-
-                // Dev Tools Section
                 toolGroupSection(
-                    eyebrow: "Essentials",
-                    title: "Dev Tools",
-                    subtitle: "Formatters, converters, and analyzers built for daily workflows.",
-                    icon: "wrench.and.screwdriver",
-                    accentColor: AppTheme.accent,
+                    eyebrow: "Development",
+                    title: "Precision utilities",
+                    subtitle: "Fast daily workflows for inspection, conversion, formatting, and diagnosis.",
                     tools: devTools,
-                    columns: 3,
-                    delayBase: 0
+                    accentColor: AppTheme.accent
                 )
-                .padding(.bottom, 56)
-
-                // AI Tools Section
                 toolGroupSection(
-                    eyebrow: "Intelligence",
-                    title: "AI Tools",
-                    subtitle: "Claude chat, Hermes Agent, and MiniMax speech, image, and music in one deck.",
-                    icon: "cpu",
-                    accentColor: AppTheme.accentWarm,
+                    eyebrow: "AI Workspace",
+                    title: "Agentic surfaces",
+                    subtitle: "Speech, image, music, and CLI-native chat brought into the same visual language.",
                     tools: aiTools,
-                    columns: 2,
-                    delayBase: 6
+                    accentColor: AppTheme.accentWarm
                 )
-                .padding(.bottom, 56)
-
-                // Footer
-                footerSection
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 48)
+            .padding(.horizontal, AppTheme.Spacing.xxl)
+            .padding(.top, AppTheme.Spacing.xxl)
+            .padding(.bottom, AppTheme.Spacing.xxxl)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackdrop())
-        .opacity(appeared ? 1 : 0)
-        .animation(AppTheme.Anim.slow, value: appeared)
+        .opacity(appeared ? 1 : 0.84)
+        .offset(y: appeared ? 0 : 12)
+        .animation(AppTheme.Anim.settle, value: appeared)
         .onAppear {
             appeared = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                heroAnimated = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                cardsAnimated = true
-            }
         }
     }
-
-    // MARK: - Hero
 
     private var heroSection: some View {
-        VStack(spacing: AppTheme.Spacing.xl) {
-            Spacer().frame(height: 60)
-
-            // Decorative top line
-            HStack(spacing: AppTheme.Spacing.md) {
-                Rectangle()
-                    .fill(AppTheme.accentGradient)
-                    .frame(width: heroAnimated ? 48 : 0, height: 2)
-                    .animation(.easeOut(duration: 0.6).delay(0.2), value: heroAnimated)
-
-                Text("CodeTool")
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(AppTheme.textMuted)
-                    .textCase(.uppercase)
-                    .tracking(3)
-                    .opacity(heroAnimated ? 1 : 0)
-                    .animation(.easeOut(duration: 0.4).delay(0.3), value: heroAnimated)
-
-                Rectangle()
-                    .fill(AppTheme.accentGradient)
-                    .frame(width: heroAnimated ? 48 : 0, height: 2)
-                    .animation(.easeOut(duration: 0.6).delay(0.2), value: heroAnimated)
-            }
-
-            // Main headline with gradient text
-            VStack(spacing: AppTheme.Spacing.sm) {
-                Text("Your developer")
-                    .font(.system(size: 52, weight: .heavy, design: .rounded))
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                Text("Elegant tools for the everyday macOS workflow.")
+                    .font(.system(size: 46, weight: .heavy, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
-                    .opacity(heroAnimated ? 1 : 0)
-                    .offset(y: heroAnimated ? 0 : 20)
-                    .animation(.spring(duration: 0.5, bounce: 0.1).delay(0.1), value: heroAnimated)
 
-                Text("utility cockpit.")
-                    .font(.system(size: 52, weight: .heavy, design: .rounded))
-                    .foregroundStyle(AppTheme.accentGradient)
-                    .opacity(heroAnimated ? 1 : 0)
-                    .offset(y: heroAnimated ? 0 : 20)
-                    .animation(.spring(duration: 0.5, bounce: 0.1).delay(0.2), value: heroAnimated)
+                Text("A more refined desktop shell with lighter chrome, calmer focus, and shared glass surfaces across every utility.")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .frame(maxWidth: 680, alignment: .leading)
             }
 
-            Text("\(tools.count) tools. \(categoryCount) categories. One unified language.")
-                .font(.system(size: 17, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textSecondary)
-                .opacity(heroAnimated ? 1 : 0)
-                .animation(.easeOut(duration: 0.5).delay(0.4), value: heroAnimated)
-
-            // Stats row
-            HStack(spacing: AppTheme.Spacing.xl) {
-                LandingMetric(
-                    value: "\(devTools.count)", label: "Dev Tools", color: AppTheme.accent
-                )
-                .opacity(heroAnimated ? 1 : 0)
-                .offset(y: heroAnimated ? 0 : 12)
-                .animation(.spring(duration: 0.4, bounce: 0.1).delay(0.45), value: heroAnimated)
-
-                // Divider dot
-                Circle()
-                    .fill(AppTheme.textMuted.opacity(0.4))
-                    .frame(width: 4, height: 4)
-
-                LandingMetric(
-                    value: "\(aiTools.count)", label: "AI Tools", color: AppTheme.accentWarm
-                )
-                .opacity(heroAnimated ? 1 : 0)
-                .offset(y: heroAnimated ? 0 : 12)
-                .animation(.spring(duration: 0.4, bounce: 0.1).delay(0.55), value: heroAnimated)
-
-                Circle()
-                    .fill(AppTheme.textMuted.opacity(0.4))
-                    .frame(width: 4, height: 4)
-
-                LandingMetric(value: "1", label: "Unified Layout", color: AppTheme.accentCoral)
-                    .opacity(heroAnimated ? 1 : 0)
-                    .offset(y: heroAnimated ? 0 : 12)
-                    .animation(.spring(duration: 0.4, bounce: 0.1).delay(0.65), value: heroAnimated)
+            HStack(spacing: AppTheme.Spacing.lg) {
+                LandingMetric(value: "\(devTools.count)", label: "Dev Tools", color: AppTheme.accent)
+                LandingMetric(value: "\(aiTools.count)", label: "AI Tools", color: AppTheme.accentWarm)
+                LandingMetric(value: "1", label: "Shared Language", color: AppTheme.accentCoral)
             }
-            .padding(.top, AppTheme.Spacing.sm)
+
+            HStack(spacing: AppTheme.Spacing.md) {
+                if let jsonTool = tool(with: .jsonTool) {
+                    StyledButton("Open JSON Tool", systemImage: jsonTool.systemImage, variant: .primary) {
+                        selectedTool = jsonTool
+                    }
+                }
+
+                if let aiChat = tool(with: .aiChat) {
+                    StyledButton("Launch AI Chat", systemImage: aiChat.systemImage, variant: .secondary) {
+                        selectedTool = aiChat
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
+        .padding(AppTheme.Spacing.xxxl)
+        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong, shadowOpacity: 0.22)
     }
-
-    // MARK: - Tool Group Section
 
     private func toolGroupSection(
         eyebrow: String,
         title: String,
         subtitle: String,
-        icon: String,
-        accentColor: Color,
         tools: [Tool],
-        columns: Int,
-        delayBase: Int
+        accentColor: Color
     ) -> some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
-            // Section header
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
-                HStack(spacing: AppTheme.Spacing.sm) {
-                    Image(systemName: icon)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(accentColor)
-                    Text(eyebrow)
-                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(accentColor)
-                        .textCase(.uppercase)
-                        .tracking(2)
-
-                    Rectangle()
-                        .fill(accentColor.opacity(0.25))
-                        .frame(height: 1)
-                }
+                Text(eyebrow)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(accentColor)
+                    .textCase(.uppercase)
+                    .tracking(1.4)
 
                 Text(title)
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
 
                 Text(subtitle)
@@ -837,53 +666,23 @@ private struct WelcomeView: View {
                     .foregroundStyle(AppTheme.textSecondary)
             }
 
-            // Tool cards grid
-            let gridColumns = Array(
-                repeating: GridItem(.flexible(), spacing: AppTheme.Spacing.lg), count: columns)
-            LazyVGrid(columns: gridColumns, spacing: AppTheme.Spacing.lg) {
-                ForEach(Array(tools.enumerated()), id: \.element.id) { index, tool in
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 240, maximum: 320), spacing: AppTheme.Spacing.lg)],
+                spacing: AppTheme.Spacing.lg
+            ) {
+                ForEach(tools) { tool in
                     LandingToolCard(tool: tool, accentColor: accentColor) {
                         selectedTool = tool
                     }
-                    .opacity(cardsAnimated ? 1 : 0)
-                    .offset(y: cardsAnimated ? 0 : 24)
-                    .animation(
-                        .spring(duration: 0.45, bounce: 0.12)
-                            .delay(Double(delayBase + index) * 0.06),
-                        value: cardsAnimated
-                    )
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Footer
-
-    private var footerSection: some View {
-        VStack(spacing: AppTheme.Spacing.md) {
-            Rectangle()
-                .fill(AppTheme.border)
-                .frame(height: 1)
-                .padding(.horizontal, 40)
-
-            HStack {
-                Text("Built with SwiftUI")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(AppTheme.textMuted)
-                    .tracking(0.8)
-                Spacer()
-                Text("Powered by Claude CLI + MiniMax")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(AppTheme.textMuted)
-                    .tracking(0.8)
-            }
-        }
-        .padding(.bottom, 40)
+    private func tool(with id: ToolID) -> Tool? {
+        tools.first { $0.toolID == id }
     }
 }
-
-// MARK: - Landing Metric
 
 private struct LandingMetric: View {
     let value: String
@@ -893,18 +692,20 @@ private struct LandingMetric: View {
     var body: some View {
         HStack(spacing: AppTheme.Spacing.sm) {
             Text(value)
-                .font(.system(size: 28, weight: .black, design: .rounded))
+                .font(.system(size: 24, weight: .black, design: .rounded))
                 .foregroundStyle(color)
+
             Text(label)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppTheme.textMuted)
                 .textCase(.uppercase)
                 .tracking(0.8)
         }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.vertical, AppTheme.Spacing.sm)
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: color.opacity(0.16), stroke: color.opacity(0.18), shadowOpacity: 0.10)
     }
 }
-
-// MARK: - Landing Tool Card
 
 private struct LandingToolCard: View {
     let tool: Tool
@@ -916,119 +717,122 @@ private struct LandingToolCard: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-                // Icon + tag row
-                HStack {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                            .fill(accentColor.opacity(isHovered ? 0.22 : 0.12))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: tool.systemImage)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(isHovered ? accentColor : AppTheme.textSecondary)
-                    }
+                HStack(alignment: .top) {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 42, height: 42)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                                .fill(accentColor.opacity(isHovered ? 0.24 : 0.16))
+                                .padding(2)
+                                .overlay {
+                                    Image(systemName: tool.systemImage)
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(isHovered ? accentColor : AppTheme.textSecondary)
+                                }
+                        }
 
                     Spacer()
 
                     Text(tool.routeSlug)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(accentColor.opacity(0.7))
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(accentColor)
                         .textCase(.uppercase)
-                        .tracking(1.2)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule().fill(accentColor.opacity(0.08))
-                        )
+                        .tracking(1.0)
+                        .padding(.horizontal, AppTheme.Spacing.sm)
+                        .padding(.vertical, AppTheme.Spacing.xs + 1)
+                        .background {
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay {
+                                    Capsule().fill(accentColor.opacity(0.10))
+                                }
+                        }
                 }
 
-                // Name + description
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs + 2) {
                     Text(tool.name)
                         .font(.system(size: 17, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
+
                     Text(tool.description)
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // CTA row
                 HStack {
                     Text("Open")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(isHovered ? accentColor : AppTheme.textMuted)
+
                     Spacer()
+
                     Image(systemName: "arrow.right")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(isHovered ? accentColor : AppTheme.textMuted)
-                        .offset(x: isHovered ? 3 : 0)
+                        .offset(x: isHovered ? 4 : 0)
                 }
             }
-            .padding(AppTheme.Spacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.xl)
-                    .fill(isHovered ? AppTheme.surfaceHover : AppTheme.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.xl)
-                    .strokeBorder(
-                        isHovered ? accentColor.opacity(0.3) : AppTheme.border, lineWidth: 1)
-            )
-            .shadow(
-                color: isHovered ? accentColor.opacity(0.08) : Color.black.opacity(0.10),
-                radius: isHovered ? 24 : 12, y: 8)
+            .padding(AppTheme.Spacing.xl)
+            .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTintStrong, stroke: isHovered ? accentColor.opacity(0.30) : AppTheme.border, shadowOpacity: isHovered ? 0.22 : 0.14)
         }
         .buttonStyle(.plain)
-        .onHover { hovering in withAnimation(AppTheme.Anim.fast) { isHovered = hovering } }
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .toolHoverTracking($isHovered)
     }
 }
-// MARK: - Settings Sheet
 
 private struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedTab: ToolSettingsTab
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Picker("", selection: $selectedTab) {
-                    ForEach(ToolSettingsTab.allCases, id: \.self) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 500)
+        VStack(spacing: AppTheme.Spacing.lg) {
+            HStack(alignment: .top, spacing: AppTheme.Spacing.lg) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    Text("Provider Settings")
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
 
-                Spacer()
-                Button {
+                    Text("Keep diagnostics, providers, and local CLI integrations inside the same visual rhythm as the main workspace.")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                Spacer(minLength: 0)
+
+                StyledIconButton("xmark", help: "Close") {
                     dismiss()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AppTheme.textMuted)
                 }
-                .buttonStyle(.plain)
-                .padding(AppTheme.Spacing.md)
             }
 
-            if selectedTab == .minimax {
-                MiniMaxSettingsView()
-            } else if selectedTab == .claude {
-                ClaudeCLISettingsView()
-            } else if selectedTab == .hermes {
-                HermesSettingsView()
-            } else {
-                DiagnosticsView()
+            Picker("", selection: $selectedTab) {
+                ForEach(ToolSettingsTab.allCases, id: \.self) { tab in
+                    Text(tab.title).tag(tab)
+                }
             }
+            .pickerStyle(.segmented)
+            .padding(6)
+            .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong, shadowOpacity: 0.08)
+
+            Group {
+                if selectedTab == .minimax {
+                    MiniMaxSettingsView()
+                } else if selectedTab == .claude {
+                    ClaudeCLISettingsView()
+                } else {
+                    DiagnosticsView()
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
         }
-        .frame(minWidth: 600, minHeight: 500)
-        .background(AppTheme.background)
+        .padding(AppTheme.Spacing.xxl)
+        .frame(minWidth: 760, minHeight: 620)
+        .background(AppBackdrop())
     }
 }
-
-// MARK: - Previews
 
 #if DEBUG
     struct ContentView_Previews: PreviewProvider {

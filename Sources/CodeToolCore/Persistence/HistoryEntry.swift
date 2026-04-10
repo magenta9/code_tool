@@ -6,7 +6,6 @@ import Foundation
 public enum HistoryToolID: String, CaseIterable, Codable, Sendable {
     case chat
     case claudeChat = "claude-chat"
-    case hermesAgent = "hermes-agent"
     case speech
     case image
     case music
@@ -22,7 +21,6 @@ public enum HistoryToolID: String, CaseIterable, Codable, Sendable {
         switch category {
         case .chat: self = .chat
         case .claudeChat: self = .claudeChat
-        case .hermesAgent: self = .hermesAgent
         case .speech: self = .speech
         case .image: self = .image
         case .music: self = .music
@@ -40,7 +38,6 @@ public enum HistoryToolID: String, CaseIterable, Codable, Sendable {
         switch self {
         case .chat: return .chat
         case .claudeChat: return .claudeChat
-        case .hermesAgent: return .hermesAgent
         case .speech: return .speech
         case .image: return .image
         case .music: return .music

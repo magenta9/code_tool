@@ -17,7 +17,6 @@
 
 ## Key conventions
 
-- When the agent needs clarification or a user decision, prefer the `ask_user` tool instead of asking in plain text. Keep clarification requests scoped to real blocking ambiguities so the user is not peppered with conversational follow-up questions.
 - When adding, removing, or renaming a tool, treat tool wiring as a cross-file change. Update `ToolRegistry.defaults` in `Tool.swift`, the `ToolDetailView` switch in `ContentView.swift`, the `Tool.navigationTag` mapping in `ContentView.swift`, the tool-count and user-facing copy in `ContentView.swift`, `Tests/CodeToolTests/CodeToolTests.swift`, and `README.md`. History shows agents often touch only part of this path; `ToolRegistry.defaults` is the source of truth when other surfaces drift.
 - New or refactored tool screens should be built from the shared shell (`ToolWorkbench`, `StyledPanel`, `StyledButton`, `StyledTextEditor`, `ToolMessageBanner`, `AppTheme`) instead of introducing a one-off top-level layout.
 - Keep terminal builds SwiftPM-safe. This codebase already moved away from bare `#Preview {}` usage because it breaks command-line builds; prefer `PreviewProvider` wrapped in `#if DEBUG` for preview code.

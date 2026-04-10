@@ -3,7 +3,6 @@ import SwiftUI
 enum ToolSettingsTab: String, CaseIterable, Hashable {
     case minimax
     case claude
-    case hermes
     case diagnostics
 
     var title: String {
@@ -12,8 +11,6 @@ enum ToolSettingsTab: String, CaseIterable, Hashable {
             return "MiniMax"
         case .claude:
             return "Claude CLI"
-        case .hermes:
-            return "Hermes"
         case .diagnostics:
             return "Diagnostics"
         }

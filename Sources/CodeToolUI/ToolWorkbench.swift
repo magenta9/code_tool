@@ -69,16 +69,21 @@ public struct ToolWorkbench<Actions: View, Content: View>: View {
             HStack(alignment: .top, spacing: AppTheme.Spacing.lg) {
                 HStack(spacing: AppTheme.Spacing.md) {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                        .fill(AppTheme.heroGradient)
+                        .fill(.ultraThinMaterial)
                         .frame(width: 52, height: 52)
                         .overlay {
-                            Image(systemName: systemImage)
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
+                                .fill(AppTheme.heroGradient)
+                                .padding(2)
+                                .overlay {
+                                    Image(systemName: systemImage)
+                                        .font(.system(size: 20, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                }
                         }
                         .overlay(
                             RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
                         )
 
                     VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
@@ -124,9 +129,11 @@ public struct ToolWorkbench<Actions: View, Content: View>: View {
         .padding(.horizontal, AppTheme.Spacing.xxl)
         .padding(.top, AppTheme.Spacing.xxl)
         .padding(.bottom, AppTheme.Spacing.xl)
-        .background(Color.black.opacity(0.10))
+        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong, shadowOpacity: 0.12)
+        .padding(.horizontal, AppTheme.Spacing.xl)
+        .padding(.top, AppTheme.Spacing.xl)
         .overlay(alignment: .bottom) {
-            AppTheme.border.frame(height: 1)
+            Color.clear.frame(height: 1)
         }
     }
 
@@ -137,12 +144,14 @@ public struct ToolWorkbench<Actions: View, Content: View>: View {
             .foregroundStyle(item.tint)
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
-            .background(item.tint.opacity(0.10))
-            .clipShape(Capsule())
-            .overlay(
+            .background {
                 Capsule()
-                    .strokeBorder(item.tint.opacity(0.25), lineWidth: 1)
-            )
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule().fill(item.tint.opacity(0.10))
+                    }
+            }
+            .overlay(Capsule().strokeBorder(item.tint.opacity(0.24), lineWidth: 1))
 
         if let action = item.action {
             Button(action: action) {
@@ -178,11 +187,6 @@ public struct ToolMessageBanner: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(tint.opacity(0.10))
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.Radius.md)
-                    .strokeBorder(tint.opacity(0.22), lineWidth: 1)
-            )
+            .glassSurface(cornerRadius: AppTheme.Radius.md, tint: tint.opacity(0.22), stroke: tint.opacity(0.22), shadowOpacity: 0.08)
     }
 }

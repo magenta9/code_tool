@@ -24,7 +24,6 @@ public enum ToolID: String, CaseIterable, Codable, Hashable, Sendable {
     case jwtTool
     case wordCloud
     case aiChat
-    case hermesAgent
     case aiSpeech
     case aiImage
     case aiMusic
@@ -39,7 +38,6 @@ public enum ToolID: String, CaseIterable, Codable, Hashable, Sendable {
         case .jwtTool: return "Inspect"
         case .wordCloud: return "Visualize"
         case .aiChat: return "Chat"
-        case .hermesAgent: return "Agent"
         case .aiSpeech: return "Speech"
         case .aiImage: return "Image"
         case .aiMusic: return "Music"
@@ -133,13 +131,6 @@ public enum ToolCatalog {
             title: "AI Chat",
             description: "Chat with Claude — full agentic capabilities via CLI.",
             systemImage: "bubble.left.and.bubble.right",
-            category: .aiTools
-        ),
-        ToolCatalogEntry(
-            id: .hermesAgent,
-            title: "Hermes Agent",
-            description: "Run Hermes locally with file references, resume, and diagnostics tracing.",
-            systemImage: "command",
             category: .aiTools
         ),
         ToolCatalogEntry(

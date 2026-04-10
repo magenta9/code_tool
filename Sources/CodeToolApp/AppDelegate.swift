@@ -21,10 +21,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         DispatchQueue.main.async {
             if let window = NSApp.windows.first {
-                window.backgroundColor = NSColor(AppTheme.background)
+                window.backgroundColor = .clear
+                window.isOpaque = false
                 window.titlebarAppearsTransparent = true
                 window.titleVisibility = .hidden
                 window.styleMask.insert(.fullSizeContentView)
+                window.toolbarStyle = .unifiedCompact
+                window.isMovableByWindowBackground = true
             }
         }
     }

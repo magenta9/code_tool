@@ -124,53 +124,6 @@ public struct ClaudeChatHistoryCodec: HistoryPayloadCodec, Sendable {
     public func createdAt(for r: ClaudeChatHistoryRecord) -> Date { r.createdAt }
 }
 
-public struct HermesAgentHistoryCodec: HistoryPayloadCodec, Sendable {
-    public typealias Payload = HermesAgentDiagnosticsRecord
-    public let toolID = HistoryToolID.hermesAgent
-
-    public init() {}
-
-    public func summary(for r: HermesAgentDiagnosticsRecord) -> HistoryEntrySummary {
-        let subtitle = [
-            r.status,
-            "attachments=\(r.attachmentCount)",
-            r.modelOrProfile,
-        ]
-        .compactMap { value -> String? in
-            guard let value else { return nil }
-            return value.isEmpty ? nil : value
-        }
-        .joined(separator: " · ")
-
-        return HistoryEntrySummary(
-            title: String(r.requestSummary.prefix(60)),
-            subtitle: subtitle,
-            icon: "command"
-        )
-    }
-
-    public func diagnosticsInfo(for r: HermesAgentDiagnosticsRecord) -> HistoryDiagnosticsInfo? {
-        let detail = [
-            "status=\(r.status)",
-            "attachments=\(r.attachmentCount)",
-            r.modelOrProfile.map { "profile=\($0)" },
-        ]
-        .compactMap { $0 }
-        .joined(separator: ", ")
-
-        return HistoryDiagnosticsInfo(
-            title: "Hermes Agent",
-            detail: detail,
-            sessionID: r.sessionID
-        )
-    }
-
-    public func referenceID(for r: HermesAgentDiagnosticsRecord) -> String? { r.referenceID }
-    public func sessionID(for r: HermesAgentDiagnosticsRecord) -> String? { r.sessionID }
-    public func assetFileNames(for r: HermesAgentDiagnosticsRecord) -> [String] { [] }
-    public func createdAt(for r: HermesAgentDiagnosticsRecord) -> Date { r.createdAt }
-}
-
 public struct SpeechHistoryCodec: HistoryPayloadCodec, Sendable {
     public typealias Payload = SpeechHistoryRecord
     public let toolID = HistoryToolID.speech
@@ -405,7 +358,6 @@ public struct HistoryDefinitionRegistry: Sendable {
         let all: [ToolHistoryDefinition] = [
             ToolHistoryDefinition(codec: ChatHistoryCodec()),
             ToolHistoryDefinition(codec: ClaudeChatHistoryCodec()),
-            ToolHistoryDefinition(codec: HermesAgentHistoryCodec()),
             ToolHistoryDefinition(codec: SpeechHistoryCodec()),
             ToolHistoryDefinition(codec: ImageHistoryCodec()),
             ToolHistoryDefinition(codec: MusicHistoryCodec()),

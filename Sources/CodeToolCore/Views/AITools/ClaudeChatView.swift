@@ -99,7 +99,7 @@ public struct ClaudeChatView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 inputArea
-                    .padding(.horizontal, AppTheme.Spacing.xxl)
+                    .padding(.horizontal, AppTheme.Spacing.xl)
                     .padding(.top, AppTheme.Spacing.lg)
                     .padding(.bottom, AppTheme.Spacing.xxl)
             }
@@ -167,7 +167,7 @@ public struct ClaudeChatView: View {
                 )
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.xxl)
+        .padding(.horizontal, AppTheme.Spacing.xl)
         .padding(.top, AppTheme.Spacing.sm)
     }
 
@@ -465,7 +465,27 @@ public struct ClaudeChatView: View {
                     ClaudeMarkdownView(markdown: message.content)
                 }
             }
+            .padding(.horizontal, AppTheme.Spacing.lg)
+            .padding(.vertical, AppTheme.Spacing.md)
             .frame(maxWidth: assistantColumnWidth, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AppTheme.surfaceRaised.opacity(0.78),
+                                AppTheme.surface.opacity(0.58),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(AppTheme.borderHover.opacity(0.78), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.14), radius: 20, y: 10)
             .hoverCopy(text: message.content)
 
             Spacer(minLength: 96)
@@ -748,7 +768,7 @@ public struct ClaudeChatView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(AppTheme.Spacing.lg)
-        .frame(maxWidth: 960)
+        .frame(maxWidth: 1280)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
@@ -776,15 +796,15 @@ public struct ClaudeChatView: View {
     }
 
     private var messageColumnWidth: CGFloat {
-        920
+        1040
     }
 
     private var assistantColumnWidth: CGFloat {
-        760
+        860
     }
 
     private var userBubbleWidth: CGFloat {
-        560
+        620
     }
 
     private var composerReservedSpace: CGFloat {
@@ -1526,9 +1546,9 @@ private struct ClaudeConversationPane<LeadIn: View, EmptyState: View, MessageCon
                         .frame(height: state.composerReservedSpace)
                         .id("bottom")
                 }
-                .frame(maxWidth: 920)
+                .frame(maxWidth: 1040)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, AppTheme.Spacing.xxl)
+                .padding(.horizontal, AppTheme.Spacing.xl)
                 .padding(.top, AppTheme.Spacing.xl)
                 .padding(.bottom, AppTheme.Spacing.md)
             }
@@ -1597,7 +1617,7 @@ private struct ClaudeStarterCard: View {
     }
 }
 
-private struct ClaudeCapsuleTag: View {
+struct ClaudeCapsuleTag: View {
     let title: String
     let systemImage: String
     let tint: Color
@@ -1622,7 +1642,7 @@ private struct ClaudeCapsuleTag: View {
     }
 }
 
-private struct ClaudeComposerAccessoryButton: View {
+struct ClaudeComposerAccessoryButton: View {
     let systemImage: String
     let action: () -> Void
 
@@ -1646,7 +1666,7 @@ private struct ClaudeComposerAccessoryButton: View {
     }
 }
 
-private struct ClaudeSendButton: View {
+struct ClaudeSendButton: View {
     let disabled: Bool
     let action: () -> Void
 

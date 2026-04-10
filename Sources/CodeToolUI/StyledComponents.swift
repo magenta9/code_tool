@@ -100,12 +100,7 @@ public struct StyledToolbar<Content: View>: View {
         }
         .padding(AppTheme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface.opacity(0.86))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong)
     }
 }
 
@@ -147,20 +142,19 @@ public struct StyledButton: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm + 1)
             .foregroundStyle(foregroundColor)
-            .background(backgroundView)
-            .clipShape(Capsule())
+            .background(capsuleBackground)
             .overlay(overlayView)
-            .shadow(color: shadowColor, radius: isHovered ? 18 : 10, y: 8)
+            .shadow(color: shadowColor, radius: isHovered ? 22 : 12, y: 10)
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .scaleEffect(isHovered ? 1.015 : 1.0)
         .toolHoverTracking($isHovered)
     }
 
     private var foregroundColor: Color {
         switch variant {
         case .primary:
-            return AppTheme.background
+            return Color.black.opacity(0.78)
         case .secondary:
             return AppTheme.textPrimary
         case .ghost:
@@ -173,25 +167,50 @@ public struct StyledButton: View {
     private var shadowColor: Color {
         switch variant {
         case .primary:
-            return AppTheme.accent.opacity(0.18)
+            return AppTheme.accent.opacity(0.20)
         case .destructive:
-            return AppTheme.error.opacity(0.10)
+            return AppTheme.error.opacity(0.12)
         case .secondary, .ghost:
             return .clear
         }
     }
 
+    private var capsuleBackground: some View {
+        Capsule()
+            .fill(.ultraThinMaterial)
+            .overlay {
+                backgroundOverlay
+            }
+    }
+
     @ViewBuilder
-    private var backgroundView: some View {
+    private var backgroundOverlay: some View {
         switch variant {
         case .primary:
-            AppTheme.accentGradient.opacity(isHovered ? 1.0 : 0.92)
+            Capsule().fill(AppTheme.accentGradient.opacity(isHovered ? 1.0 : 0.94))
         case .secondary:
-            AppTheme.surfaceRaised.opacity(isHovered ? 1.0 : 0.82)
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.panelTintStrong.opacity(isHovered ? 0.62 : 0.52),
+                            AppTheme.panelTint.opacity(isHovered ? 0.40 : 0.28),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         case .ghost:
-            Color.white.opacity(isHovered ? 0.08 : 0.03)
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(isHovered ? 0.10 : 0.06), Color.clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         case .destructive:
-            AppTheme.error.opacity(isHovered ? 0.16 : 0.10)
+            Capsule().fill(AppTheme.error.opacity(isHovered ? 0.20 : 0.13))
         }
     }
 
@@ -199,9 +218,9 @@ public struct StyledButton: View {
     private var overlayView: some View {
         switch variant {
         case .primary:
-            Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+            Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
         case .secondary, .ghost:
-            Capsule().strokeBorder(AppTheme.border, lineWidth: 1)
+            Capsule().strokeBorder(isHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1)
         case .destructive:
             Capsule().strokeBorder(AppTheme.error.opacity(0.24), lineWidth: 1)
         }
@@ -227,9 +246,24 @@ public struct StyledIconButton: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(AppTheme.textSecondary)
                 .frame(width: 30, height: 30)
-                .background(AppTheme.surfaceRaised.opacity(isHovered ? 0.95 : 0.72))
-                .clipShape(Circle())
-                .overlay(Circle().strokeBorder(AppTheme.border, lineWidth: 1))
+                .background {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(isHovered ? 0.16 : 0.08),
+                                            AppTheme.panelTintStrong.opacity(isHovered ? 0.30 : 0.18),
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                }
+                .overlay(Circle().strokeBorder(isHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .help(help)
@@ -271,8 +305,20 @@ public struct CopyButton: View {
             }
             .padding(.horizontal, AppTheme.Spacing.sm + 2)
             .padding(.vertical, AppTheme.Spacing.xs + 2)
-            .background(AppTheme.surfaceRaised.opacity(0.72))
-            .clipShape(Capsule())
+            .background {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.10), AppTheme.panelTint.opacity(0.18)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+            }
             .overlay(Capsule().strokeBorder(AppTheme.border, lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -333,13 +379,7 @@ public struct StyledPanel<Content: View>: View {
         }
         .padding(AppTheme.Spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.cardGradient.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.14), radius: 18, y: 10)
+        .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTintStrong)
     }
 }
 
@@ -387,10 +427,25 @@ public struct StyledTextEditor: View {
                     .allowsHitTesting(false)
             }
         }
-        .background(AppTheme.background.opacity(0.82))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md))
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AppTheme.background.opacity(0.66),
+                                    AppTheme.panelTint.opacity(0.24),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+        }
         .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.md)
+            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
                 .strokeBorder(AppTheme.border, lineWidth: 1)
         )
     }
@@ -412,10 +467,7 @@ public struct StyledStatusBar<Content: View>: View {
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.vertical, AppTheme.Spacing.sm + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.surface.opacity(0.76))
-        .overlay(alignment: .top) {
-            AppTheme.border.frame(height: 1)
-        }
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTint)
     }
 }
 
@@ -521,8 +573,20 @@ public struct StyledSegmentedPicker<T: Hashable>: View {
             }
         }
         .padding(4)
-        .background(AppTheme.surfaceRaised.opacity(0.72))
-        .clipShape(Capsule())
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.10), AppTheme.panelTint.opacity(0.20)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+        }
         .overlay(Capsule().strokeBorder(AppTheme.border, lineWidth: 1))
     }
 }
@@ -575,12 +639,7 @@ public struct ThemedValueCard: View {
         }
         .padding(AppTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.heroGradient.opacity(0.34))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong)
     }
 }
 

@@ -70,18 +70,6 @@ public struct ContentView: View {
         }
     }
 
-    private var activeToolTitle: String {
-        selectedTool?.name ?? "CodeTool"
-    }
-
-    private var activeToolSubtitle: String {
-        if let selectedTool {
-            return selectedTool.description
-        }
-
-        return "A calmer desktop deck for daily dev utilities and AI workflows."
-    }
-
     public var body: some View {
         let settingsPresenter = ToolSettingsPresenter { tab in
             selectedSettingsTab = tab
@@ -92,13 +80,12 @@ public struct ContentView: View {
             SidebarPane(
                 groups: filteredGroups,
                 selectedTool: $selectedTool,
-                totalToolCount: tools.count,
-                searchText: searchText,
                 openSettings: {
                     selectedSettingsTab = .minimax
                     showSettings = true
                 }
             )
+            .navigationSplitViewColumnWidth(min: 260, ideal: 290, max: 340)
         } detail: {
             ToolDetailCacheView(
                 tools: tools,
@@ -107,8 +94,8 @@ public struct ContentView: View {
             )
             .environment(\.toolSettingsPresenter, settingsPresenter)
         }
-        .navigationSplitViewStyle(.balanced)
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search tools")
+        .navigationTitle(selectedTool?.name ?? "CodeTool")
         .environment(\.toolSettingsPresenter, settingsPresenter)
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -118,15 +105,11 @@ public struct ContentView: View {
                 .help("切换侧边栏 (⌘\\)")
             }
 
-            ToolbarItem(placement: .principal) {
-                ToolbarTitleView(title: activeToolTitle, subtitle: activeToolSubtitle)
-            }
-
-            ToolbarItemGroup {
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     selectedTool = nil
                 } label: {
-                    Label("Home", systemImage: "square.grid.2x2")
+                    Image(systemName: "house")
                 }
                 .help("返回工作台首页")
 
@@ -134,7 +117,7 @@ public struct ContentView: View {
                     selectedSettingsTab = .minimax
                     showSettings = true
                 } label: {
-                    Label("Settings", systemImage: "slider.horizontal.3")
+                    Image(systemName: "slider.horizontal.3")
                 }
                 .help("打开 Provider 设置")
             }
@@ -240,44 +223,13 @@ enum ToolViewCache {
     }
 }
 
-private struct ToolbarTitleView: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(spacing: 2) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(AppTheme.textPrimary)
-                .lineLimit(1)
-
-            Text(subtitle)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textMuted)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: 360)
-    }
-}
-
 private struct SidebarPane: View {
     let groups: [ToolGroup]
     @Binding var selectedTool: Tool?
-    let totalToolCount: Int
-    let searchText: String
     let openSettings: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            SidebarHeroCard(
-                totalToolCount: totalToolCount,
-                selectedTool: selectedTool,
-                searchText: searchText
-            )
-            .padding(.horizontal, AppTheme.Spacing.lg)
-            .padding(.top, AppTheme.Spacing.lg)
-            .padding(.bottom, AppTheme.Spacing.sm)
-
+        Group {
             if groups.isEmpty {
                 ContentUnavailableView(
                     "No Matching Tools",
@@ -288,27 +240,21 @@ private struct SidebarPane: View {
             } else {
                 List(selection: $selectedTool) {
                     ForEach(groups) { group in
-                        Section {
+                        Section(group.category.displayName) {
                             ForEach(group.tools) { tool in
                                 SidebarRow(tool: tool, isSelected: selectedTool == tool)
                                     .tag(tool as Tool?)
                                     .listRowInsets(
                                         EdgeInsets(
-                                            top: 5,
+                                            top: 4,
                                             leading: AppTheme.Spacing.md,
-                                            bottom: 5,
+                                            bottom: 4,
                                             trailing: AppTheme.Spacing.md
                                         )
                                     )
                                     .listRowBackground(Color.clear)
                                     .listRowSeparator(.hidden)
                             }
-                        } header: {
-                            Label(group.category.displayName, systemImage: group.category.systemImage)
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppTheme.textMuted)
-                                .textCase(.uppercase)
-                                .tracking(1.0)
                         }
                     }
                 }
@@ -317,102 +263,20 @@ private struct SidebarPane: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            SidebarFooterCard(openSettings: openSettings)
-                .padding(.horizontal, AppTheme.Spacing.lg)
-                .padding(.top, AppTheme.Spacing.sm)
-                .padding(.bottom, AppTheme.Spacing.lg)
-        }
-    }
-}
-
-private struct SidebarHeroCard: View {
-    let totalToolCount: Int
-    let selectedTool: Tool?
-    let searchText: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-            HStack(spacing: AppTheme.Spacing.md) {
-                RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
-                    .fill(AppTheme.accentGradient)
-                    .frame(width: 44, height: 44)
-                    .overlay {
-                        Image(systemName: selectedTool?.systemImage ?? "square.grid.2x2")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Color.black.opacity(0.78))
-                    }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(selectedTool?.name ?? "CodeTool")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+            VStack(spacing: 0) {
+                Divider()
+                Button(action: openSettings) {
+                    Label("Provider Settings", systemImage: "slider.horizontal.3")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
-
-                    Text(selectedTool?.routeSlug ?? "Desktop utility deck")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textMuted)
-                        .textCase(.uppercase)
-                        .tracking(1.1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, AppTheme.Spacing.lg)
+                        .padding(.vertical, AppTheme.Spacing.md)
                 }
-            }
-
-            Text(selectedTool?.description ?? "Elegant utility workflows built around consistent surfaces, lighter chrome, and a calmer reading rhythm.")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: AppTheme.Spacing.sm) {
-                infoCapsule(title: "\(totalToolCount) tools", tint: AppTheme.accent)
-
-                if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    infoCapsule(title: "Filtered", tint: AppTheme.accentWarm)
-                } else {
-                    infoCapsule(title: "Ready", tint: AppTheme.success)
-                }
+                .buttonStyle(.plain)
+                .background(.regularMaterial)
             }
         }
-        .padding(AppTheme.Spacing.lg)
-        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong)
-    }
-
-    private func infoCapsule(title: String, tint: Color) -> some View {
-        Text(title)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundStyle(tint)
-            .padding(.horizontal, AppTheme.Spacing.sm + 2)
-            .padding(.vertical, AppTheme.Spacing.xs + 2)
-            .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule().fill(tint.opacity(0.10))
-                    }
-            }
-            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1))
-    }
-}
-
-private struct SidebarFooterCard: View {
-    let openSettings: () -> Void
-
-    var body: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Provider Settings")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-
-                Text("Tune your model providers without leaving the current workspace.")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textMuted)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-
-            StyledButton("Open", systemImage: "slider.horizontal.3", variant: .secondary, action: openSettings)
-        }
-        .padding(AppTheme.Spacing.lg)
-        .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTint)
     }
 }
 
@@ -421,22 +285,14 @@ private struct SidebarRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: AppTheme.Spacing.md) {
-            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .frame(width: 34, height: 34)
-                .overlay {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                        .fill(isSelected ? AppTheme.accentGradient : AppTheme.heroGradient)
-                        .padding(2)
-                        .overlay {
-                            Image(systemName: tool.systemImage)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(isSelected ? Color.black.opacity(0.78) : AppTheme.textSecondary)
-                        }
-                }
+        HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
+            Image(systemName: tool.systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.textSecondary)
+                .frame(width: 22, height: 22)
+                .padding(.top, 1)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(tool.name)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -445,18 +301,10 @@ private struct SidebarRow: View {
                 Text(tool.description)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
-
-            Spacer(minLength: 0)
-
-            Text(tool.routeSlug)
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(isSelected ? AppTheme.accentWarm : AppTheme.textMuted)
-                .textCase(.uppercase)
-                .tracking(0.8)
         }
-        .padding(.horizontal, AppTheme.Spacing.sm)
+        .padding(.horizontal, AppTheme.Spacing.xs)
         .padding(.vertical, AppTheme.Spacing.sm)
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous))
     }

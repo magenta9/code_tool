@@ -15,6 +15,17 @@ A macOS developer toolkit built with Swift and SwiftUI, providing a collection o
 - **AI Image** – Generate images with MiniMax image-01 using text alone or reference images via drag-and-drop, file selection, or paste
 - **AI Music** – Generate music with MiniMax Music-2.5
 
+## Workspace Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+0` | Show the landing workspace |
+| `Cmd+\` | Toggle the sidebar |
+| `Cmd+K` | Focus the sidebar search field |
+| `Cmd+,` | Open Settings |
+| `Cmd+1` ... `Cmd+9` | Jump to the first nine bundled tools in sidebar order |
+| `Cmd+Shift+0` | Jump to AI Music |
+
 ## Requirements
 
 | Requirement | Version |

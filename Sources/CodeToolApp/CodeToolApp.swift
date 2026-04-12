@@ -2,6 +2,26 @@ import SwiftUI
 import AppKit
 import CodeToolCore
 
+private struct WorkspaceCommands: Commands {
+    @FocusedValue(\.workspaceCommandActions) private var workspaceCommandActions
+
+    var body: some Commands {
+        CommandMenu("Workspace") {
+            Button("Show Landing") {
+                workspaceCommandActions?.showLanding()
+            }
+            .keyboardShortcut("0", modifiers: .command)
+            .disabled(workspaceCommandActions == nil)
+
+            Button("Toggle Sidebar") {
+                workspaceCommandActions?.toggleSidebar()
+            }
+            .keyboardShortcut("\\", modifiers: .command)
+            .disabled(workspaceCommandActions == nil)
+        }
+    }
+}
+
 @main
 struct CodeToolApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -22,6 +42,8 @@ struct CodeToolApp: App {
                     )
                 }
             }
+
+            WorkspaceCommands()
         }
     }
 }

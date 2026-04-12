@@ -39,14 +39,24 @@ private struct ToolGroup: Identifiable {
 }
 
 public struct ContentView: View {
-    @State private var selectedTool: Tool?
+    @State private var selectedToolID: ToolID?
     @State private var retainedToolIDs: [ToolID] = []
-    @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    @State private var isSidebarVisible = true
     @State private var showSettings = false
     @State private var selectedSettingsTab: ToolSettingsTab = .minimax
     @State private var searchText = ""
 
     private let tools = ToolRegistry.defaults
+
+    private enum Layout {
+        static let sidebarWidth: CGFloat = 290
+        static let minimumWindowWidth: CGFloat = 980
+        static let minimumWindowHeight: CGFloat = 680
+    }
+
+    private var selectedTool: Tool? {
+        tool(for: selectedToolID)
+    }
 
     public init() {}
 
@@ -76,42 +86,46 @@ public struct ContentView: View {
             showSettings = true
         }
 
-        NavigationSplitView(columnVisibility: $sidebarVisibility) {
-            SidebarPane(
-                groups: filteredGroups,
-                selectedTool: $selectedTool,
-                openSettings: {
-                    selectedSettingsTab = .minimax
-                    showSettings = true
-                }
-            )
-            .navigationSplitViewColumnWidth(min: 260, ideal: 290, max: 340)
-        } detail: {
+        HStack(spacing: 0) {
+            if isSidebarVisible {
+                SidebarPane(
+                    groups: filteredGroups,
+                    selectedToolID: $selectedToolID,
+                    openSettings: {
+                        selectedSettingsTab = .minimax
+                        showSettings = true
+                    }
+                )
+                .frame(width: Layout.sidebarWidth)
+
+                SidebarDivider()
+            }
+
             ToolDetailCacheView(
                 tools: tools,
-                selectedTool: $selectedTool,
+                selectedToolID: $selectedToolID,
                 retainedToolIDs: retainedToolIDs
             )
             .environment(\.toolSettingsPresenter, settingsPresenter)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search tools")
-        .navigationTitle(selectedTool?.name ?? "CodeTool")
         .environment(\.toolSettingsPresenter, settingsPresenter)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
+            ToolbarItem(placement: .primaryAction) {
                 Button(action: toggleSidebar) {
                     Image(systemName: "sidebar.leading")
                 }
                 .help("切换侧边栏 (⌘\\)")
             }
 
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItemGroup {
                 Button {
-                    selectedTool = nil
+                    showLanding()
                 } label: {
                     Image(systemName: "house")
                 }
-                .help("返回工作台首页")
+                .help("返回工作台首页 (⌘0)")
 
                 Button {
                     selectedSettingsTab = .minimax
@@ -122,29 +136,29 @@ public struct ContentView: View {
                 .help("打开 Provider 设置")
             }
         }
-        .frame(minWidth: 980, minHeight: 680)
+        .frame(minWidth: Layout.minimumWindowWidth, minHeight: Layout.minimumWindowHeight)
         .background(AppBackdrop())
-        .background {
-            Button("") {
-                toggleSidebar()
-            }
-            .keyboardShortcut("\\", modifiers: .command)
-            .hidden()
-        }
+        .focusedSceneValue(
+            \.workspaceCommandActions,
+            WorkspaceCommandActions(
+                showLanding: showLanding,
+                toggleSidebar: toggleSidebar
+            )
+        )
         .onAppear {
             ClaudeCLISettingsStore.shared.discoverCLI()
             ObservabilitySystem.shared.rootViewReady()
             RenderingPerformance.configureCaptureIfNeeded()
             retainedToolIDs = ToolViewCache.retainedToolIDs(
                 current: retainedToolIDs,
-                selectedToolID: selectedTool?.toolID
+                selectedToolID: selectedToolID
             )
             RenderingPerformance.toolCacheSnapshot(
-                selectedToolID: selectedTool?.toolID,
+                selectedToolID: selectedToolID,
                 retainedToolIDs: retainedToolIDs
             )
         }
-        .onChange(of: selectedTool?.toolID) { previousToolID, selectedToolID in
+        .onChange(of: selectedToolID) { previousToolID, selectedToolID in
             let existingRetainedIDs = retainedToolIDs
             let cacheHit = selectedToolID.map(existingRetainedIDs.contains) ?? false
             let startedAt = Date()
@@ -199,8 +213,36 @@ public struct ContentView: View {
 
     private func toggleSidebar() {
         withAnimation(AppTheme.Anim.settle) {
-            sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
+            isSidebarVisible.toggle()
         }
+    }
+
+    private func showLanding() {
+        selectedToolID = nil
+    }
+
+    private func tool(for toolID: ToolID?) -> Tool? {
+        guard let toolID else {
+            return nil
+        }
+
+        return tools.first { $0.toolID == toolID }
+    }
+}
+
+private struct SidebarDivider: View {
+    var body: some View {
+        ZStack {
+            AppTheme.sidebarBackground.opacity(0.92)
+
+            AppTheme.border
+                .frame(width: 1)
+
+            AppTheme.accent.opacity(0.08)
+                .frame(width: 1)
+                .blur(radius: 3)
+        }
+        .frame(width: 1)
     }
 }
 
@@ -225,7 +267,7 @@ enum ToolViewCache {
 
 private struct SidebarPane: View {
     let groups: [ToolGroup]
-    @Binding var selectedTool: Tool?
+    @Binding var selectedToolID: ToolID?
     let openSettings: () -> Void
 
     var body: some View {
@@ -238,12 +280,16 @@ private struct SidebarPane: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(selection: $selectedTool) {
+                List(selection: $selectedToolID) {
                     ForEach(groups) { group in
                         Section(group.category.displayName) {
                             ForEach(group.tools) { tool in
-                                SidebarRow(tool: tool, isSelected: selectedTool == tool)
-                                    .tag(tool as Tool?)
+                                SidebarRow(tool: tool, isSelected: selectedToolID == tool.toolID)
+                                    .tag(tool.toolID)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        selectedToolID = tool.toolID
+                                    }
                                     .listRowInsets(
                                         EdgeInsets(
                                             top: 4,
@@ -262,6 +308,8 @@ private struct SidebarPane: View {
                 .scrollContentBackground(.hidden)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppTheme.sidebarBackground)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 Divider()
@@ -283,6 +331,14 @@ private struct SidebarPane: View {
 private struct SidebarRow: View {
     let tool: Tool
     let isSelected: Bool
+
+    private var backgroundFill: Color {
+        isSelected ? AppTheme.accent.opacity(0.14) : .clear
+    }
+
+    private var borderColor: Color {
+        isSelected ? AppTheme.accent.opacity(0.24) : .clear
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
@@ -306,28 +362,44 @@ private struct SidebarRow: View {
         }
         .padding(.horizontal, AppTheme.Spacing.xs)
         .padding(.vertical, AppTheme.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                .fill(backgroundFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                .stroke(borderColor, lineWidth: 1)
+        )
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous))
     }
 }
 
 private struct ToolDetailCacheView: View {
     let tools: [Tool]
-    @Binding var selectedTool: Tool?
+    @Binding var selectedToolID: ToolID?
     let retainedToolIDs: [ToolID]
 
     private var visibilityState: ToolVisibilityState {
-        ToolVisibilityState(selectedToolID: selectedTool?.toolID)
+        ToolVisibilityState(selectedToolID: selectedToolID)
+    }
+
+    private var selectedTool: Tool? {
+        guard let selectedToolID else {
+            return nil
+        }
+
+        return tools.first { $0.toolID == selectedToolID }
     }
 
     var body: some View {
         ZStack {
             if selectedTool == nil {
-                WelcomeView(tools: tools, selectedTool: $selectedTool)
+                WelcomeView(tools: tools, selectedToolID: $selectedToolID)
             }
 
             ForEach(cachedTools) { tool in
                 let visibilityContext = visibilityState.context(for: tool.toolID)
-                let isSelected = selectedTool == tool
+                let isSelected = selectedToolID == tool.toolID
 
                 ToolDetailView(tool: tool)
                     .environment(\.toolVisibilityContext, visibilityContext)
@@ -413,7 +485,7 @@ private struct ToolDetailView: View {
 
 private struct WelcomeView: View {
     let tools: [Tool]
-    @Binding var selectedTool: Tool?
+    @Binding var selectedToolID: ToolID?
 
     @State private var appeared = false
 
@@ -475,13 +547,13 @@ private struct WelcomeView: View {
             HStack(spacing: AppTheme.Spacing.md) {
                 if let jsonTool = tool(with: .jsonTool) {
                     StyledButton("Open JSON Tool", systemImage: jsonTool.systemImage, variant: .primary) {
-                        selectedTool = jsonTool
+                        selectedToolID = jsonTool.toolID
                     }
                 }
 
                 if let aiChat = tool(with: .aiChat) {
                     StyledButton("Launch AI Chat", systemImage: aiChat.systemImage, variant: .secondary) {
-                        selectedTool = aiChat
+                        selectedToolID = aiChat.toolID
                     }
                 }
             }
@@ -520,7 +592,7 @@ private struct WelcomeView: View {
             ) {
                 ForEach(tools) { tool in
                     LandingToolCard(tool: tool, accentColor: accentColor) {
-                        selectedTool = tool
+                        selectedToolID = tool.toolID
                     }
                 }
             }

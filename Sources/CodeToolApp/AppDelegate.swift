@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 window.titleVisibility = .hidden
                 window.styleMask.insert(.fullSizeContentView)
                 window.toolbarStyle = .unifiedCompact
-                window.isMovableByWindowBackground = true
+                window.isMovableByWindowBackground = false
             }
         }
     }

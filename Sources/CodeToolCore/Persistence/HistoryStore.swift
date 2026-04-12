@@ -219,108 +219,10 @@ extension SpeechHistoryRecord: HistoryRecord {}
 extension ImageHistoryRecord: HistoryRecord {}
 extension MusicHistoryRecord: HistoryRecord {}
 
-// MARK: - Claude Chat History Models
-
-/// Metadata for a single attachment in a Claude chat message.
-public struct ClaudeChatAttachmentRecord: Codable, Identifiable {
-    public let id: UUID
-    public let type: String   // "image"
-    public let fileName: String
-    public let mimeType: String
-    public let sizeBytes: Int
-
-    public init(
-        id: UUID = UUID(),
-        type: String = "image",
-        fileName: String,
-        mimeType: String,
-        sizeBytes: Int
-    ) {
-        self.id = id
-        self.type = type
-        self.fileName = fileName
-        self.mimeType = mimeType
-        self.sizeBytes = sizeBytes
-    }
-}
-
-/// A single message in a Claude chat conversation.
-public struct ClaudeChatMessageRecord: Codable {
-    public let role: String
-    public let content: String
-    public let thinkingContent: String?
-    public let toolName: String?
-    public let toolInput: String?
-    public let attachments: [ClaudeChatAttachmentRecord]?
-
-    public init(
-        role: String,
-        content: String,
-        thinkingContent: String? = nil,
-        toolName: String? = nil,
-        toolInput: String? = nil,
-        attachments: [ClaudeChatAttachmentRecord]? = nil
-    ) {
-        self.role = role
-        self.content = content
-        self.thinkingContent = thinkingContent
-        self.toolName = toolName
-        self.toolInput = toolInput
-        self.attachments = attachments
-    }
-}
-
-/// History record for a Claude CLI chat session.
-public struct ClaudeChatHistoryRecord: Codable, Identifiable {
-    public let id: UUID
-    public let createdAt: Date
-    public let systemPrompt: String?
-    public let workingDirectory: String?
-    public let messages: [ClaudeChatMessageRecord]
-    public let model: String
-    public let totalCostUSD: Double?
-    public let inputTokens: Int?
-    public let outputTokens: Int?
-    public let durationMs: Int?
-    public let sessionId: String?
-    public let referenceID: String
-
-    public init(
-        id: UUID = UUID(),
-        createdAt: Date = Date(),
-        systemPrompt: String? = nil,
-        workingDirectory: String? = nil,
-        messages: [ClaudeChatMessageRecord],
-        model: String,
-        totalCostUSD: Double? = nil,
-        inputTokens: Int? = nil,
-        outputTokens: Int? = nil,
-        durationMs: Int? = nil,
-        sessionId: String? = nil,
-        referenceID: String
-    ) {
-        self.id = id
-        self.createdAt = createdAt
-        self.systemPrompt = systemPrompt
-        self.workingDirectory = workingDirectory
-        self.messages = messages
-        self.model = model
-        self.totalCostUSD = totalCostUSD
-        self.inputTokens = inputTokens
-        self.outputTokens = outputTokens
-        self.durationMs = durationMs
-        self.sessionId = sessionId
-        self.referenceID = referenceID
-    }
-}
-
-extension ClaudeChatHistoryRecord: HistoryRecord {}
-
 // MARK: - HistoryCategory
 
 public enum HistoryCategory: String, CaseIterable {
     case chat
-    case claudeChat = "claude-chat"
     case speech
     case image
     case music
@@ -477,73 +379,6 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         overrideBaseURL = url
     }
 
-    // MARK: - Static Attachment Helpers (non-actor, for synchronous use)
-
-    private static func staticBaseURL() throws -> URL {
-        guard
-            let appSupport = FileManager.default.urls(
-                for: .applicationSupportDirectory, in: .userDomainMask
-            ).first
-        else {
-            throw HistoryStoreError.storageUnavailable
-        }
-        return
-            appSupport
-            .appendingPathComponent("CodeTool", isDirectory: true)
-            .appendingPathComponent("history", isDirectory: true)
-    }
-
-    private static func staticClaudeChatAttachmentsURL() throws -> URL {
-        let dir = try staticBaseURL().appendingPathComponent("claude-chat-attachments", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: dir.path) {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
-        return dir
-    }
-
-    /// Save an attachment file synchronously (non-actor). For use from main thread.
-    public static func syncSaveClaudeChatAttachment(data: Data, fileName: String) throws -> String {
-        let dir = try staticClaudeChatAttachmentsURL()
-        try data.write(to: dir.appendingPathComponent(fileName))
-        return fileName
-    }
-
-    /// Get the URL for a Claude chat attachment file synchronously (non-actor).
-    public static func syncClaudeChatAttachmentURL(fileName: String) throws -> URL {
-        let dir = try staticClaudeChatAttachmentsURL()
-        return dir.appendingPathComponent(fileName)
-    }
-
-    // MARK: - Claude Chat Attachment Storage
-
-    /// Directory for Claude chat attachment files.
-    private func claudeChatAttachmentsURL() throws -> URL {
-        let dir = try baseURL().appendingPathComponent("claude-chat-attachments", isDirectory: true)
-        if !fileManager.fileExists(atPath: dir.path) {
-            try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
-        return dir
-    }
-
-    /// Save an attachment file for Claude chat. Returns the persisted file name.
-    public func saveClaudeChatAttachment(data: Data, fileName: String) throws -> String {
-        let dir = try claudeChatAttachmentsURL()
-        try data.write(to: dir.appendingPathComponent(fileName))
-        return fileName
-    }
-
-    /// Load an attachment file for Claude chat.
-    public func loadClaudeChatAttachment(fileName: String) throws -> Data {
-        let dir = try claudeChatAttachmentsURL()
-        return try Data(contentsOf: dir.appendingPathComponent(fileName))
-    }
-
-    /// URL for a Claude chat attachment file.
-    public func claudeChatAttachmentURL(fileName: String) throws -> URL {
-        let dir = try claudeChatAttachmentsURL()
-        return dir.appendingPathComponent(fileName)
-    }
-
     // MARK: - Save
 
     public func save(_ record: ChatHistoryRecord) throws {
@@ -617,14 +452,6 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         if let audioData, let audioFileName = record.audioFileName {
             try audioData.write(to: dir.appendingPathComponent(audioFileName))
         }
-    }
-
-    // MARK: - Dev Tool Save
-
-    public func save(_ record: ClaudeChatHistoryRecord) throws {
-        let dir = try categoryURL(.claudeChat)
-        let data = try encoder.encode(record)
-        try data.write(to: dir.appendingPathComponent("\(record.id.uuidString).json"))
     }
 
     public func save(_ record: JSONToolHistoryRecord) throws {
@@ -762,19 +589,10 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         if let data = try? Data(contentsOf: jsonURL),
            let def = registry.definition(for: toolID),
            let entry = try? def.loadEntry(data) {
-            // Delete known asset files
             for assetName in entry.assetFileNames {
-                if toolID == .claudeChat {
-                    // Claude attachments live in a separate directory
-                    if let attachDir = try? claudeChatAttachmentsURL() {
-                        try? fileManager.removeItem(at: attachDir.appendingPathComponent(assetName))
-                    }
-                } else {
-                    try? fileManager.removeItem(at: dir.appendingPathComponent(assetName))
-                }
+                try? fileManager.removeItem(at: dir.appendingPathComponent(assetName))
             }
         } else {
-            // Fallback: remove all files with this UUID prefix
             removeFiles(in: dir, prefix: id.uuidString)
         }
 
@@ -811,12 +629,6 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
 
     public func listMusic(limit: Int? = nil, offset: Int = 0) throws -> [MusicHistoryRecord] {
         try loadRecords(category: .music, limit: limit, offset: offset)
-    }
-
-    // MARK: - Dev Tool List
-
-    public func listClaudeChat(limit: Int? = nil, offset: Int = 0) throws -> [ClaudeChatHistoryRecord] {
-        try loadRecords(category: .claudeChat, limit: limit, offset: offset)
     }
 
     public func listJSONTool() throws -> [JSONToolHistoryRecord] {
@@ -961,29 +773,6 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         removeFiles(in: dir, prefix: id.uuidString)
     }
 
-    // MARK: - Dev Tool Delete
-
-    public func deleteClaudeChat(id: UUID) throws {
-        let dir = try categoryURL(.claudeChat)
-        let jsonURL = dir.appendingPathComponent("\(id.uuidString).json")
-
-        // Clean up referenced attachment files
-        if let data = try? Data(contentsOf: jsonURL),
-           let record = try? decoder.decode(ClaudeChatHistoryRecord.self, from: data) {
-            let attachmentDir = try? claudeChatAttachmentsURL()
-            for message in record.messages {
-                for attachment in message.attachments ?? [] {
-                    if let attachmentDir {
-                        try? fileManager.removeItem(
-                            at: attachmentDir.appendingPathComponent(attachment.fileName))
-                    }
-                }
-            }
-        }
-
-        try? fileManager.removeItem(at: jsonURL)
-    }
-
     public func deleteJSONTool(id: UUID) throws {
         let dir = try categoryURL(.jsonTool)
         try? fileManager.removeItem(at: dir.appendingPathComponent("\(id.uuidString).json"))
@@ -1041,17 +830,6 @@ public actor HistoryStore: DiagnosticsHistoryLookupPort, HistoryRepository {
         else { return }
         for url in urls {
             try fileManager.removeItem(at: url)
-        }
-
-        // Also clear claude-chat attachment files when clearing claude-chat history
-        if category == .claudeChat {
-            if let attachmentDir = try? claudeChatAttachmentsURL(),
-               let attachmentURLs = try? fileManager.contentsOfDirectory(
-                   at: attachmentDir, includingPropertiesForKeys: nil) {
-                for url in attachmentURLs {
-                    try? fileManager.removeItem(at: url)
-                }
-            }
         }
     }
 

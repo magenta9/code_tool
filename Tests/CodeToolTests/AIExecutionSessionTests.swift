@@ -95,7 +95,6 @@ final class AIExecutionSessionTests: XCTestCase {
         XCTAssertEqual(AIExecutionTool.speech.rawValue, "speech")
         XCTAssertEqual(AIExecutionTool.image.rawValue, "image")
         XCTAssertEqual(AIExecutionTool.music.rawValue, "music")
-        XCTAssertEqual(AIExecutionTool.claudeChat.rawValue, "claudeChat")
     }
 
     func testExecutionStateIsTerminal() {
@@ -524,17 +523,6 @@ final class AIExecutionSessionTests: XCTestCase {
         XCTAssertEqual(payload.format, "mp3")
         XCTAssertEqual(payload.sampleRate, 44100)
         XCTAssertEqual(payload.bitrate, 256000)
-    }
-
-    func testClaudeChatPayload() {
-        let payload = ClaudeChatExecutionPayload(
-            prompt: "hello",
-            sessionID: "sid-123",
-            workingDirectory: "/Users/test"
-        )
-        XCTAssertEqual(payload.prompt, "hello")
-        XCTAssertEqual(payload.sessionID, "sid-123")
-        XCTAssertEqual(payload.workingDirectory, "/Users/test")
     }
 
     // MARK: - AppLoggerDiagnosticsSink Tests

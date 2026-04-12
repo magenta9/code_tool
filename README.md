@@ -10,7 +10,7 @@ A macOS developer toolkit built with Swift and SwiftUI, providing a collection o
 - **Timestamp Converter** – Convert between timestamps and human-readable dates
 - **JWT Tool** – Encode and decode JWT tokens
 - **Word Cloud** – Generate word cloud visualizations from text
-- **AI Chat** – Chat with Claude through the local CLI agent harness
+- **AI Chat** – Minimal streaming text chat powered by MiniMax
 - **AI Speech** – Stream text-to-speech with MiniMax Speech 2.8
 - **AI Image** – Generate images with MiniMax image-01 using text alone or reference images via drag-and-drop, file selection, or paste
 - **AI Music** – Generate music with MiniMax Music-2.5
@@ -35,7 +35,6 @@ CodeTool/
 │   │   ├── Observability/
 │   │   ├── Persistence/
 │   │   ├── Providers/
-│   │   │   ├── Claude/
 │   │   │   └── MiniMax/
 │   │   └── Views/
 │   ├── CodeToolFoundation/              # Shared models, settings, tool catalog

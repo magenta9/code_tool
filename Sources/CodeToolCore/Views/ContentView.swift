@@ -12,7 +12,7 @@ enum ToolDestinationRegistry {
         .timestampConverter: { AnyView(TimestampConverterView()) },
         .jwtTool: { AnyView(JWTToolView()) },
         .wordCloud: { AnyView(WordCloudView()) },
-        .aiChat: { AnyView(ClaudeChatView()) },
+        .aiChat: { AnyView(MiniMaxChatView()) },
         .aiSpeech: { AnyView(AISpeechView()) },
         .aiImage: { AnyView(AIImageView()) },
         .aiMusic: { AnyView(AIMusicView()) },
@@ -146,7 +146,6 @@ public struct ContentView: View {
             )
         )
         .onAppear {
-            ClaudeCLISettingsStore.shared.discoverCLI()
             ObservabilitySystem.shared.rootViewReady()
             RenderingPerformance.configureCaptureIfNeeded()
             retainedToolIDs = ToolViewCache.retainedToolIDs(
@@ -506,7 +505,7 @@ private struct WelcomeView: View {
                 toolGroupSection(
                     eyebrow: "AI Workspace",
                     title: "Agentic surfaces",
-                    subtitle: "Speech, image, music, and CLI-native chat brought into the same visual language.",
+                    subtitle: "Speech, image, music, and MiniMax chat brought into the same visual language.",
                     tools: aiTools,
                     accentColor: AppTheme.accentWarm
                 )
@@ -740,8 +739,6 @@ private struct SettingsSheet: View {
             Group {
                 if selectedTab == .minimax {
                     MiniMaxSettingsView()
-                } else if selectedTab == .claude {
-                    ClaudeCLISettingsView()
                 } else {
                     DiagnosticsView()
                 }

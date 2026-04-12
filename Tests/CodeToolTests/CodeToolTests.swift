@@ -79,14 +79,6 @@ final class CodeToolTests: XCTestCase {
     var miniMaxClient: MiniMaxAPIClient!
     var savedDefaults: [Tool] = []
     var savedConfig: MiniMaxConfig = .defaults
-    var savedClaudePath = ""
-    var savedClaudeAPIKey = ""
-    var savedClaudeModel = ""
-    var savedClaudeSystemPrompt = ""
-    var savedClaudeMaxTurns = 10
-    var savedClaudeMaxBudgetUSD = 5.0
-    var savedClaudeUseBare = true
-    var savedClaudePermissionMode = ""
     var temporaryLogDirectoryURL: URL?
     var temporaryDiagnosticsDirectoryURL: URL?
     let asyncLogPropagationDelay: UInt64 = 300_000_000
@@ -97,16 +89,6 @@ final class CodeToolTests: XCTestCase {
 
         let store = MiniMaxSettingsStore.shared
         savedConfig = store.currentConfig
-
-        let claudeStore = ClaudeCLISettingsStore.shared
-        savedClaudePath = claudeStore.claudePath
-        savedClaudeAPIKey = claudeStore.apiKey
-        savedClaudeModel = claudeStore.model
-        savedClaudeSystemPrompt = claudeStore.systemPrompt
-        savedClaudeMaxTurns = claudeStore.maxTurns
-        savedClaudeMaxBudgetUSD = claudeStore.maxBudgetUSD
-        savedClaudeUseBare = claudeStore.useBare
-        savedClaudePermissionMode = claudeStore.permissionMode.rawValue
 
         store.apiKey = "test-api-key"
         store.baseURL = "https://example.com/v1"
@@ -150,18 +132,6 @@ final class CodeToolTests: XCTestCase {
         store.speechModel = savedConfig.speechModel
         store.imageModel = savedConfig.imageModel
         store.musicModel = savedConfig.musicModel
-
-        let claudeStore = ClaudeCLISettingsStore.shared
-        claudeStore.claudePath = savedClaudePath
-        claudeStore.apiKey = savedClaudeAPIKey
-        claudeStore.model = savedClaudeModel
-        claudeStore.systemPrompt = savedClaudeSystemPrompt
-        claudeStore.maxTurns = savedClaudeMaxTurns
-        claudeStore.maxBudgetUSD = savedClaudeMaxBudgetUSD
-        claudeStore.useBare = savedClaudeUseBare
-        claudeStore.permissionMode =
-            ClaudeCLIPermissionMode(rawValue: savedClaudePermissionMode) ?? .auto
-        claudeStore.discoverCLI()
 
         MockURLProtocol.requestHandler = nil
         miniMaxClient = nil

@@ -104,7 +104,6 @@ public struct AppLoggerDiagnosticsSink: AIExecutionDiagnosticsSink {
         case .speech: return .aispeech
         case .image: return .aiimage
         case .music: return .aimusic
-        case .claudeChat: return .claudechat
         }
     }
 }

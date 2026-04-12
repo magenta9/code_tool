@@ -25,7 +25,7 @@ public protocol HistoryPayloadCodec: Sendable {
     /// Extract a reference ID from the payload, if present.
     func referenceID(for payload: Payload) -> String?
 
-    /// Extract a session ID for diagnostics trace correlation (typically from Claude chat).
+    /// Extract a session ID for diagnostics trace correlation, if applicable.
     func sessionID(for payload: Payload) -> String?
 
     /// List asset file names that belong to this record.
@@ -82,46 +82,6 @@ public struct ChatHistoryCodec: HistoryPayloadCodec, Sendable {
     public func referenceID(for r: ChatHistoryRecord) -> String? { r.referenceID }
     public func assetFileNames(for r: ChatHistoryRecord) -> [String] { [] }
     public func createdAt(for r: ChatHistoryRecord) -> Date { r.createdAt }
-}
-
-public struct ClaudeChatHistoryCodec: HistoryPayloadCodec, Sendable {
-    public typealias Payload = ClaudeChatHistoryRecord
-    public let toolID = HistoryToolID.claudeChat
-
-    public func summary(for r: ClaudeChatHistoryRecord) -> HistoryEntrySummary {
-        let title = r.messages.last(where: { $0.role == "user" })?.content ?? "Chat session"
-        let costStr = r.totalCostUSD.map { String(format: "$%.4f", $0) } ?? ""
-        let tokStr = [r.inputTokens.map { "↑\($0)" }, r.outputTokens.map { "↓\($0)" }]
-            .compactMap { $0 }.joined(separator: " ")
-        let attachmentCount = r.messages.reduce(0) { $0 + ($1.attachments?.count ?? 0) }
-        let attachStr = attachmentCount > 0 ? "\(attachmentCount) 📎" : ""
-        let subtitle = ["\(r.messages.count) msgs", attachStr, costStr, tokStr]
-            .filter { !$0.isEmpty }.joined(separator: " · ")
-
-        return HistoryEntrySummary(
-            title: String(title.prefix(60)),
-            subtitle: subtitle,
-            icon: "bubble.left.and.bubble.right"
-        )
-    }
-
-    public func diagnosticsInfo(for r: ClaudeChatHistoryRecord) -> HistoryDiagnosticsInfo? {
-        HistoryDiagnosticsInfo(
-            title: "Claude Chat",
-            detail: "model=\(r.model), messages=\(r.messages.count)",
-            sessionID: r.sessionId
-        )
-    }
-
-    public func referenceID(for r: ClaudeChatHistoryRecord) -> String? { r.referenceID }
-
-    public func sessionID(for r: ClaudeChatHistoryRecord) -> String? { r.sessionId }
-
-    public func assetFileNames(for r: ClaudeChatHistoryRecord) -> [String] {
-        r.messages.flatMap { $0.attachments ?? [] }.map(\.fileName)
-    }
-
-    public func createdAt(for r: ClaudeChatHistoryRecord) -> Date { r.createdAt }
 }
 
 public struct SpeechHistoryCodec: HistoryPayloadCodec, Sendable {
@@ -357,7 +317,6 @@ public struct HistoryDefinitionRegistry: Sendable {
     public init() {
         let all: [ToolHistoryDefinition] = [
             ToolHistoryDefinition(codec: ChatHistoryCodec()),
-            ToolHistoryDefinition(codec: ClaudeChatHistoryCodec()),
             ToolHistoryDefinition(codec: SpeechHistoryCodec()),
             ToolHistoryDefinition(codec: ImageHistoryCodec()),
             ToolHistoryDefinition(codec: MusicHistoryCodec()),

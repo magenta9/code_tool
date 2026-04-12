@@ -5,7 +5,6 @@ import Foundation
 /// Identifies which tool produced a history entry. Raw values match the on-disk directory names.
 public enum HistoryToolID: String, CaseIterable, Codable, Sendable {
     case chat
-    case claudeChat = "claude-chat"
     case speech
     case image
     case music
@@ -20,7 +19,6 @@ public enum HistoryToolID: String, CaseIterable, Codable, Sendable {
     public init(_ category: HistoryCategory) {
         switch category {
         case .chat: self = .chat
-        case .claudeChat: self = .claudeChat
         case .speech: self = .speech
         case .image: self = .image
         case .music: self = .music
@@ -37,7 +35,6 @@ public enum HistoryToolID: String, CaseIterable, Codable, Sendable {
     public var category: HistoryCategory {
         switch self {
         case .chat: return .chat
-        case .claudeChat: return .claudeChat
         case .speech: return .speech
         case .image: return .image
         case .music: return .music
@@ -95,7 +92,6 @@ public struct HistoryEntry: Identifiable, Sendable {
     public let createdAt: Date
     public let summary: HistoryEntrySummary
     public let referenceID: String?
-    /// Claude chat session ID, surfaced for diagnostics trace correlation.
     public let sessionID: String?
     public let assetFileNames: [String]
     public let diagnosticsInfo: HistoryDiagnosticsInfo?
@@ -148,13 +144,10 @@ public struct HistoryQuery: Sendable {
 /// ## Storage Contract
 ///
 /// - **Upsert semantics**: `upsert` writes to `{entry.id}.json`. Saving an entry whose ID
-///   already exists overwrites the previous record.  This matches the legacy behavior
-///   that `ClaudeChatView` relies on for conversation-record reuse.
+///   already exists overwrites the previous record.
 ///
-/// - **Asset directories**: Most tool assets live alongside the record JSON in the
-///   tool's directory.  Claude chat attachments are the exception — they are stored
-///   in a separate `claude-chat-attachments/` directory.  `delete` and `clear` handle
-///   both locations for `.claudeChat` entries.
+/// - **Asset directories**: Tool assets live alongside the record JSON in the
+///   tool's directory.
 ///
 /// - **Image two-phase commit**: The typed `save(_:ImageHistoryRecord,…)` method on
 ///   `HistoryStore` writes image data to temp files, commits the JSON, then renames
@@ -166,13 +159,9 @@ public struct HistoryQuery: Sendable {
 ///   everything it can, swallowing per-file errors.
 ///
 /// - **Diagnostics**: `diagnosticsMatches` scans all tool categories at query time
-///   using codec-defined `diagnosticsInfo`.  Only AI tools (chat, claude-chat, speech,
+///   using codec-defined `diagnosticsInfo`. Only AI tools (chat, speech,
 ///   image, music) produce non-nil diagnostics info; dev tools return nil and are
 ///   skipped.
-///
-/// - **Sync attachment helpers**: `HistoryStore` exposes `static` (non-actor) helpers
-///   `syncSaveClaudeChatAttachment` / `syncClaudeChatAttachmentURL` for main-thread
-///   callers that cannot await.  These are outside the `HistoryRepository` protocol.
 public protocol HistoryRepository: Sendable {
     /// Upsert an entry with optional binary assets.
     /// Writing an entry whose `id` already exists overwrites the previous file.
@@ -190,7 +179,6 @@ public protocol HistoryRepository: Sendable {
     func loadAsset(toolID: HistoryToolID, fileName: String) async throws -> Data
 
     /// Clear all entries for a specific tool.
-    /// For `.claudeChat`, also clears the separate attachment directory.
     func clear(toolID: HistoryToolID) async throws
 
     /// Clear all entries across all tools, including Claude attachments.

@@ -146,16 +146,26 @@ extension CodeToolTests {
             )
         )
         try await HistoryStore.shared.save(
-            ClaudeChatHistoryRecord(
-                messages: [ClaudeChatMessageRecord(role: "user", content: "Hi claude")],
-                model: "claude-sonnet-4-20250514",
+            SpeechHistoryRecord(
+                id: UUID(),
+                createdAt: Date(),
+                inputText: "Hello speech",
+                voice: "Voice-1",
+                speed: 1.0,
+                volume: 1.0,
+                pitch: 0,
+                outputFormat: "mp3",
+                model: "speech-model",
+                durationMs: 1200,
+                audioFileName: "speech.mp3",
                 referenceID: refID
-            )
+            ),
+            audioData: Data("speech".utf8)
         )
 
         let entries = try await HistoryStore.shared.list(HistoryQuery(referenceID: refID))
         XCTAssertEqual(entries.count, 2)
-        XCTAssertEqual(Set(entries.map(\.toolID)), Set([.chat, .claudeChat]))
+        XCTAssertEqual(Set(entries.map(\.toolID)), Set([.chat, .speech]))
     }
 
     func testUnifiedRepositoryDiagnosticsMatchesUsesCodecs() async throws {
@@ -167,19 +177,24 @@ extension CodeToolTests {
 
         let refID = "diag-unified-001"
         try await HistoryStore.shared.save(
-            ClaudeChatHistoryRecord(
-                messages: [ClaudeChatMessageRecord(role: "user", content: "test")],
-                model: "claude-sonnet-4-20250514",
-                sessionId: "session-unified-1",
+            ChatHistoryRecord(
+                id: UUID(),
+                createdAt: Date(),
+                systemPrompt: "",
+                messages: [ChatMessageRecord(role: "user", content: "test")],
+                model: "MiniMax-M2.7",
+                promptTokens: 1,
+                completionTokens: 1,
+                totalTokens: 2,
                 referenceID: refID
             )
         )
 
         let matches = try await HistoryStore.shared.diagnosticsMatches(referenceID: refID)
         XCTAssertEqual(matches.count, 1)
-        XCTAssertEqual(matches.first?.title, "Claude Chat")
-        XCTAssertEqual(matches.first?.sessionID, "session-unified-1")
-        XCTAssertEqual(matches.first?.category, "claude-chat")
+        XCTAssertEqual(matches.first?.title, "AI Chat")
+        XCTAssertNil(matches.first?.sessionID)
+        XCTAssertEqual(matches.first?.category, "chat")
     }
 
     func testHistoryDefinitionRegistryCoversAllToolIDs() {
@@ -279,103 +294,73 @@ extension CodeToolTests {
 
         let stableID = UUID()
         let stableCreatedAt = Date()
-        let codec = ClaudeChatHistoryCodec()
+        let codec = ChatHistoryCodec()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-        let record1 = ClaudeChatHistoryRecord(
+        let record1 = ChatHistoryRecord(
             id: stableID,
             createdAt: stableCreatedAt,
-            messages: [ClaudeChatMessageRecord(role: "user", content: "Hello")],
-            model: "claude-sonnet-4-20250514",
+            systemPrompt: "",
+            messages: [ChatMessageRecord(role: "user", content: "Hello")],
+            model: "MiniMax-M2.7",
+            promptTokens: 1,
+            completionTokens: 1,
+            totalTokens: 2,
             referenceID: "ref-overwrite"
         )
         try await HistoryStore.shared.upsert(codec.entry(for: record1, data: encoder.encode(record1)), assets: [])
 
-        var entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
+        var entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .chat))
         XCTAssertEqual(entries.count, 1)
         XCTAssertEqual(entries.first?.id, stableID)
 
-        let record2 = ClaudeChatHistoryRecord(
+        let record2 = ChatHistoryRecord(
             id: stableID,
             createdAt: stableCreatedAt,
+            systemPrompt: "",
             messages: [
-                ClaudeChatMessageRecord(role: "user", content: "Hello"),
-                ClaudeChatMessageRecord(role: "assistant", content: "Hi there"),
+                ChatMessageRecord(role: "user", content: "Hello"),
+                ChatMessageRecord(role: "assistant", content: "Hi there"),
             ],
-            model: "claude-sonnet-4-20250514",
-            totalCostUSD: 0.01,
+            model: "MiniMax-M2.7",
+            promptTokens: 2,
+            completionTokens: 2,
+            totalTokens: 4,
             referenceID: "ref-overwrite-2"
         )
         try await HistoryStore.shared.upsert(codec.entry(for: record2, data: encoder.encode(record2)), assets: [])
 
-        entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
+        entries = try await HistoryStore.shared.list(HistoryQuery(toolID: .chat))
         XCTAssertEqual(entries.count, 1)
         XCTAssertEqual(entries.first?.id, stableID)
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(ClaudeChatHistoryRecord.self, from: try XCTUnwrap(entries.first?.payloadData))
+        let decoded = try decoder.decode(ChatHistoryRecord.self, from: try XCTUnwrap(entries.first?.payloadData))
         XCTAssertEqual(decoded.messages.count, 2)
-        XCTAssertEqual(decoded.totalCostUSD, 0.01)
+        XCTAssertEqual(decoded.totalTokens, 4)
     }
 
-    func testUnifiedDeleteClaudeChatCleansAttachments() async throws {
-        let tempDir = try makeTemporaryDirectory(prefix: "UnifiedClaudeDelete")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
-
-        await HistoryStore.shared.setBaseURLForTesting(tempDir)
-        defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
-
-        let attachFileName = "test-attach-\(UUID().uuidString).png"
-
-        _ = try await HistoryStore.shared.saveClaudeChatAttachment(data: Data("fake-png".utf8), fileName: attachFileName)
-        try await HistoryStore.shared.save(
-            ClaudeChatHistoryRecord(
-                messages: [
-                    ClaudeChatMessageRecord(
-                        role: "user",
-                        content: "Check image",
-                        attachments: [ClaudeChatAttachmentRecord(fileName: attachFileName, mimeType: "image/png", sizeBytes: 8)]
-                    )
-                ],
-                model: "claude-sonnet-4-20250514",
-                referenceID: "ref-attach-del"
-            )
-        )
-
-        let attachmentData = try await HistoryStore.shared.loadClaudeChatAttachment(fileName: attachFileName)
-        XCTAssertFalse(attachmentData.isEmpty)
-
-        let records = try await HistoryStore.shared.listClaudeChat()
-        try await HistoryStore.shared.delete(toolID: .claudeChat, id: try XCTUnwrap(records.first?.id))
-
-        let remainingClaudeEntries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
-        XCTAssertEqual(remainingClaudeEntries.count, 0)
-
-        do {
-            _ = try await HistoryStore.shared.loadClaudeChatAttachment(fileName: attachFileName)
-            XCTFail("Expected attachment file to be deleted")
-        } catch {
-        }
-    }
-
-    func testClearAllCleansClaudeAttachments() async throws {
+    func testClearAllRemovesMiniMaxAndDevToolHistory() async throws {
         let tempDir = try makeTemporaryDirectory(prefix: "UnifiedClearAll")
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
         await HistoryStore.shared.setBaseURLForTesting(tempDir)
         defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
 
-        let attachFileName = "clearall-attach-\(UUID().uuidString).png"
-
-        _ = try await HistoryStore.shared.saveClaudeChatAttachment(data: Data("fake".utf8), fileName: attachFileName)
         try await HistoryStore.shared.save(
-            ClaudeChatHistoryRecord(
-                messages: [ClaudeChatMessageRecord(role: "user", content: "hi")],
-                model: "claude-sonnet-4-20250514",
-                referenceID: "ref-clearall"
+            ChatHistoryRecord(
+                id: UUID(),
+                createdAt: Date(),
+                systemPrompt: "",
+                messages: [ChatMessageRecord(role: "user", content: "hi")],
+                model: "MiniMax-M2.7",
+                promptTokens: 1,
+                completionTokens: 1,
+                totalTokens: 2,
+                referenceID: "ref-clearall-chat"
             )
         )
         try await HistoryStore.shared.save(
@@ -391,16 +376,10 @@ extension CodeToolTests {
 
         try await HistoryStore.shared.clearAll()
 
-        let claudeEntries = try await HistoryStore.shared.list(HistoryQuery(toolID: .claudeChat))
+        let chatEntries = try await HistoryStore.shared.list(HistoryQuery(toolID: .chat))
         let jsonEntries = try await HistoryStore.shared.list(HistoryQuery(toolID: .jsonTool))
-        XCTAssertEqual(claudeEntries.count, 0)
+        XCTAssertEqual(chatEntries.count, 0)
         XCTAssertEqual(jsonEntries.count, 0)
-
-        do {
-            _ = try await HistoryStore.shared.loadClaudeChatAttachment(fileName: attachFileName)
-            XCTFail("Expected attachment to be deleted by clearAll")
-        } catch {
-        }
     }
 
     func testUnifiedDeleteIsIdempotent() async throws {
@@ -487,22 +466,6 @@ extension CodeToolTests {
     }
 
     func testAllCodecSummariesMatchLegacyDrawerConformances() throws {
-        let claudeRecord = ClaudeChatHistoryRecord(
-            messages: [
-                ClaudeChatMessageRecord(role: "user", content: "Hello Claude"),
-                ClaudeChatMessageRecord(role: "assistant", content: "Hi!"),
-            ],
-            model: "claude-sonnet-4-20250514",
-            totalCostUSD: 0.005,
-            inputTokens: 100,
-            outputTokens: 50,
-            referenceID: "ref"
-        )
-        let claudeSummary = ClaudeChatHistoryCodec().summary(for: claudeRecord)
-        XCTAssertEqual(claudeSummary.title, claudeRecord.drawerTitle)
-        XCTAssertEqual(claudeSummary.subtitle, claudeRecord.drawerSubtitle)
-        XCTAssertEqual(claudeSummary.icon, claudeRecord.drawerIcon)
-
         let jsonRecord = JSONToolHistoryRecord(
             id: UUID(),
             createdAt: Date(),

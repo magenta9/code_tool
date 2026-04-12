@@ -81,26 +81,31 @@ extension CodeToolTests {
         defer { Task { await HistoryStore.shared.setBaseURLForTesting(nil) } }
 
         await AppLogger.shared.info(
-            category: .claudechat,
-            event: "claude_process_started",
+            category: .aichat,
+            event: "chat_request_started",
             referenceID: referenceID,
-            message: "Started Claude CLI subprocess.",
-            metadata: ["stage": "launch_process"]
+            message: "Started MiniMax chat request.",
+            metadata: ["stage": "request_chat_completion"]
         )
         _ = await AppLogger.shared.error(
-            category: .claudechat,
-            event: "claude_process_failed",
+            category: .aichat,
+            event: "chat_request_failed",
             referenceID: referenceID,
-            message: "Claude CLI subprocess exited with a non-zero status.",
-            metadata: ["stage": "process_exit", "exitCode": "1"],
-            error: NSError(domain: "ClaudeCLIClient.exit", code: 1)
+            message: "MiniMax chat request failed.",
+            metadata: ["stage": "request_chat_completion", "statusCode": "500"],
+            error: NSError(domain: "MiniMaxAPIClient.request", code: 500)
         )
 
         try await HistoryStore.shared.save(
-            ClaudeChatHistoryRecord(
-                messages: [ClaudeChatMessageRecord(role: "user", content: "hi")],
-                model: "claude-sonnet-4-20250514",
-                sessionId: "session-001",
+            ChatHistoryRecord(
+                id: UUID(),
+                createdAt: Date(),
+                systemPrompt: "",
+                messages: [ChatMessageRecord(role: "user", content: "hi")],
+                model: "MiniMax-M2.7",
+                promptTokens: 1,
+                completionTokens: 1,
+                totalTokens: 2,
                 referenceID: referenceID
             )
         )
@@ -116,7 +121,8 @@ extension CodeToolTests {
         XCTAssertEqual(snapshot.traceSummary?.referenceID, referenceID)
         XCTAssertEqual(snapshot.traceSummary?.eventCount, snapshot.relatedEvents.count)
         XCTAssertEqual(snapshot.historyMatches.count, 1)
-        XCTAssertEqual(snapshot.historyMatches.first?.sessionID, "session-001")
+        XCTAssertEqual(snapshot.historyMatches.first?.title, "AI Chat")
+        XCTAssertNil(snapshot.historyMatches.first?.sessionID)
     }
 
     func testDiagnosticsExportPackageIncludesHistoryAndMetrics() async throws {

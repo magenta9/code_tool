@@ -6,7 +6,6 @@ public enum AIExecutionPayload: Sendable {
     case speech(SpeechExecutionPayload)
     case image(ImageExecutionPayload)
     case music(MusicExecutionPayload)
-    case claudeChat(ClaudeChatExecutionPayload)
 }
 
 /// Payload for MiniMax chat completions.
@@ -110,23 +109,6 @@ public struct MusicExecutionPayload: Sendable {
         self.format = format
         self.sampleRate = sampleRate
         self.bitrate = bitrate
-    }
-}
-
-/// Payload for Claude CLI chat.
-public struct ClaudeChatExecutionPayload: Sendable {
-    public let prompt: String
-    public let sessionID: String?
-    public let workingDirectory: String
-
-    public init(
-        prompt: String,
-        sessionID: String? = nil,
-        workingDirectory: String
-    ) {
-        self.prompt = prompt
-        self.sessionID = sessionID
-        self.workingDirectory = workingDirectory
     }
 }
 

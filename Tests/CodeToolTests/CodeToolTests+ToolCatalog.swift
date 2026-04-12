@@ -65,43 +65,24 @@ extension CodeToolTests {
         )
     }
 
+    func testAIChatCatalogEntryUsesMiniMaxCopy() {
+        let entry = ToolCatalog.entry(for: .aiChat)
+
+        XCTAssertEqual(entry?.title, "AI Chat")
+        XCTAssertEqual(entry?.category, .aiTools)
+        XCTAssertTrue(entry?.description.contains("MiniMax") == true)
+        XCTAssertFalse(entry?.description.contains("Claude") == true)
+    }
+
+    func testProviderSettingsTabsExcludeClaude() {
+        XCTAssertEqual(ToolSettingsTab.allCases, [.minimax, .diagnostics])
+        XCTAssertEqual(ToolSettingsTab.allCases.map(\.title), ["MiniMax", "Diagnostics"])
+    }
+
     func testRegistryCanRegisterAdditionalTool() {
         let originalCount = ToolRegistry.defaults.count
         ToolRegistry.defaults.append(Tool(name: "Extra Tool", description: "Extra.", systemImage: "star"))
         XCTAssertEqual(ToolRegistry.defaults.count, originalCount + 1)
-    }
-
-    func testClaudeCLISettingsStoreDefaults() {
-        let store = ClaudeCLISettingsStore.shared
-        store.resetToDefaults()
-
-        XCTAssertEqual(store.model, "claude-sonnet-4-20250514")
-        XCTAssertEqual(store.maxTurns, 10)
-        XCTAssertEqual(store.maxBudgetUSD, 5.0)
-        XCTAssertTrue(store.useBare)
-        XCTAssertEqual(store.permissionMode, .bypassPermissions)
-    }
-
-    func testClaudeCLISettingsDraftDoesNotMutateStoreUntilApplied() {
-        let store = ClaudeCLISettingsStore.shared
-        store.claudePath = "/usr/bin/claude"
-        store.apiKey = "original-api-key"
-        store.systemPrompt = "original prompt"
-
-        var draft = ClaudeCLISettingsDraft(store: store)
-        draft.claudePath = "/tmp/custom-claude"
-        draft.apiKey = "draft-api-key"
-        draft.systemPrompt = "draft prompt"
-
-        XCTAssertEqual(store.claudePath, "/usr/bin/claude")
-        XCTAssertEqual(store.apiKey, "original-api-key")
-        XCTAssertEqual(store.systemPrompt, "original prompt")
-
-        draft.apply(to: store)
-
-        XCTAssertEqual(store.claudePath, "/tmp/custom-claude")
-        XCTAssertEqual(store.apiKey, "draft-api-key")
-        XCTAssertEqual(store.systemPrompt, "draft prompt")
     }
 
     func testMiniMaxSettingsDraftDoesNotMutateStoreUntilApplied() {

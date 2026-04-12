@@ -10,8 +10,6 @@ enum RenderingPerformanceEvent: String {
     case toolSwitchFinished = "tool_switch_finished"
     case toolVisibilityChanged = "tool_visibility_changed"
     case toolCacheSnapshot = "tool_cache_snapshot"
-    case claudeStreamBatchCommitted = "claude_stream_batch_committed"
-    case claudeMarkdownRendered = "claude_markdown_rendered"
     case historyDrawerOpened = "history_drawer_opened"
     case imageRestoreFirstPreviewReady = "image_restore_first_preview_ready"
     case imageRestoreCompleted = "image_restore_completed"

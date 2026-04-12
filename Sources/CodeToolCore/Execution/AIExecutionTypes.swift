@@ -6,7 +6,6 @@ public enum AIExecutionTool: String, Codable, Sendable {
     case speech
     case image
     case music
-    case claudeChat
 }
 
 /// A Sendable error snapshot capturing the essential details of a failure.

@@ -2,15 +2,12 @@ import SwiftUI
 
 enum ToolSettingsTab: String, CaseIterable, Hashable {
     case minimax
-    case claude
     case diagnostics
 
     var title: String {
         switch self {
         case .minimax:
             return "MiniMax"
-        case .claude:
-            return "Claude CLI"
         case .diagnostics:
             return "Diagnostics"
         }

@@ -129,7 +129,7 @@ public enum ToolCatalog {
         ToolCatalogEntry(
             id: .aiChat,
             title: "AI Chat",
-            description: "Chat with Claude — full agentic capabilities via CLI.",
+            description: "Chat with MiniMax using a minimal streaming text workspace.",
             systemImage: "bubble.left.and.bubble.right",
             category: .aiTools
         ),

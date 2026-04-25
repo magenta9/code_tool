@@ -121,7 +121,7 @@ public struct TimestampConverterView: View {
                 id: "time-zone",
                 title: TimeZone.autoupdatingCurrent.identifier,
                 systemImage: "globe",
-                tint: AppTheme.accentWarm
+                tint: AppTheme.accentBright
             )
         ]
     }
@@ -224,7 +224,7 @@ private struct CurrentTimeSection: View {
                 ToolMessageBanner(
                     systemImage: "calendar",
                     message: formatDate(currentDate, timeZone: .autoupdatingCurrent),
-                    tint: AppTheme.accentWarm
+                    tint: AppTheme.accentBright
                 )
             }
         }

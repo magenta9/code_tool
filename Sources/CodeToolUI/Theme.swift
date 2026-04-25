@@ -6,66 +6,76 @@ public enum AppTheme {
 
     // MARK: Colors
 
-    public static let background = Color(red: 0.031, green: 0.051, blue: 0.071)
-    public static let backgroundRaised = Color(red: 0.055, green: 0.082, blue: 0.102)
-    public static let surface = Color(red: 0.082, green: 0.122, blue: 0.153)
-    public static let surfaceRaised = Color(red: 0.110, green: 0.161, blue: 0.196)
-    public static let surfaceHover = Color(red: 0.145, green: 0.208, blue: 0.239)
-    public static let sidebarBackground = Color(red: 0.051, green: 0.075, blue: 0.094)
-    public static let panelTint = Color(red: 0.122, green: 0.173, blue: 0.212)
-    public static let panelTintStrong = Color(red: 0.167, green: 0.227, blue: 0.271)
+    public static let background = Color(red: 0.035, green: 0.041, blue: 0.051)
+    public static let backgroundRaised = Color(red: 0.052, green: 0.064, blue: 0.081)
+    public static let surface = Color(red: 0.070, green: 0.084, blue: 0.106)
+    public static let surfaceRaised = Color(red: 0.092, green: 0.112, blue: 0.142)
+    public static let surfaceHover = Color(red: 0.180, green: 0.470, blue: 0.920).opacity(0.105)
+    public static let sidebarBackground = Color(red: 0.044, green: 0.052, blue: 0.064)
+    public static let panelTint = Color(red: 0.500, green: 0.720, blue: 1.000).opacity(0.030)
+    public static let panelTintStrong = Color(red: 0.500, green: 0.720, blue: 1.000).opacity(0.050)
 
-    public static let textPrimary = Color(red: 0.941, green: 0.965, blue: 0.973)
-    public static let textSecondary = Color(red: 0.675, green: 0.741, blue: 0.776)
-    public static let textMuted = Color(red: 0.463, green: 0.541, blue: 0.592)
+    public static let foreground = Color(red: 0.930, green: 0.950, blue: 0.980)
+    public static let foregroundMuted = Color(red: 0.635, green: 0.675, blue: 0.725)
+    public static let foregroundDim = Color(red: 0.410, green: 0.465, blue: 0.540)
 
-    public static let border = Color.white.opacity(0.11)
-    public static let borderHover = Color.white.opacity(0.20)
-    public static let glow = Color(red: 0.165, green: 0.812, blue: 0.835)
-    public static let innerGlow = Color.white.opacity(0.15)
-    public static let shadow = Color.black.opacity(0.34)
+    public static let textPrimary = foreground
+    public static let textSecondary = foregroundMuted
+    public static let textMuted = foregroundDim
 
-    public static let accent = Color(red: 0.184, green: 0.780, blue: 0.824)
-    public static let accentBright = Color(red: 0.294, green: 0.918, blue: 0.902)
-    public static let accentWarm = Color(red: 0.973, green: 0.694, blue: 0.329)
-    public static let accentCoral = Color(red: 0.937, green: 0.451, blue: 0.353)
+    public static let card = Color(red: 0.058, green: 0.071, blue: 0.090)
+    public static let cardRaised = Color(red: 0.078, green: 0.096, blue: 0.122)
+    public static let popover = Color(red: 0.068, green: 0.083, blue: 0.106)
+    public static let secondary = Color(red: 0.500, green: 0.720, blue: 1.000).opacity(0.060)
+    public static let muted = Color(red: 0.500, green: 0.720, blue: 1.000).opacity(0.045)
+    public static let input = Color(red: 0.500, green: 0.720, blue: 1.000).opacity(0.075)
 
-    public static let success = Color(red: 0.400, green: 0.831, blue: 0.624)
-    public static let error = Color(red: 0.937, green: 0.451, blue: 0.353)
-    public static let warning = Color(red: 0.973, green: 0.694, blue: 0.329)
+    public static let border = Color(red: 0.650, green: 0.780, blue: 1.000).opacity(0.080)
+    public static let borderHover = Color(red: 0.650, green: 0.780, blue: 1.000).opacity(0.160)
+    public static let ring = Color(red: 0.160, green: 0.480, blue: 0.960)
+    public static let glow = ring
+    public static let innerGlow = Color.white.opacity(0.090)
+    public static let shadow = Color.black.opacity(0.42)
+
+    public static let accent = Color(red: 0.120, green: 0.420, blue: 0.940)
+    public static let accentBright = Color(red: 0.360, green: 0.670, blue: 1.000)
+    public static let accentWarm = Color(red: 0.420, green: 0.760, blue: 1.000)
+    public static let accentCoral = Color(red: 0.955, green: 0.294, blue: 0.294)
+
+    public static let info = Color(red: 0.231, green: 0.510, blue: 0.965)
+    public static let success = Color(red: 0.133, green: 0.773, blue: 0.369)
+    public static let error = Color(red: 0.957, green: 0.267, blue: 0.267)
+    public static let destructive = error
+    public static let warning = Color(red: 0.961, green: 0.620, blue: 0.043)
 
     // MARK: Gradients
 
     public static let accentGradient = LinearGradient(
-        colors: [accentBright, accentWarm],
+        colors: [accentBright, accent],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     public static let heroGradient = LinearGradient(
-        colors: [accent.opacity(0.30), accentWarm.opacity(0.12), accentCoral.opacity(0.06)],
+        colors: [accent.opacity(0.22), Color.white.opacity(0.035)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     public static let selectionGradient = LinearGradient(
-        colors: [accent.opacity(0.22), accentWarm.opacity(0.08)],
+        colors: [accent.opacity(0.24), accent.opacity(0.12)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     public static let cardGradient = LinearGradient(
-        colors: [panelTintStrong.opacity(0.92), panelTint.opacity(0.74)],
+        colors: [cardRaised, card],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
 
     public static let ambientGradient = LinearGradient(
-        colors: [
-            backgroundRaised.opacity(0.95),
-            background.opacity(0.88),
-            Color.black.opacity(0.82),
-        ],
+        colors: [backgroundRaised, background, Color(red: 0.020, green: 0.026, blue: 0.034)],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -86,11 +96,13 @@ public enum AppTheme {
     // MARK: Corner Radius
 
     public enum Radius {
+        public static let xs: CGFloat = 6
         public static let sm: CGFloat = 8
-        public static let md: CGFloat = 12
-        public static let lg: CGFloat = 18
-        public static let xl: CGFloat = 24
-        public static let hero: CGFloat = 32
+        public static let md: CGFloat = 8
+        public static let lg: CGFloat = 10
+        public static let xl: CGFloat = 14
+        public static let xxl: CGFloat = 18
+        public static let hero: CGFloat = 18
     }
 
     // MARK: Typography
@@ -120,50 +132,40 @@ public struct AppBackdrop: View {
         ZStack {
             AppTheme.ambientGradient
 
-            Circle()
-                .fill(AppTheme.accent.opacity(0.16))
-                .frame(width: 460, height: 460)
-                .blur(radius: 120)
-                .offset(x: -300, y: -240)
-
-            Circle()
-                .fill(AppTheme.accentWarm.opacity(0.12))
-                .frame(width: 420, height: 420)
-                .blur(radius: 120)
-                .offset(x: 300, y: -200)
-
-            Circle()
-                .fill(AppTheme.accentCoral.opacity(0.10))
-                .frame(width: 300, height: 300)
-                .blur(radius: 110)
-                .offset(x: 300, y: 280)
-
-            Circle()
-                .fill(AppTheme.accentBright.opacity(0.08))
-                .frame(width: 220, height: 220)
-                .blur(radius: 90)
-                .offset(x: -40, y: 260)
-
             Rectangle()
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.05), Color.clear, Color.black.opacity(0.18)],
+                        colors: [AppTheme.accent.opacity(0.075), Color.clear, Color.black.opacity(0.24)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
 
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.clear, Color.white.opacity(0.03), Color.clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+            noiseTexture
+                .opacity(0.024)
                 .blendMode(.screen)
         }
         .ignoresSafeArea()
+    }
+
+    private var noiseTexture: some View {
+        Canvas { context, size in
+            let step: CGFloat = 3
+            var y: CGFloat = 0
+            while y < size.height {
+                var x: CGFloat = 0
+                while x < size.width {
+                    let seed = Int((x * 17 + y * 31).truncatingRemainder(dividingBy: 11))
+                    let opacity = seed.isMultiple(of: 3) ? 0.42 : 0.12
+                    context.fill(
+                        Path(CGRect(x: x, y: y, width: 1, height: 1)),
+                        with: .color(Color.white.opacity(opacity))
+                    )
+                    x += step
+                }
+                y += step
+            }
+        }
     }
 }
 
@@ -179,7 +181,7 @@ public struct GlassSurfaceModifier: ViewModifier {
         cornerRadius: CGFloat = AppTheme.Radius.lg,
         tint: Color = AppTheme.panelTint,
         stroke: Color = AppTheme.border,
-        shadowOpacity: Double = 0.18
+        shadowOpacity: Double = 0.10
     ) {
         self.cornerRadius = cornerRadius
         self.tint = tint
@@ -193,38 +195,30 @@ public struct GlassSurfaceModifier: ViewModifier {
         content
             .background {
                 shape
-                    .fill(.ultraThinMaterial)
+                    .fill(AppTheme.card)
+                    .overlay { shape.fill(tint) }
                     .overlay {
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.040), Color.clear, Color.black.opacity(0.075)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .clipShape(shape)
+                    }
+                    .overlay(alignment: .top) {
                         shape
-                            .fill(
+                            .stroke(Color.white.opacity(0.070), lineWidth: 1)
+                            .mask(
                                 LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.12),
-                                        tint.opacity(0.26),
-                                        Color.black.opacity(0.14),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                    colors: [Color.white, Color.clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
                                 )
                             )
                     }
-                    .overlay {
-                        shape.strokeBorder(stroke, lineWidth: 1)
-                    }
-                    .overlay(alignment: .topLeading) {
-                        shape
-                            .stroke(Color.white.opacity(0.14), lineWidth: 0.8)
-                            .blur(radius: 0.4)
-                            .mask {
-                                LinearGradient(
-                                    colors: [Color.white, Color.white.opacity(0)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            }
-                    }
+                    .overlay { shape.strokeBorder(stroke, lineWidth: 1) }
             }
-            .shadow(color: AppTheme.shadow.opacity(shadowOpacity), radius: 24, y: 14)
+            .shadow(color: AppTheme.shadow.opacity(shadowOpacity), radius: 12, y: 5)
     }
 }
 
@@ -257,7 +251,7 @@ public extension View {
         cornerRadius: CGFloat = AppTheme.Radius.lg,
         tint: Color = AppTheme.panelTint,
         stroke: Color = AppTheme.border,
-        shadowOpacity: Double = 0.18
+        shadowOpacity: Double = 0.10
     ) -> some View {
         modifier(
             GlassSurfaceModifier(

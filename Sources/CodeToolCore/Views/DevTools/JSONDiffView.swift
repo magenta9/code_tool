@@ -232,13 +232,13 @@ public struct JSONDiffView: View {
                     tint: AppTheme.accent),
                 ToolStatusItem(
                     title: "+\(added) / -\(removed) / ~\(modified)",
-                    systemImage: "list.bullet.indent", tint: AppTheme.accentWarm),
+                    systemImage: "list.bullet.indent", tint: AppTheme.accentBright),
             ]
         }
         return [
             ToolStatusItem(
                 title: "Ready to compare", systemImage: "rectangle.split.2x1",
-                tint: AppTheme.accentWarm)
+                tint: AppTheme.accentBright)
         ]
     }
 
@@ -255,7 +255,7 @@ public struct JSONDiffView: View {
                     systemImage: "sparkles",
                     message:
                         "Enter JSON in both panels and run Compare from the shared action bar.",
-                    tint: AppTheme.accentWarm)
+                    tint: AppTheme.accentBright)
             } else if diffs.isEmpty {
                 ToolMessageBanner(
                     systemImage: "checkmark.circle.fill",

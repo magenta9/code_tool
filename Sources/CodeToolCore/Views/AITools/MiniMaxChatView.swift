@@ -207,7 +207,7 @@ public struct MiniMaxChatView: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             Text(message.role == "assistant" ? "MiniMax" : "You")
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(message.role == "assistant" ? AppTheme.accentWarm : AppTheme.textSecondary)
+                .foregroundStyle(message.role == "assistant" ? AppTheme.accentBright : AppTheme.textSecondary)
                 .textCase(.uppercase)
                 .tracking(1.0)
 
@@ -351,7 +351,11 @@ public struct MiniMaxChatView: View {
     }
 
     private func clearChat() {
-        currentSession?.cancel()
+        if let session = currentSession {
+            Task {
+                await session.cancel()
+            }
+        }
         currentSession = nil
         messages = []
         inputText = ""

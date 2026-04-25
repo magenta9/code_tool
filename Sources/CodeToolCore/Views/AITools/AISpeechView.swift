@@ -203,7 +203,7 @@ public struct AISpeechView: View {
                 ToolStatusItem(
                     title: streamPhase == .playable ? "Streaming" : "Buffering…",
                     systemImage: "arrow.triangle.2.circlepath",
-                    tint: AppTheme.accentWarm
+                    tint: AppTheme.accentBright
                 ))
         }
 
@@ -213,7 +213,7 @@ public struct AISpeechView: View {
 
             if isPlaying {
                 title = "Playing"
-                tint = AppTheme.accentWarm
+                tint = AppTheme.accentBright
             } else if completedAudioData != nil {
                 title = "Audio ready"
                 tint = AppTheme.success
@@ -446,7 +446,7 @@ public struct AISpeechView: View {
             ToolMessageBanner(
                 systemImage: "sparkles",
                 message: "Enter text and stream speech with MiniMax Speech 2.8, then press Play when enough audio is buffered.",
-                tint: AppTheme.accentWarm
+                tint: AppTheme.accentBright
             )
         }
     }

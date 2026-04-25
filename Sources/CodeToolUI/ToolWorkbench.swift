@@ -65,60 +65,52 @@ public struct ToolWorkbench<Actions: View, Content: View>: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
-            HStack(alignment: .top, spacing: AppTheme.Spacing.lg) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+            HStack(alignment: .center, spacing: AppTheme.Spacing.md) {
                 HStack(spacing: AppTheme.Spacing.md) {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 52, height: 52)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                        .fill(AppTheme.accentGradient)
+                        .frame(width: 40, height: 40)
                         .overlay {
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                                .fill(AppTheme.heroGradient)
-                                .padding(2)
-                                .overlay {
-                                    Image(systemName: systemImage)
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                }
+                            Image(systemName: systemImage)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
                         }
                         .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                                .strokeBorder(AppTheme.accentBright.opacity(0.34), lineWidth: 1)
                         )
+                        .shadow(color: AppTheme.accent.opacity(0.20), radius: 8, y: 3)
 
-                    VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(eyebrow)
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(AppTheme.accentWarm)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.textMuted)
                             .textCase(.uppercase)
-                            .tracking(1.4)
+                            .tracking(1.1)
 
                         Text(title)
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.textPrimary)
 
                         Text(description)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(AppTheme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
-                Spacer(minLength: 24)
+                Spacer(minLength: AppTheme.Spacing.lg)
 
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AppTheme.Spacing.sm) {
-                        actions
-                    }
-                    VStack(alignment: .trailing, spacing: AppTheme.Spacing.sm) {
-                        actions
-                    }
+                    HStack(spacing: AppTheme.Spacing.sm) { actions }
+                    VStack(alignment: .trailing, spacing: AppTheme.Spacing.sm) { actions }
                 }
             }
 
             if !statusItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: AppTheme.Spacing.sm) {
+                    HStack(spacing: AppTheme.Spacing.xs) {
                         ForEach(statusItems) { item in
                             statusItemView(item)
                         }
@@ -126,43 +118,36 @@ public struct ToolWorkbench<Actions: View, Content: View>: View {
                 }
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.xxl)
-        .padding(.top, AppTheme.Spacing.xxl)
-        .padding(.bottom, AppTheme.Spacing.xl)
-        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong, shadowOpacity: 0.12)
         .padding(.horizontal, AppTheme.Spacing.xl)
-        .padding(.top, AppTheme.Spacing.xl)
-        .overlay(alignment: .bottom) {
-            Color.clear.frame(height: 1)
-        }
+        .padding(.vertical, AppTheme.Spacing.lg)
+        .glassSurface(cornerRadius: AppTheme.Radius.xxl, tint: AppTheme.panelTintStrong, stroke: AppTheme.borderHover, shadowOpacity: 0.08)
+        .padding(.horizontal, AppTheme.Spacing.lg)
+        .padding(.top, AppTheme.Spacing.lg)
     }
 
     @ViewBuilder
     private func statusItemView(_ item: ToolStatusItem) -> some View {
-        let capsule = Label(item.title, systemImage: item.systemImage)
-            .font(.system(size: 12, weight: .medium, design: .rounded))
+        let shape = RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+        let badge = Label(item.title, systemImage: item.systemImage)
+            .font(.system(size: 11, weight: .medium, design: .rounded))
             .foregroundStyle(item.tint)
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, AppTheme.Spacing.sm)
+            .padding(.horizontal, AppTheme.Spacing.sm + 2)
+            .padding(.vertical, AppTheme.Spacing.xs + 2)
             .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule().fill(item.tint.opacity(0.10))
-                    }
+                shape.fill(item.tint.opacity(0.095))
             }
-            .overlay(Capsule().strokeBorder(item.tint.opacity(0.24), lineWidth: 1))
+            .overlay(shape.strokeBorder(item.tint.opacity(0.24), lineWidth: 1))
 
         if let action = item.action {
             Button(action: action) {
-                capsule
+                badge
             }
             .buttonStyle(.plain)
-            .contentShape(Capsule())
+            .contentShape(shape)
             .help(item.help ?? "")
             .accessibilityLabel(item.accessibilityLabel ?? item.title)
         } else {
-            capsule
+            badge
                 .help(item.help ?? "")
                 .accessibilityLabel(item.accessibilityLabel ?? item.title)
         }
@@ -187,6 +172,6 @@ public struct ToolMessageBanner: View {
             .padding(.horizontal, AppTheme.Spacing.md)
             .padding(.vertical, AppTheme.Spacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassSurface(cornerRadius: AppTheme.Radius.md, tint: tint.opacity(0.22), stroke: tint.opacity(0.22), shadowOpacity: 0.08)
+            .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: tint.opacity(0.12), stroke: tint.opacity(0.22), shadowOpacity: 0.05)
     }
 }

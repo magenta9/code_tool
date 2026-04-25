@@ -109,7 +109,7 @@ public struct JSONToolView: View {
         return [
             ToolStatusItem(
                 title: "Object, array, or fragment", systemImage: "checkmark.shield",
-                tint: AppTheme.accentWarm),
+                tint: AppTheme.accentBright),
             ToolStatusItem(
                 title: "Sorted output supported", systemImage: "arrow.up.arrow.down",
                 tint: AppTheme.accent),
@@ -130,7 +130,7 @@ public struct JSONToolView: View {
                     systemImage: "sparkles",
                     message:
                         "Paste JSON on the left, then format, minify or validate from the shared action bar.",
-                    tint: AppTheme.accentWarm)
+                    tint: AppTheme.accentBright)
             }
         }
     }

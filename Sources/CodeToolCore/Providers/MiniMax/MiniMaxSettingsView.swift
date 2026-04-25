@@ -82,10 +82,10 @@ public struct MiniMaxSettingsView: View {
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
                     .padding(AppTheme.Spacing.md)
-                    .background(AppTheme.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
+                        .background(AppTheme.input.opacity(0.72))
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
                             .strokeBorder(AppTheme.border, lineWidth: 1)
                     )
 
@@ -110,10 +110,10 @@ public struct MiniMaxSettingsView: View {
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppTheme.textPrimary)
                     .padding(AppTheme.Spacing.md)
-                    .background(AppTheme.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
+                    .background(AppTheme.input.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                        RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
                             .strokeBorder(AppTheme.border, lineWidth: 1)
                     )
             }
@@ -160,10 +160,10 @@ public struct MiniMaxSettingsView: View {
                 .foregroundStyle(AppTheme.textPrimary)
                 .padding(.horizontal, AppTheme.Spacing.md)
                 .padding(.vertical, AppTheme.Spacing.sm)
-                .background(AppTheme.surface)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm))
+                .background(AppTheme.input.opacity(0.72))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
                         .strokeBorder(AppTheme.border, lineWidth: 1)
                 )
         }

@@ -61,13 +61,7 @@ public struct AudioPlayerView: View {
             }
         }
         .padding(AppTheme.Spacing.lg)
-        .background(AppTheme.cardGradient.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.14), radius: 18, y: 10)
+        .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTintStrong, shadowOpacity: 0.08)
     }
 
     // MARK: - Controls Row
@@ -136,7 +130,7 @@ public struct AudioPlayerView: View {
                     streamingDots
                     Text("Streaming…")
                         .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(AppTheme.accentWarm)
+                        .foregroundStyle(AppTheme.accentBright)
                 }
             } else {
                 Text("\(formatTime(displayTime)) / \(formatTime(duration))")
@@ -150,7 +144,7 @@ public struct AudioPlayerView: View {
         HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
-                    .fill(AppTheme.accentWarm)
+                    .fill(AppTheme.accentBright)
                     .frame(width: 4, height: 4)
                     .opacity(shimmerPhase ? (i == 0 ? 1.0 : i == 1 ? 0.6 : 0.3) : (i == 0 ? 0.3 : i == 1 ? 0.6 : 1.0))
             }
@@ -287,8 +281,11 @@ public struct AudioPlayerView: View {
         .padding(.horizontal, AppTheme.Spacing.sm)
         .padding(.vertical, AppTheme.Spacing.xxs)
         .background(AppTheme.surfaceRaised.opacity(0.5))
-        .clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(AppTheme.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
+        )
     }
 
     // MARK: - Helpers

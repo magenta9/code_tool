@@ -100,7 +100,7 @@ public struct StyledToolbar<Content: View>: View {
         }
         .padding(AppTheme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong)
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong, shadowOpacity: 0.06)
     }
 }
 
@@ -108,122 +108,148 @@ public enum StyledButtonVariant {
     case primary
     case secondary
     case ghost
+    case outline
     case destructive
+}
+
+public enum StyledButtonSize {
+    case regular
+    case large
+    case small
+    case extraSmall
 }
 
 public struct StyledButton: View {
     let title: String
     let systemImage: String?
     let variant: StyledButtonVariant
+    let size: StyledButtonSize
     let action: () -> Void
 
     @State private var isHovered = false
 
     public init(
         _ title: String, systemImage: String? = nil, variant: StyledButtonVariant = .secondary,
+        size: StyledButtonSize = .regular,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.systemImage = systemImage
         self.variant = variant
+        self.size = size
         self.action = action
     }
 
     public var body: some View {
         Button(action: action) {
-            HStack(spacing: AppTheme.Spacing.xs + 2) {
+            HStack(spacing: metrics.gap) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: metrics.iconSize, weight: .semibold))
                 }
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: metrics.fontSize, weight: .semibold, design: .rounded))
             }
-            .padding(.horizontal, AppTheme.Spacing.md)
-            .padding(.vertical, AppTheme.Spacing.sm + 1)
+            .padding(.horizontal, metrics.horizontalPadding)
+            .frame(height: metrics.height)
             .foregroundStyle(foregroundColor)
-            .background(capsuleBackground)
+            .background(buttonBackground)
             .overlay(overlayView)
-            .shadow(color: shadowColor, radius: isHovered ? 22 : 12, y: 10)
+            .shadow(color: shadowColor, radius: isHovered ? 9 : 5, y: isHovered ? 4 : 2)
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.015 : 1.0)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
         .toolHoverTracking($isHovered)
+    }
+
+    private var metrics: (height: CGFloat, horizontalPadding: CGFloat, fontSize: CGFloat, iconSize: CGFloat, gap: CGFloat) {
+        switch size {
+        case .large:
+            return (38, AppTheme.Spacing.lg, 14, 14, AppTheme.Spacing.sm)
+        case .regular:
+            return (32, AppTheme.Spacing.md, 13, 13, AppTheme.Spacing.xs + 2)
+        case .small:
+            return (28, AppTheme.Spacing.sm + 2, 12, 12, AppTheme.Spacing.xs + 1)
+        case .extraSmall:
+            return (24, AppTheme.Spacing.sm, 11, 11, AppTheme.Spacing.xs)
+        }
     }
 
     private var foregroundColor: Color {
         switch variant {
         case .primary:
-            return Color.black.opacity(0.78)
+            return .white
         case .secondary:
             return AppTheme.textPrimary
         case .ghost:
             return AppTheme.textSecondary
+        case .outline:
+            return AppTheme.textPrimary
         case .destructive:
-            return AppTheme.error
+            return .white
         }
     }
 
     private var shadowColor: Color {
         switch variant {
         case .primary:
-            return AppTheme.accent.opacity(0.20)
+            return AppTheme.accent.opacity(0.30)
         case .destructive:
-            return AppTheme.error.opacity(0.12)
-        case .secondary, .ghost:
+            return AppTheme.error.opacity(0.20)
+        case .secondary, .ghost, .outline:
             return .clear
         }
     }
 
-    private var capsuleBackground: some View {
-        Capsule()
-            .fill(.ultraThinMaterial)
-            .overlay {
-                backgroundOverlay
-            }
-    }
-
     @ViewBuilder
-    private var backgroundOverlay: some View {
+    private var buttonBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         switch variant {
         case .primary:
-            Capsule().fill(AppTheme.accentGradient.opacity(isHovered ? 1.0 : 0.94))
+            shape
+                .fill(
+                    LinearGradient(
+                        colors: isHovered
+                            ? [AppTheme.accentBright, AppTheme.accent]
+                            : [Color(red: 0.220, green: 0.560, blue: 0.980), AppTheme.accent],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(alignment: .top) {
+                    shape.stroke(Color.white.opacity(0.22), lineWidth: 1)
+                        .mask(LinearGradient(colors: [Color.white, Color.clear], startPoint: .top, endPoint: .bottom))
+                }
         case .secondary:
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            AppTheme.panelTintStrong.opacity(isHovered ? 0.62 : 0.52),
-                            AppTheme.panelTint.opacity(isHovered ? 0.40 : 0.28),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            shape.fill(isHovered ? AppTheme.surfaceHover : AppTheme.secondary)
         case .ghost:
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(isHovered ? 0.10 : 0.06), Color.clear],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            shape.fill(isHovered ? AppTheme.muted : Color.clear)
+        case .outline:
+            shape.fill(isHovered ? AppTheme.accent.opacity(0.10) : AppTheme.popover)
         case .destructive:
-            Capsule().fill(AppTheme.error.opacity(isHovered ? 0.20 : 0.13))
+            shape.fill(isHovered ? AppTheme.error.opacity(0.94) : AppTheme.error)
         }
     }
 
     @ViewBuilder
     private var overlayView: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         switch variant {
         case .primary:
-            Capsule().strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-        case .secondary, .ghost:
-            Capsule().strokeBorder(isHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1)
+            shape.strokeBorder(AppTheme.accentBright.opacity(0.36), lineWidth: 1)
+        case .secondary:
+            shape.strokeBorder(isHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1)
+        case .ghost:
+            shape.strokeBorder(Color.clear, lineWidth: 1)
+        case .outline:
+            shape.strokeBorder(isHovered ? AppTheme.accentBright.opacity(0.32) : AppTheme.input, lineWidth: 1)
         case .destructive:
-            Capsule().strokeBorder(AppTheme.error.opacity(0.24), lineWidth: 1)
+            shape.strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
         }
+    }
+
+    private var cornerRadius: CGFloat {
+        size == .extraSmall ? AppTheme.Radius.sm : AppTheme.Radius.lg
     }
 }
 
@@ -244,29 +270,20 @@ public struct StyledIconButton: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(isHovered ? AppTheme.accentBright : AppTheme.textSecondary)
                 .frame(width: 30, height: 30)
                 .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(isHovered ? 0.16 : 0.08),
-                                            AppTheme.panelTintStrong.opacity(isHovered ? 0.30 : 0.18),
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        }
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                        .fill(isHovered ? AppTheme.accent.opacity(0.12) : AppTheme.secondary.opacity(0.42))
                 }
-                .overlay(Circle().strokeBorder(isHovered ? AppTheme.borderHover : AppTheme.border, lineWidth: 1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                        .strokeBorder(isHovered ? AppTheme.accentBright.opacity(0.30) : AppTheme.border, lineWidth: 1)
+                )
         }
         .buttonStyle(.plain)
         .help(help)
+        .scaleEffect(isHovered ? 0.98 : 1.0)
         .toolHoverTracking($isHovered)
     }
 }
@@ -306,20 +323,13 @@ public struct CopyButton: View {
             .padding(.horizontal, AppTheme.Spacing.sm + 2)
             .padding(.vertical, AppTheme.Spacing.xs + 2)
             .background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.10), AppTheme.panelTint.opacity(0.18)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
+                RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+                    .fill(showCheck ? AppTheme.success.opacity(0.12) : AppTheme.muted)
             }
-            .overlay(Capsule().strokeBorder(AppTheme.border, lineWidth: 1))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+                    .strokeBorder(showCheck ? AppTheme.success.opacity(0.24) : AppTheme.border, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .animation(AppTheme.Anim.fast, value: showCheck)
@@ -379,7 +389,7 @@ public struct StyledPanel<Content: View>: View {
         }
         .padding(AppTheme.Spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTintStrong)
+        .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTintStrong, shadowOpacity: 0.08)
     }
 }
 
@@ -429,20 +439,7 @@ public struct StyledTextEditor: View {
         }
         .background {
             RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppTheme.background.opacity(0.66),
-                                    AppTheme.panelTint.opacity(0.24),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                .fill(AppTheme.input.opacity(0.72))
         }
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
@@ -467,7 +464,7 @@ public struct StyledStatusBar<Content: View>: View {
         .padding(.horizontal, AppTheme.Spacing.lg)
         .padding(.vertical, AppTheme.Spacing.sm + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTint)
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTint, shadowOpacity: 0.06)
     }
 }
 
@@ -485,7 +482,7 @@ public struct StyledSectionHeader: View {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(AppTheme.accentWarm)
+                    .foregroundStyle(AppTheme.accentBright)
             }
             Text(title)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -511,8 +508,8 @@ public struct GradientBadge: View {
             .padding(.horizontal, AppTheme.Spacing.sm)
             .padding(.vertical, AppTheme.Spacing.xxs + 2)
             .foregroundStyle(.white)
-            .background(color.gradient)
-            .clipShape(Capsule())
+            .background(color.opacity(0.90))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
     }
 }
 
@@ -556,14 +553,14 @@ public struct StyledSegmentedPicker<T: Hashable>: View {
                     Text(label(option))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(
-                            selection == option ? AppTheme.background : AppTheme.textMuted
+                            selection == option ? AppTheme.textPrimary : AppTheme.textMuted
                         )
                         .padding(.horizontal, AppTheme.Spacing.md)
                         .padding(.vertical, AppTheme.Spacing.sm)
                         .background {
                             if selection == option {
-                                Capsule()
-                                    .fill(AppTheme.accentGradient)
+                                RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+                                    .fill(AppTheme.accent.opacity(0.24))
                                     .matchedGeometryEffect(
                                         id: "picker-selection", in: pickerNamespace)
                             }
@@ -574,20 +571,13 @@ public struct StyledSegmentedPicker<T: Hashable>: View {
         }
         .padding(4)
         .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.10), AppTheme.panelTint.opacity(0.20)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+            RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                .fill(AppTheme.input.opacity(0.58))
         }
-        .overlay(Capsule().strokeBorder(AppTheme.border, lineWidth: 1))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
+                .strokeBorder(AppTheme.border, lineWidth: 1)
+        )
     }
 }
 
@@ -639,7 +629,7 @@ public struct ThemedValueCard: View {
         }
         .padding(AppTheme.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong)
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong, shadowOpacity: 0.07)
     }
 }
 

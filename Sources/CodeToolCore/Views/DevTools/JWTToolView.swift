@@ -86,7 +86,7 @@ public struct JWTToolView: View {
     }
 
     private var statusItems: [ToolStatusItem] {
-        var items = [ToolStatusItem(title: mode.rawValue, systemImage: "arrow.left.arrow.right", tint: AppTheme.accentWarm)]
+        var items = [ToolStatusItem(title: mode.rawValue, systemImage: "arrow.left.arrow.right", tint: AppTheme.accentBright)]
         if !errorMessage.isEmpty {
             items.append(ToolStatusItem(title: "Decode error", systemImage: "exclamationmark.triangle.fill", tint: AppTheme.error))
         }
@@ -128,7 +128,7 @@ public struct JWTToolView: View {
                     if !errorMessage.isEmpty {
                         ToolMessageBanner(systemImage: "exclamationmark.triangle.fill", message: errorMessage, tint: AppTheme.error)
                     } else {
-                        ToolMessageBanner(systemImage: "info.bubble", message: "Header, payload and signature are decoded live as the token changes.", tint: AppTheme.accentWarm)
+                        ToolMessageBanner(systemImage: "info.bubble", message: "Header, payload and signature are decoded live as the token changes.", tint: AppTheme.accentBright)
                     }
                 }
             }
@@ -271,7 +271,7 @@ public struct JWTToolView: View {
                         StyledTextEditor(text: $encodePayload, placeholder: "")
                     }
 
-                    ToolMessageBanner(systemImage: "sparkles", message: "Generation creates an unsigned token for debugging and payload inspection flows.", tint: AppTheme.accentWarm)
+                    ToolMessageBanner(systemImage: "sparkles", message: "Generation creates an unsigned token for debugging and payload inspection flows.", tint: AppTheme.accentBright)
                 }
             }
             .frame(minWidth: 340)

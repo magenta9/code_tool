@@ -76,7 +76,7 @@ public struct ImageConverterView: View {
         var items = [
             ToolStatusItem(
                 title: selectedMode.rawValue, systemImage: "arrow.left.arrow.right",
-                tint: AppTheme.accentWarm)
+                tint: AppTheme.accentBright)
         ]
         if selectedImage != nil {
             items.append(
@@ -178,7 +178,7 @@ public struct ImageConverterView: View {
                             systemImage: "sparkles",
                             message:
                                 "Data URLs are supported. Any data URI prefix is stripped before decode.",
-                            tint: AppTheme.accentWarm)
+                            tint: AppTheme.accentBright)
                     }
                 }
             }

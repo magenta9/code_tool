@@ -102,7 +102,7 @@ public struct WordCloudView: View {
         var items = [
             ToolStatusItem(
                 title: "Min length \(minWordLength)",
-                systemImage: "line.3.horizontal.decrease.circle", tint: AppTheme.accentWarm),
+                systemImage: "line.3.horizontal.decrease.circle", tint: AppTheme.accentBright),
             ToolStatusItem(
                 title: "Max \(maxWords)", systemImage: "number.circle", tint: AppTheme.accent),
         ]
@@ -132,7 +132,7 @@ public struct WordCloudView: View {
                         systemImage: "sparkles",
                         message:
                             "Paste text, tune filters, then generate to build the cloud and frequency table.",
-                        tint: AppTheme.accentWarm)
+                        tint: AppTheme.accentBright)
                 }
             }
         }

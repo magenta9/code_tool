@@ -199,14 +199,14 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
             Spacer()
 
             // Semi-transparent backdrop tap to dismiss
-            Color.black.opacity(appeared ? 0.3 : 0.0)
+            Color.black.opacity(appeared ? 0.42 : 0.0)
                 .ignoresSafeArea()
                 .onTapGesture { dismiss() }
                 .frame(maxWidth: .infinity)
 
             drawerContent
-                .frame(width: 380)
-                .offset(x: appeared ? 0 : 380)
+                .frame(width: 372)
+                .offset(x: appeared ? 0 : 372)
         }
         .animation(.spring(duration: 0.38, bounce: 0.14), value: appeared)
         .onAppear {
@@ -242,7 +242,7 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
                 Spacer()
 
                 if !items.isEmpty {
-                    StyledButton("Clear All", systemImage: "trash", variant: .destructive) {
+                    StyledButton("Clear All", systemImage: "trash", variant: .destructive, size: .small) {
                         onClearAll()
                     }
                 }
@@ -252,8 +252,8 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
                 }
             }
             .padding(.horizontal, AppTheme.Spacing.lg)
-            .padding(.vertical, AppTheme.Spacing.lg)
-            .background(AppTheme.surface.opacity(0.95))
+            .padding(.vertical, AppTheme.Spacing.md)
+            .background(AppTheme.card)
             .overlay(alignment: .bottom) {
                 AppTheme.border.frame(height: 1)
             }
@@ -282,7 +282,7 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
                                 .padding(.horizontal, AppTheme.Spacing.md)
                                 .padding(.vertical, AppTheme.Spacing.sm)
                                 .background(AppTheme.accent.opacity(0.10))
-                                .clipShape(Capsule())
+                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
                             }
                             .buttonStyle(.plain)
                             .padding(.top, AppTheme.Spacing.md)
@@ -304,12 +304,12 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
             }
             .padding(.horizontal, AppTheme.Spacing.lg)
             .padding(.vertical, AppTheme.Spacing.sm)
-            .background(AppTheme.surface.opacity(0.95))
+            .background(AppTheme.card)
             .overlay(alignment: .top) {
                 AppTheme.border.frame(height: 1)
             }
         }
-        .background(AppTheme.backgroundRaised)
+        .background(AppTheme.sidebarBackground)
         .overlay(alignment: .leading) {
             AppTheme.border.frame(width: 1)
         }
@@ -321,10 +321,9 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
         HStack(alignment: .top, spacing: AppTheme.Spacing.md) {
             // Timeline element
             VStack(spacing: 0) {
-                Circle()
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(AppTheme.accent)
                     .frame(width: 8, height: 8)
-                    .shadow(color: AppTheme.accent.opacity(0.4), radius: 4)
 
                 if !isLast {
                     Rectangle()
@@ -376,7 +375,7 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
                         .padding(.horizontal, AppTheme.Spacing.sm)
                         .padding(.vertical, AppTheme.Spacing.xs)
                         .background(AppTheme.accent.opacity(0.12))
-                        .clipShape(Capsule())
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
                     }
                     .buttonStyle(.plain)
 
@@ -400,7 +399,7 @@ public struct HistoryDrawer<Item: HistoryDrawerItem>: View {
         .padding(.horizontal, AppTheme.Spacing.lg)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.sm)
-                .fill(hoveredItemID == item.id ? AppTheme.surfaceHover.opacity(0.5) : .clear)
+                .fill(hoveredItemID == item.id ? AppTheme.muted : .clear)
         )
         .animation(AppTheme.Anim.hover, value: hoveredItemID)
         .onHover { hovering in

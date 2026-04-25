@@ -68,13 +68,7 @@ public struct ScrollingLyricsView: View {
         }
         .padding(AppTheme.Spacing.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.cardGradient.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
-                .strokeBorder(AppTheme.border, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.14), radius: 18, y: 10)
+        .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTintStrong, shadowOpacity: 0.08)
         .task(id: text) {
             lines = Self.buildLines(from: text)
         }
@@ -107,12 +101,12 @@ public struct ScrollingLyricsView: View {
 
         return Text(tagText.uppercased())
             .font(.system(size: 10, weight: .bold, design: .rounded))
-            .foregroundStyle(AppTheme.accentWarm)
+            .foregroundStyle(AppTheme.accentBright)
             .tracking(1.0)
             .padding(.horizontal, AppTheme.Spacing.sm)
             .padding(.vertical, AppTheme.Spacing.xxs)
-            .background(AppTheme.accentWarm.opacity(0.10))
-            .clipShape(Capsule())
+            .background(AppTheme.accent.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
             .padding(.vertical, AppTheme.Spacing.xs)
             .padding(.horizontal, AppTheme.Spacing.sm)
     }

@@ -232,14 +232,10 @@ public struct ContentView: View {
 private struct SidebarDivider: View {
     var body: some View {
         ZStack {
-            AppTheme.sidebarBackground.opacity(0.92)
+            AppTheme.sidebarBackground
 
             AppTheme.border
                 .frame(width: 1)
-
-            AppTheme.accent.opacity(0.08)
-                .frame(width: 1)
-                .blur(radius: 3)
         }
         .frame(width: 1)
     }
@@ -270,7 +266,9 @@ private struct SidebarPane: View {
     let openSettings: () -> Void
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            SidebarBrandHeader()
+
             if groups.isEmpty {
                 ContentUnavailableView(
                     "No Matching Tools",
@@ -291,10 +289,10 @@ private struct SidebarPane: View {
                                     }
                                     .listRowInsets(
                                         EdgeInsets(
-                                            top: 4,
-                                            leading: AppTheme.Spacing.md,
-                                            bottom: 4,
-                                            trailing: AppTheme.Spacing.md
+                                            top: 3,
+                                            leading: AppTheme.Spacing.sm,
+                                            bottom: 3,
+                                            trailing: AppTheme.Spacing.sm
                                         )
                                     )
                                     .listRowBackground(Color.clear)
@@ -311,18 +309,60 @@ private struct SidebarPane: View {
         .background(AppTheme.sidebarBackground)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                Divider()
+                AppTheme.border.frame(height: 1)
                 Button(action: openSettings) {
                     Label("Provider Settings", systemImage: "slider.horizontal.3")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(AppTheme.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, AppTheme.Spacing.lg)
-                        .padding(.vertical, AppTheme.Spacing.md)
+                        .padding(.horizontal, AppTheme.Spacing.md)
+                        .padding(.vertical, AppTheme.Spacing.sm + 2)
                 }
                 .buttonStyle(.plain)
-                .background(.regularMaterial)
+                .background(AppTheme.sidebarBackground)
             }
+        }
+    }
+}
+
+private struct SidebarBrandHeader: View {
+    var body: some View {
+        HStack(spacing: AppTheme.Spacing.sm) {
+            Text("CT")
+                .font(.system(size: 11, weight: .black, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .frame(width: 28, height: 28)
+                .background(AppTheme.accentGradient)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+                        .strokeBorder(AppTheme.accentBright.opacity(0.34), lineWidth: 1)
+                )
+                .shadow(color: AppTheme.accent.opacity(0.20), radius: 8, y: 3)
+
+            HStack(spacing: AppTheme.Spacing.xs) {
+                Text("CodeTool")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .tracking(-0.1)
+
+                Text("LOCAL")
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textMuted)
+                    .tracking(1.2)
+                    .padding(.horizontal, AppTheme.Spacing.xs + 1)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.muted)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, AppTheme.Spacing.md)
+        .padding(.top, AppTheme.Spacing.lg)
+        .padding(.bottom, AppTheme.Spacing.sm)
+        .overlay(alignment: .bottom) {
+            AppTheme.border.frame(height: 1)
         }
     }
 }
@@ -331,23 +371,30 @@ private struct SidebarRow: View {
     let tool: Tool
     let isSelected: Bool
 
+    @State private var isHovered = false
+
     private var backgroundFill: Color {
-        isSelected ? AppTheme.accent.opacity(0.14) : .clear
+        if isSelected { return AppTheme.accent.opacity(0.20) }
+        if isHovered { return AppTheme.muted }
+        return .clear
     }
 
     private var borderColor: Color {
-        isSelected ? AppTheme.accent.opacity(0.24) : .clear
+        isSelected ? AppTheme.accent.opacity(0.26) : .clear
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppTheme.Spacing.sm) {
-            Image(systemName: tool.systemImage)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isSelected ? AppTheme.accent : AppTheme.textSecondary)
-                .frame(width: 22, height: 22)
-                .padding(.top, 1)
+        HStack(alignment: .center, spacing: AppTheme.Spacing.sm) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(isSelected ? AppTheme.accentBright : Color.clear)
+                .frame(width: 3, height: 28)
 
-            VStack(alignment: .leading, spacing: 3) {
+            Image(systemName: tool.systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? AppTheme.accentBright : AppTheme.textMuted)
+                .frame(width: 20, height: 20)
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(tool.name)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
@@ -359,8 +406,8 @@ private struct SidebarRow: View {
                     .lineLimit(2)
             }
         }
-        .padding(.horizontal, AppTheme.Spacing.xs)
-        .padding(.vertical, AppTheme.Spacing.sm)
+        .padding(.horizontal, AppTheme.Spacing.sm)
+        .padding(.vertical, AppTheme.Spacing.xs + 2)
         .background(
             RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous)
                 .fill(backgroundFill)
@@ -370,6 +417,7 @@ private struct SidebarRow: View {
                 .stroke(borderColor, lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: AppTheme.Radius.lg, style: .continuous))
+        .toolHoverTracking($isHovered)
     }
 }
 
@@ -476,7 +524,7 @@ private struct ToolDetailView: View {
                 .foregroundStyle(AppTheme.textSecondary)
         }
         .padding(AppTheme.Spacing.xxxl)
-        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong)
+        .glassSurface(cornerRadius: AppTheme.Radius.xxl, tint: AppTheme.panelTintStrong, shadowOpacity: 0.08)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppBackdrop())
     }
@@ -493,7 +541,7 @@ private struct WelcomeView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxxl) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.xxl) {
                 heroSection
                 toolGroupSection(
                     eyebrow: "Development",
@@ -507,7 +555,7 @@ private struct WelcomeView: View {
                     title: "Agentic surfaces",
                     subtitle: "Speech, image, music, and MiniMax chat brought into the same visual language.",
                     tools: aiTools,
-                    accentColor: AppTheme.accentWarm
+                    accentColor: AppTheme.accentBright
                 )
             }
             .padding(.horizontal, AppTheme.Spacing.xxl)
@@ -526,21 +574,40 @@ private struct WelcomeView: View {
 
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
-                Text("Elegant tools for the everyday macOS workflow.")
-                    .font(.system(size: 46, weight: .heavy, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
+            HStack(alignment: .top, spacing: AppTheme.Spacing.xl) {
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
+                    HStack(spacing: AppTheme.Spacing.sm) {
+                        Text("CodeTool")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.textSecondary)
 
-                Text("A more refined desktop shell with lighter chrome, calmer focus, and shared glass surfaces across every utility.")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: 680, alignment: .leading)
-            }
+                        Text("LOCAL SUITE")
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.accentBright)
+                            .tracking(1.3)
+                            .padding(.horizontal, AppTheme.Spacing.sm)
+                            .padding(.vertical, 3)
+                            .background(AppTheme.accent.opacity(0.14))
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
+                    }
 
-            HStack(spacing: AppTheme.Spacing.lg) {
-                LandingMetric(value: "\(devTools.count)", label: "Dev Tools", color: AppTheme.accent)
-                LandingMetric(value: "\(aiTools.count)", label: "AI Tools", color: AppTheme.accentWarm)
-                LandingMetric(value: "1", label: "Shared Language", color: AppTheme.accentCoral)
+                    Text("Quiet tools for fast local work.")
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Text("A compact macOS workspace for conversion, inspection, and AI generation close at hand.")
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .frame(maxWidth: 650, alignment: .leading)
+                }
+
+                Spacer(minLength: 0)
+
+                VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                    LandingMetric(value: "\(devTools.count)", label: "Dev Tools", color: AppTheme.accent)
+                    LandingMetric(value: "\(aiTools.count)", label: "AI Tools", color: AppTheme.accentBright)
+                    LandingMetric(value: "1", label: "Shell", color: AppTheme.textMuted)
+                }
             }
 
             HStack(spacing: AppTheme.Spacing.md) {
@@ -551,14 +618,14 @@ private struct WelcomeView: View {
                 }
 
                 if let aiChat = tool(with: .aiChat) {
-                    StyledButton("Launch AI Chat", systemImage: aiChat.systemImage, variant: .secondary) {
+                    StyledButton("Launch AI Chat", systemImage: aiChat.systemImage, variant: .outline) {
                         selectedToolID = aiChat.toolID
                     }
                 }
             }
         }
-        .padding(AppTheme.Spacing.xxxl)
-        .glassSurface(cornerRadius: AppTheme.Radius.hero, tint: AppTheme.panelTintStrong, shadowOpacity: 0.22)
+        .padding(AppTheme.Spacing.xxl)
+        .glassSurface(cornerRadius: AppTheme.Radius.xxl, tint: AppTheme.accent.opacity(0.045), stroke: AppTheme.borderHover, shadowOpacity: 0.12)
     }
 
     private func toolGroupSection(
@@ -568,7 +635,7 @@ private struct WelcomeView: View {
         tools: [Tool],
         accentColor: Color
     ) -> some View {
-        VStack(alignment: .leading, spacing: AppTheme.Spacing.xl) {
+        VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                 Text(eyebrow)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -577,7 +644,7 @@ private struct WelcomeView: View {
                     .tracking(1.4)
 
                 Text(title)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
 
                 Text(subtitle)
@@ -611,7 +678,7 @@ private struct LandingMetric: View {
     var body: some View {
         HStack(spacing: AppTheme.Spacing.sm) {
             Text(value)
-                .font(.system(size: 24, weight: .black, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
 
             Text(label)
@@ -622,7 +689,7 @@ private struct LandingMetric: View {
         }
         .padding(.horizontal, AppTheme.Spacing.md)
         .padding(.vertical, AppTheme.Spacing.sm)
-        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: color.opacity(0.16), stroke: color.opacity(0.18), shadowOpacity: 0.10)
+        .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: color.opacity(0.10), stroke: AppTheme.border, shadowOpacity: 0.05)
     }
 }
 
@@ -635,21 +702,20 @@ private struct LandingToolCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: AppTheme.Spacing.lg) {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.md) {
                 HStack(alignment: .top) {
                     RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                        .fill(.ultraThinMaterial)
+                        .fill(accentColor.opacity(isHovered ? 0.18 : 0.12))
                         .frame(width: 42, height: 42)
                         .overlay {
-                            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
-                                .fill(accentColor.opacity(isHovered ? 0.24 : 0.16))
-                                .padding(2)
-                                .overlay {
-                                    Image(systemName: tool.systemImage)
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundStyle(isHovered ? accentColor : AppTheme.textSecondary)
-                                }
+                            Image(systemName: tool.systemImage)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(isHovered ? accentColor : AppTheme.textSecondary)
                         }
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.md, style: .continuous)
+                                .strokeBorder(accentColor.opacity(0.18), lineWidth: 1)
+                        )
 
                     Spacer()
 
@@ -661,11 +727,8 @@ private struct LandingToolCard: View {
                         .padding(.horizontal, AppTheme.Spacing.sm)
                         .padding(.vertical, AppTheme.Spacing.xs + 1)
                         .background {
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay {
-                                    Capsule().fill(accentColor.opacity(0.10))
-                                }
+                            RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous)
+                                .fill(AppTheme.muted)
                         }
                 }
 
@@ -694,8 +757,8 @@ private struct LandingToolCard: View {
                         .offset(x: isHovered ? 4 : 0)
                 }
             }
-            .padding(AppTheme.Spacing.xl)
-            .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: AppTheme.panelTintStrong, stroke: isHovered ? accentColor.opacity(0.30) : AppTheme.border, shadowOpacity: isHovered ? 0.22 : 0.14)
+            .padding(AppTheme.Spacing.lg)
+            .glassSurface(cornerRadius: AppTheme.Radius.xl, tint: isHovered ? accentColor.opacity(0.070) : AppTheme.panelTintStrong, stroke: isHovered ? accentColor.opacity(0.30) : AppTheme.border, shadowOpacity: isHovered ? 0.12 : 0.06)
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.01 : 1.0)
@@ -712,10 +775,10 @@ private struct SettingsSheet: View {
             HStack(alignment: .top, spacing: AppTheme.Spacing.lg) {
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
                     Text("Provider Settings")
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text("Keep diagnostics, providers, and local CLI integrations inside the same visual rhythm as the main workspace.")
+                    Text("Manage diagnostics, providers, and local CLI integrations from one workspace.")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
@@ -734,7 +797,7 @@ private struct SettingsSheet: View {
             }
             .pickerStyle(.segmented)
             .padding(6)
-            .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong, shadowOpacity: 0.08)
+            .glassSurface(cornerRadius: AppTheme.Radius.lg, tint: AppTheme.panelTintStrong, shadowOpacity: 0.05)
 
             Group {
                 if selectedTab == .minimax {
@@ -743,7 +806,7 @@ private struct SettingsSheet: View {
                     DiagnosticsView()
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.hero, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xxl, style: .continuous))
         }
         .padding(AppTheme.Spacing.xxl)
         .frame(minWidth: 760, minHeight: 620)

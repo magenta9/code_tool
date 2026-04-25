@@ -214,7 +214,7 @@ public struct AIImageView: View {
             ToolStatusItem(
                 title: generationMode.title,
                 systemImage: generationMode == .referenceGuided ? "photo.stack.fill" : "text.quote",
-                tint: generationMode == .referenceGuided ? AppTheme.accentWarm : AppTheme.accent
+                tint: generationMode == .referenceGuided ? AppTheme.accentBright : AppTheme.accent
             ),
             ToolStatusItem(
                 title: sizeSummary,
@@ -233,7 +233,7 @@ public struct AIImageView: View {
                 ToolStatusItem(
                     title: "\(referenceImages.count) ref\(referenceImages.count == 1 ? "" : "s")",
                     systemImage: "photo.on.rectangle.angled",
-                    tint: AppTheme.accentWarm
+                    tint: AppTheme.accentBright
                 )
             )
         }
@@ -261,7 +261,7 @@ public struct AIImageView: View {
                 ToolStatusItem(
                     title: "Optimizer on",
                     systemImage: "wand.and.stars",
-                    tint: AppTheme.accentWarm
+                    tint: AppTheme.accentBright
                 )
             )
         }
@@ -330,7 +330,7 @@ public struct AIImageView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 VStack(alignment: .leading, spacing: AppTheme.Spacing.xs) {
-                    GradientBadge("Selected reference", color: AppTheme.accentWarm)
+                    GradientBadge("Selected reference", color: AppTheme.accentBright)
                     Text(item.fileName)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
@@ -344,7 +344,7 @@ public struct AIImageView: View {
                 VStack(spacing: AppTheme.Spacing.md) {
                     Image(systemName: isReferenceDropTargeted ? "square.and.arrow.down.fill" : "photo.stack")
                         .font(.system(size: 34, weight: .semibold))
-                        .foregroundStyle(isReferenceDropTargeted ? AppTheme.accentWarm : AppTheme.accent)
+                        .foregroundStyle(isReferenceDropTargeted ? AppTheme.accentBright : AppTheme.accent)
 
                     VStack(spacing: AppTheme.Spacing.xs) {
                         Text(isReferenceDropTargeted ? "Release to stage the reference frame" : "Build a director’s light table")
@@ -368,7 +368,7 @@ public struct AIImageView: View {
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
                 .strokeBorder(
-                    isReferenceDropTargeted ? AppTheme.accentWarm.opacity(0.9) : AppTheme.borderHover,
+                    isReferenceDropTargeted ? AppTheme.accentBright.opacity(0.9) : AppTheme.borderHover,
                     style: StrokeStyle(lineWidth: 1.2, dash: [8, 5])
                 )
         )
@@ -436,7 +436,7 @@ public struct AIImageView: View {
         VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AppTheme.accentWarm)
+                .foregroundStyle(AppTheme.accentBright)
             Text(title)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppTheme.textPrimary)
@@ -473,8 +473,8 @@ public struct AIImageView: View {
                         .foregroundStyle(AppTheme.background)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
-                        .background(AppTheme.accentWarm)
-                        .clipShape(Capsule())
+                        .background(AppTheme.accentBright)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
                         .padding(8)
 
                     VStack {
@@ -517,7 +517,7 @@ public struct AIImageView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.Radius.lg)
                     .strokeBorder(
-                        selectedReferenceImageID == item.id ? AppTheme.accentWarm.opacity(0.7) : AppTheme.border,
+                        selectedReferenceImageID == item.id ? AppTheme.accentBright.opacity(0.7) : AppTheme.border,
                         lineWidth: 1
                     )
             )
@@ -627,11 +627,12 @@ public struct AIImageView: View {
                                             .padding(.horizontal, AppTheme.Spacing.md)
                                             .padding(.vertical, AppTheme.Spacing.sm)
                                             .background(
-                                                Capsule()
-                                                    .fill(aspectRatio == ratio ? AnyShapeStyle(AppTheme.accentGradient) : AnyShapeStyle(AppTheme.surfaceRaised))
+                                                RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+                                                    .fill(aspectRatio == ratio ? AnyShapeStyle(AppTheme.accent) : AnyShapeStyle(AppTheme.surfaceRaised))
                                             )
                                             .overlay(
-                                                Capsule().strokeBorder(aspectRatio == ratio ? Color.white.opacity(0.16) : AppTheme.border, lineWidth: 1)
+                                                RoundedRectangle(cornerRadius: AppTheme.Radius.sm, style: .continuous)
+                                                    .strokeBorder(aspectRatio == ratio ? Color.white.opacity(0.16) : AppTheme.border, lineWidth: 1)
                                             )
                                     }
                                     .buttonStyle(.plain)
@@ -829,7 +830,7 @@ public struct AIImageView: View {
             outputMetaChip(
                 title: generationMode == .referenceGuided ? "Guided" : "Text only",
                 systemImage: generationMode == .referenceGuided ? "photo.stack.fill" : "text.quote",
-                tint: generationMode == .referenceGuided ? AppTheme.accentWarm : AppTheme.accent
+                tint: generationMode == .referenceGuided ? AppTheme.accentBright : AppTheme.accent
             )
             outputMetaChip(
                 title: sizeSummary,
@@ -856,9 +857,10 @@ public struct AIImageView: View {
             .padding(.horizontal, AppTheme.Spacing.sm)
             .padding(.vertical, AppTheme.Spacing.xs)
             .background(tint.opacity(0.10))
-            .clipShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
             .overlay(
-                Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1)
+                RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous)
+                    .strokeBorder(tint.opacity(0.22), lineWidth: 1)
             )
     }
 
@@ -899,7 +901,7 @@ public struct AIImageView: View {
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 4)
                                         .background(selectedOutputIndex == index ? AppTheme.accent : AppTheme.surfaceRaised)
-                                        .clipShape(Capsule())
+                                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.xs, style: .continuous))
                                         .padding(8)
                                 }
                         }

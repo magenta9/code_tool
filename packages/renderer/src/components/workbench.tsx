@@ -36,6 +36,7 @@ export function Workbench(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const active = toolCatalog.find((tool) => location.pathname === tool.routePath) ?? toolCatalog[0];
+  const activeGroupLabel = active.category === "aiTools" ? "AI Tools" : "Dev Tools";
   const filtered = useMemo(
     () =>
       toolCatalog.filter((tool) => {
@@ -46,55 +47,67 @@ export function Workbench(): JSX.Element {
   );
 
   return (
-    <div className="grid h-screen grid-cols-[280px_minmax(0,1fr)] bg-[#08090a] text-[#e8ece7]">
-      <aside className="flex min-h-0 flex-col border-r border-white/8 bg-[#0d0f10]">
-        <div className="flex h-14 items-center gap-3 pl-[88px] pr-4">
-          <div className="grid h-8 w-8 place-items-center rounded-[8px] bg-[#d1ff4a] text-[#11140d] shadow-[0_0_24px_rgba(209,255,74,0.22)]">
-            <Wrench size={17} />
-          </div>
-          <div>
-            <div className="text-[15px] font-semibold tracking-[-0.012em] text-[#f2f5ef]">CodeTool</div>
-            <div className="text-[11px] text-[#7d847d]">Electron workbench</div>
+    <div className="grid h-screen grid-cols-[292px_minmax(0,1fr)] grid-rows-[var(--app-titlebar-height)_minmax(0,1fr)] bg-[var(--app-bg)] text-[var(--app-text)]">
+      <div className="app-drag-region col-span-2 flex h-[var(--app-titlebar-height)] items-center justify-between border-b border-[var(--app-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.01))] px-5 text-[var(--app-text-dim)] backdrop-blur-md">
+        <div className="w-[var(--app-traffic-light-safe-width)] shrink-0" />
+        <div className="flex-1" />
+        <div className="rounded-full border border-white/6 bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.24em] text-[#868e86]">
+          CodeTool
+        </div>
+      </div>
+      <aside className="app-no-drag flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[linear-gradient(180deg,#0d1113_0%,#090c0d_100%)]">
+        <div className="px-4 pb-4 pt-5">
+          <div className="rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4 shadow-[0_18px_48px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[linear-gradient(180deg,#e7ff94_0%,#d8ff63_100%)] text-[#11140d] shadow-[0_12px_32px_rgba(216,255,99,0.24)]">
+                <Wrench size={18} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[15px] font-semibold tracking-[-0.02em] text-[#f4f7f1]">CodeTool</div>
+                <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">Electron workbench</div>
+              </div>
+            </div>
           </div>
         </div>
-        <label className="mx-3 mb-3 flex h-10 items-center gap-2 rounded-[8px] bg-white/[0.045] px-3 text-[#8b928b] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]">
+        <label className="app-no-drag mx-4 mb-4 flex h-11 items-center gap-3 rounded-[14px] border border-white/[0.06] bg-white/[0.045] px-3.5 text-[var(--app-text-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color] duration-150 focus-within:border-white/[0.1] focus-within:bg-white/[0.06]">
           <Search size={15} />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search tools"
-            className="min-w-0 flex-1 bg-transparent text-[13px] text-[#e8ece7] outline-none placeholder:text-[#747b74]"
+            className="app-no-drag min-w-0 flex-1 bg-transparent text-[13px] text-[var(--app-text)] outline-none placeholder:text-[#747c74]"
           />
         </label>
-        <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+        <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 pb-5">
           <ToolGroup title="Dev Tools" tools={filtered.filter((tool) => tool.category === "devTools")} />
           <ToolGroup title="AI Tools" tools={filtered.filter((tool) => tool.category === "aiTools")} />
         </nav>
-        <div className="grid grid-cols-2 gap-2 border-t border-white/8 p-3">
+        <div className="grid grid-cols-2 gap-2 border-t border-[var(--app-border)] p-4 pt-3">
           <button
             type="button"
             onClick={() => navigate("/settings")}
-            className="flex h-10 items-center justify-center gap-2 rounded-[8px] bg-white/[0.045] text-[12px] text-[#cbd1c8] transition-transform duration-150 active:scale-95"
+            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6ddd3] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
           >
             <Settings size={14} /> Settings
           </button>
           <button
             type="button"
             onClick={() => navigate("/diagnostics")}
-            className="flex h-10 items-center justify-center gap-2 rounded-[8px] bg-white/[0.045] text-[12px] text-[#cbd1c8] transition-transform duration-150 active:scale-95"
+            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6ddd3] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
           >
             <Activity size={14} /> Logs
           </button>
         </div>
       </aside>
-      <main className="min-h-0 overflow-hidden bg-[#08090a]">
-        <header className="flex h-14 items-center border-b border-white/8 px-6">
-          <div>
-            <div className="text-[13px] text-[#858c85]">Current tool</div>
-            <h1 className="text-[17px] font-semibold tracking-[-0.012em] text-[#f2f5ef]">{active.title}</h1>
+      <main className="app-no-drag flex min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(216,255,99,0.07),transparent_24%),linear-gradient(180deg,#080a0b_0%,#060708_100%)]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-7 py-7">
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--app-text-muted)]">
+              {activeGroupLabel}
+            </span>
+            <div className="h-px w-6 bg-white/8" />
+            <span className="text-[13px] text-[var(--app-text-dim)]">{active.title}</span>
           </div>
-        </header>
-        <div className="h-[calc(100vh-56px)] overflow-y-auto px-6 py-5">
           <Outlet />
         </div>
       </main>
@@ -106,15 +119,15 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
   if (tools.length === 0) {
     return (
       <section>
-        <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#6f776f]">{title}</h2>
+        <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[#727a72]">{title}</h2>
         <div className="px-2 text-[12px] text-[#666d66]">No matches</div>
       </section>
     );
   }
   return (
     <section>
-      <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#6f776f]">{title}</h2>
-      <div className="space-y-1">
+      <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[#727a72]">{title}</h2>
+      <div className="space-y-2">
         {tools.map((tool) => {
           const Icon = icons[tool.icon as keyof typeof icons];
           return (
@@ -123,16 +136,31 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
               to={tool.routePath}
               className={({ isActive }) =>
                 [
-                  "flex min-h-12 items-center gap-3 rounded-[8px] px-3 py-2 transition-[background-color,transform] duration-150 active:scale-95",
-                  isActive ? "bg-[#d1ff4a] text-[#11140d]" : "text-[#c9d0c8] [@media(hover:hover)]:hover:bg-white/[0.055]"
+                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[16px] px-3 py-3 transition-[background-color,box-shadow,transform,color] duration-150 active:scale-[0.985]",
+                  isActive
+                    ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.085),rgba(255,255,255,0.04))] text-[#f4f7f1] shadow-[0_18px_48px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    : "text-[#c9d0c8] [@media(hover:hover)]:hover:bg-white/[0.045] [@media(hover:hover)]:hover:text-[#f3f6ef]"
                 ].join(" ")
               }
             >
-              <Icon size={17} />
-              <span className="min-w-0">
-                <span className="block truncate text-[13px] font-medium">{tool.title}</span>
-                <span className="block truncate text-[11px] opacity-70">{tool.description}</span>
-              </span>
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={[
+                      "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[12px] transition-[background-color,color,box-shadow] duration-150",
+                      isActive
+                        ? "bg-[linear-gradient(180deg,#e7ff94_0%,#d8ff63_100%)] text-[#12150c] shadow-[0_10px_24px_rgba(216,255,99,0.18)]"
+                        : "bg-white/[0.045] text-[#95a096] [@media(hover:hover)]:group-hover:bg-white/[0.065] [@media(hover:hover)]:group-hover:text-[#dbe2d7]"
+                    ].join(" ")}
+                  >
+                    <Icon size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium tracking-[-0.01em]">{tool.title}</span>
+                    <span className="mt-1 block truncate text-[11px] leading-4 opacity-65">{tool.description}</span>
+                  </span>
+                </>
+              )}
             </NavLink>
           );
         })}

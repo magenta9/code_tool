@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ImageBase64Inspection } from "@codetool/shared";
 import { getApi } from "../../api";
-import { Panel, PrimaryButton, SecondaryButton, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
+import { Panel, PrimaryButton, SecondaryButton, StatusStrip, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
 
 export function ImageConverterPage(): JSX.Element {
   const [base64, setBase64] = useState("");
@@ -11,26 +11,32 @@ export function ImageConverterPage(): JSX.Element {
 
   return (
     <ToolLayout title="Image Converter" description="Inspect image Base64 and save decoded files through main-process asset storage.">
-      <Panel title="Base64">
-        <TextArea value={base64} onChange={(event) => setBase64(event.target.value)} placeholder="Paste data URL or raw Base64 image bytes" />
-        <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto_auto]">
-          <input
+      <Panel
+        title="Base64"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <SecondaryButton type="button" onClick={async () => setInspection(await getApi().tools.inspectImageBase64({ base64 }))}>
+              Inspect
+            </SecondaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={async () => {
+                const asset = await getApi().tools.saveImageBase64({ base64, filename });
+                setMessage(`Saved ${asset.filename} · ${asset.byteLength} bytes`);
+              }}
+            >
+              Save asset
+            </PrimaryButton>
+          </div>
+        }
+      >
+        <TextArea spellCheck={false} value={base64} onChange={(event) => setBase64(event.target.value)} placeholder="Paste data URL or raw Base64 image bytes" />
+        <div className="mt-3 grid gap-2">
+          <TextInput
             value={filename}
             onChange={(event) => setFilename(event.target.value)}
-            className="h-10 rounded-[8px] bg-[#050607] px-3 text-[13px] outline-none shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+            placeholder="Filename"
           />
-          <SecondaryButton type="button" onClick={async () => setInspection(await getApi().tools.inspectImageBase64({ base64 }))}>
-            Inspect
-          </SecondaryButton>
-          <PrimaryButton
-            type="button"
-            onClick={async () => {
-              const asset = await getApi().tools.saveImageBase64({ base64, filename });
-              setMessage(`Saved ${asset.filename} · ${asset.byteLength} bytes`);
-            }}
-          >
-            Save asset
-          </PrimaryButton>
         </div>
         {inspection ? (
           <div className="mt-3">

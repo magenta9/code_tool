@@ -49,7 +49,7 @@ export const toolCatalog = [
   {
     id: "wordCloud",
     title: "Word Cloud",
-    description: "Tokenize text and rank terms for deterministic word clouds.",
+    description: "Generate a word cloud preview from ranked text terms.",
     category: "devTools",
     icon: "Cloud",
     routePath: "/tools/word-cloud",

@@ -35,13 +35,88 @@ const defaultStopWords = new Set([
   "with"
 ]);
 
+type SegmenterEntry = {
+  segment: string;
+  isWordLike?: boolean;
+};
+
+type SegmenterInstance = {
+  segment(input: string): Iterable<SegmenterEntry>;
+};
+
+type SegmenterConstructor = new (
+  locales?: string | string[],
+  options?: { granularity: "word" }
+) => SegmenterInstance;
+
+const fallbackWordPattern = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
+const edgePunctuationPattern = /^[\p{Pd}'’]+|[\p{Pd}'’]+$/gu;
+const alphaNumericPattern = /[\p{Script=Latin}\p{N}]/u;
+const cjkPattern = /\p{Script=Han}/u;
+
+function normalizeToken(token: string): string {
+  return token.normalize("NFKC").replaceAll("’", "'").trim().toLowerCase().replace(edgePunctuationPattern, "");
+}
+
+function isCountableToken(token: string, stopWords: ReadonlySet<string>): boolean {
+  if (!token) {
+    return false;
+  }
+
+  if (stopWords.has(token)) {
+    return false;
+  }
+
+  if (alphaNumericPattern.test(token) && token.length < 2) {
+    return false;
+  }
+
+  if (!alphaNumericPattern.test(token) && !cjkPattern.test(token) && token.length < 2) {
+    return false;
+  }
+
+  return true;
+}
+
+function segmentWithIntl(text: string): string[] | null {
+  const segmenterConstructor = (Intl as typeof Intl & { Segmenter?: SegmenterConstructor }).Segmenter;
+  if (!segmenterConstructor) {
+    return null;
+  }
+
+  const segmenter = new segmenterConstructor(["zh-Hans", "en"], { granularity: "word" });
+  const tokens: string[] = [];
+
+  for (const entry of segmenter.segment(text)) {
+    if (entry.isWordLike === false) {
+      continue;
+    }
+
+    const normalized = normalizeToken(entry.segment);
+    if (!normalized || !/[\p{L}\p{N}]/u.test(normalized)) {
+      continue;
+    }
+
+    tokens.push(normalized);
+  }
+
+  return tokens;
+}
+
+function tokenize(text: string): string[] {
+  const segmented = segmentWithIntl(text);
+  if (segmented) {
+    return segmented;
+  }
+
+  return (text.toLowerCase().match(fallbackWordPattern) ?? []).map((word) => normalizeToken(word)).filter(Boolean);
+}
+
 export function analyzeWordCloud(text: string, stopWords = defaultStopWords): WordCloudResult {
-  const words = text
-    .toLowerCase()
-    .match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) ?? [];
+  const words = tokenize(text);
   const counts = new Map<string, number>();
   for (const word of words) {
-    if (word.length < 2 || stopWords.has(word)) continue;
+    if (!isCountableToken(word, stopWords)) continue;
     counts.set(word, (counts.get(word) ?? 0) + 1);
   }
   const max = Math.max(1, ...counts.values());

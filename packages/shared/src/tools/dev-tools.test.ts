@@ -39,6 +39,19 @@ describe("DevTools core logic", () => {
     expect(result.tokens.some((token) => token.text === "the")).toBe(false);
   });
 
+  it("removes stop words and keeps tie ordering stable", () => {
+    const result = analyzeWordCloud("the beta alpha beta alpha and gamma");
+    expect(result.tokens.map((token) => token.text)).toEqual(["alpha", "beta", "gamma"]);
+    expect(result.tokens.map((token) => token.count)).toEqual([2, 2, 1]);
+  });
+
+  it("segments chinese text into repeated terms", () => {
+    const result = analyzeWordCloud("今天天气不错，今天适合散步。");
+    expect(result.tokens[0]).toMatchObject({ text: "今天", count: 2 });
+    expect(result.tokens.some((token) => token.text === "天气")).toBe(true);
+    expect(result.totalWords).toBeGreaterThan(result.uniqueWords);
+  });
+
   it("detects png base64 input", () => {
     const result = inspectImageBase64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB");
     expect(result.ok).toBe(true);

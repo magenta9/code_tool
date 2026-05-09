@@ -48,28 +48,28 @@ export function Workbench(): JSX.Element {
 
   return (
     <div className="grid h-screen grid-cols-[292px_minmax(0,1fr)] grid-rows-[var(--app-titlebar-height)_minmax(0,1fr)] bg-[var(--app-bg)] text-[var(--app-text)]">
-      <div className="app-drag-region col-span-2 flex h-[var(--app-titlebar-height)] items-center justify-between border-b border-[var(--app-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.01))] px-5 text-[var(--app-text-dim)] backdrop-blur-md">
+      <div className="app-drag-region col-span-2 flex h-[var(--app-titlebar-height)] items-center justify-between border-b border-[var(--app-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-5 text-[var(--app-text-dim)] backdrop-blur-md">
         <div className="w-[var(--app-traffic-light-safe-width)] shrink-0" />
         <div className="flex-1" />
-        <div className="rounded-full border border-white/6 bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.24em] text-[#868e86]">
-          CodeTool
+        <div className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.24em] text-[var(--app-text-muted)]">
+          Workspace
         </div>
       </div>
-      <aside className="app-no-drag flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[linear-gradient(180deg,#0d1113_0%,#090c0d_100%)]">
+      <aside className="app-no-drag flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[linear-gradient(180deg,#0e131b_0%,#0b1016_100%)]">
         <div className="px-4 pb-4 pt-5">
-          <div className="rounded-[22px] border border-white/[0.05] bg-white/[0.025] p-4 shadow-[0_18px_48px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="rounded-[24px] border border-white/[0.06] bg-white/[0.03] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)]">
             <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[linear-gradient(180deg,#e7ff94_0%,#d8ff63_100%)] text-[#11140d] shadow-[0_12px_32px_rgba(216,255,99,0.24)]">
+              <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[linear-gradient(180deg,#8ea7ff_0%,#6f8eff_100%)] text-[var(--app-accent-ink)] shadow-[0_12px_32px_rgba(124,150,255,0.26)]">
                 <Wrench size={18} />
               </div>
               <div className="min-w-0">
-                <div className="text-[15px] font-semibold tracking-[-0.02em] text-[#f4f7f1]">CodeTool</div>
-                <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">Electron workbench</div>
+                <div className="text-[15px] font-semibold tracking-[-0.02em] text-[var(--app-text)]">CodeTool</div>
+                <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">React workbench</div>
               </div>
             </div>
           </div>
         </div>
-        <label className="app-no-drag mx-4 mb-4 flex h-11 items-center gap-3 rounded-[14px] border border-white/[0.06] bg-white/[0.045] px-3.5 text-[var(--app-text-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color] duration-150 focus-within:border-white/[0.1] focus-within:bg-white/[0.06]">
+        <label className="app-no-drag mx-4 mb-4 flex h-11 items-center gap-3 rounded-[16px] border border-white/[0.06] bg-white/[0.045] px-3.5 text-[var(--app-text-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color] duration-150 focus-within:border-[var(--app-accent-soft-strong)] focus-within:bg-white/[0.06]">
           <Search size={15} />
           <input
             value={query}
@@ -86,23 +86,23 @@ export function Workbench(): JSX.Element {
           <button
             type="button"
             onClick={() => navigate("/settings")}
-            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6ddd3] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
+            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6dde8] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
           >
             <Settings size={14} /> Settings
           </button>
           <button
             type="button"
             onClick={() => navigate("/diagnostics")}
-            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6ddd3] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
+            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6dde8] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
           >
             <Activity size={14} /> Logs
           </button>
         </div>
       </aside>
-      <main className="app-no-drag flex min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(216,255,99,0.07),transparent_24%),linear-gradient(180deg,#080a0b_0%,#060708_100%)]">
+      <main className="app-no-drag flex min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(124,150,255,0.12),transparent_24%),linear-gradient(180deg,#0b1016_0%,#070b11_100%)]">
         <div className="min-h-0 flex-1 overflow-y-auto px-7 py-7">
           <div className="mb-6 flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-white/8 bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--app-text-muted)]">
+            <span className="rounded-full border border-[var(--app-accent-soft-strong)] bg-[var(--app-accent-soft)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#dce5ff]">
               {activeGroupLabel}
             </span>
             <div className="h-px w-6 bg-white/8" />
@@ -136,10 +136,10 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
               to={tool.routePath}
               className={({ isActive }) =>
                 [
-                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[16px] px-3 py-3 transition-[background-color,box-shadow,transform,color] duration-150 active:scale-[0.985]",
+                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[18px] border border-transparent px-3 py-3 transition-[background-color,box-shadow,transform,color,border-color] duration-150 active:scale-[0.985]",
                   isActive
-                    ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.085),rgba(255,255,255,0.04))] text-[#f4f7f1] shadow-[0_18px_48px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.04)]"
-                    : "text-[#c9d0c8] [@media(hover:hover)]:hover:bg-white/[0.045] [@media(hover:hover)]:hover:text-[#f3f6ef]"
+                    ? "border-[var(--app-accent-soft-strong)] bg-[linear-gradient(180deg,rgba(124,150,255,0.16),rgba(124,150,255,0.08))] text-[var(--app-text)] shadow-[0_18px_48px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    : "text-[#c9d3e1] [@media(hover:hover)]:hover:bg-white/[0.04] [@media(hover:hover)]:hover:text-[var(--app-text)]"
                 ].join(" ")
               }
             >
@@ -149,8 +149,8 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
                     className={[
                       "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[12px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "bg-[linear-gradient(180deg,#e7ff94_0%,#d8ff63_100%)] text-[#12150c] shadow-[0_10px_24px_rgba(216,255,99,0.18)]"
-                        : "bg-white/[0.045] text-[#95a096] [@media(hover:hover)]:group-hover:bg-white/[0.065] [@media(hover:hover)]:group-hover:text-[#dbe2d7]"
+                        ? "bg-[linear-gradient(180deg,#8ea7ff_0%,#6f8eff_100%)] text-[var(--app-accent-ink)] shadow-[0_10px_24px_rgba(124,150,255,0.2)]"
+                        : "bg-white/[0.045] text-[#8d9ab0] [@media(hover:hover)]:group-hover:bg-white/[0.065] [@media(hover:hover)]:group-hover:text-[#dbe5ff]"
                     ].join(" ")}
                   >
                     <Icon size={16} />

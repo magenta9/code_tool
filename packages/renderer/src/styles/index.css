@@ -8,23 +8,28 @@
     "Segoe UI",
     system-ui,
     sans-serif;
-  background: #050607;
-  color: #edf1ea;
+  background: #070b11;
+  color: #f4f7fb;
   --app-titlebar-height: 42px;
   --app-traffic-light-safe-width: 88px;
-  --app-bg: #050607;
-  --app-bg-muted: #090c0d;
-  --app-sidebar: #0d1113;
-  --app-panel: #101518;
-  --app-panel-strong: #151b1f;
-  --app-code-bg: #06090a;
-  --app-border: rgba(255, 255, 255, 0.06);
+  --app-bg: #070b11;
+  --app-bg-muted: #0c1118;
+  --app-sidebar: #0d1219;
+  --app-panel: #121924;
+  --app-panel-strong: #17202c;
+  --app-code-bg: #0b1017;
+  --app-border: rgba(255, 255, 255, 0.07);
   --app-border-strong: rgba(255, 255, 255, 0.12);
-  --app-text: #edf1ea;
-  --app-text-muted: #8b938a;
-  --app-text-dim: #646d66;
-  --app-accent: #d8ff63;
-  --app-accent-ink: #12150c;
+  --app-text: #f4f7fb;
+  --app-text-muted: #98a2b3;
+  --app-text-dim: #697586;
+  --app-accent: #7c96ff;
+  --app-accent-soft: rgba(124, 150, 255, 0.16);
+  --app-accent-soft-strong: rgba(124, 150, 255, 0.24);
+  --app-accent-ink: #f8fbff;
+  --app-success: #59c18e;
+  --app-warning: #f5c26b;
+  --app-danger: #ff7d91;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -41,9 +46,9 @@ body {
   min-height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(216, 255, 99, 0.08), transparent 18%),
-    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.035), transparent 22%),
-    linear-gradient(180deg, #0a0d0e 0%, #050607 100%);
+    radial-gradient(circle at top right, rgba(124, 150, 255, 0.16), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(92, 211, 255, 0.08), transparent 20%),
+    linear-gradient(180deg, #0d1118 0%, #070b11 100%);
   color: var(--app-text);
 }
 
@@ -77,7 +82,7 @@ textarea {
 }
 
 ::selection {
-  background: rgba(216, 255, 99, 0.24);
+  background: rgba(124, 150, 255, 0.28);
   color: var(--app-text);
 }
 

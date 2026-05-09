@@ -6,10 +6,10 @@
   "main": "packages/main/dist/index.js",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "concurrently -k \"pnpm --filter @codetool/shared dev\" \"pnpm --filter @codetool/preload dev\" \"pnpm --filter @codetool/main dev\" \"pnpm --filter @codetool/renderer dev\" \"pnpm dev:electron:wait\"",
-    "dev:watch": "concurrently -k \"pnpm --filter @codetool/shared dev\" \"pnpm --filter @codetool/preload dev\" \"pnpm --filter @codetool/main dev\" \"pnpm --filter @codetool/renderer dev\"",
+    "dev": "node scripts/dev.mjs",
+    "dev:watch": "node scripts/dev.mjs --watch-only",
     "dev:electron": "electron .",
-    "dev:electron:wait": "wait-on http://127.0.0.1:5173 packages/shared/dist/index.js packages/preload/dist/index.js packages/main/dist/index.js && electron .",
+    "dev:electron:wait": "node scripts/dev.mjs --electron-only",
     "build": "pnpm -r run build",
     "typecheck": "pnpm --filter @codetool/shared build && pnpm -r run typecheck",
     "test": "vitest run --config vitest.config.ts",

@@ -63,7 +63,7 @@ export function Workbench(): JSX.Element {
         <div className="px-4 pb-4 pt-5">
           <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_10px_28px_rgba(24,24,22,0.05)]">
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-[8px] bg-[var(--app-accent)] text-[var(--app-accent-ink)] shadow-[0_6px_16px_rgba(24,24,22,0.12)]">
+              <div className="grid h-10 w-10 place-items-center rounded-[8px] border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] text-[var(--app-accent)]">
                 <Wrench size={18} />
               </div>
               <div className="min-w-0">
@@ -92,14 +92,16 @@ export function Workbench(): JSX.Element {
             onClick={() => navigate("/settings")}
             className="app-no-drag flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[12px] font-medium text-[var(--app-text)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-[var(--app-border-strong)] [@media(hover:hover)]:hover:bg-[var(--app-panel-strong)]"
           >
-            <Settings size={14} /> Settings
+            <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"><Settings size={14} /></span>
+            Settings
           </button>
           <button
             type="button"
             onClick={() => navigate("/diagnostics")}
             className="app-no-drag flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[12px] font-medium text-[var(--app-text)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-[var(--app-border-strong)] [@media(hover:hover)]:hover:bg-[var(--app-panel-strong)]"
           >
-            <Activity size={14} /> Logs
+            <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"><Activity size={14} /></span>
+            Logs
           </button>
         </div>
       </aside>
@@ -153,7 +155,7 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
                     className={[
                       "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "bg-[var(--app-accent)] text-[var(--app-accent-ink)] shadow-[0_6px_16px_rgba(24,24,22,0.12)]"
+                        ? "border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
                         : "bg-[rgba(36,36,36,0.055)] text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:bg-[rgba(36,36,36,0.08)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
                     ].join(" ")}
                   >

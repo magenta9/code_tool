@@ -73,7 +73,7 @@ export interface KanbanCardPatch {
     descriptionJson?: KanbanRichTextDocument;
     descriptionText?: string;
     priority: KanbanPriority;
-    dueDate?: number;
+    dueDate?: number | null;
 }
 
 export interface CreateKanbanBoardInput {

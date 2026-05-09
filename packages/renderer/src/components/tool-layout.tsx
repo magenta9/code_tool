@@ -38,7 +38,7 @@ export function Panel({
 }): JSX.Element {
   return (
     <div
-      className={`rounded-[12px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_12px_34px_rgba(24,24,22,0.05)] ${className}`}
+      className={`rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_10px_28px_rgba(24,24,22,0.045)] ${className}`}
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -130,7 +130,7 @@ export function PrimaryButton(props: JSX.IntrinsicElements["button"]): JSX.Eleme
     <button
       {...props}
       className={[
-        "inline-flex h-9 items-center justify-center gap-2 rounded-[8px] bg-[var(--app-accent)] px-4 text-[13px] font-semibold text-[var(--app-accent-ink)] shadow-[0_6px_16px_rgba(24,24,22,0.12)] transition-[transform,box-shadow,opacity] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 [@media(hover:hover)]:hover:-translate-y-px [@media(hover:hover)]:hover:shadow-[0_8px_20px_rgba(24,24,22,0.16)]",
+        "inline-flex h-9 items-center justify-center gap-2 rounded-[8px] border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] px-4 text-[13px] font-semibold text-[var(--app-accent)] transition-[background-color,border-color,transform,opacity] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 [@media(hover:hover)]:hover:bg-[var(--app-accent-soft-strong)]",
         props.className ?? ""
       ].join(" ")}
     />

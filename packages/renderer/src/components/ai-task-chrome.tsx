@@ -73,7 +73,7 @@ export function MessageBubble({
         <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
             <div
                 className={[
-                    "max-w-[92%] rounded-[12px] border p-5 shadow-[0_10px_26px_rgba(24,24,22,0.04)]",
+                    "max-w-[92%] rounded-[8px] border p-5 shadow-[0_10px_26px_rgba(24,24,22,0.04)]",
                     isUser
                         ? "border-[var(--app-border-strong)] bg-[var(--app-accent-soft)]"
                         : "border-[var(--app-border)] bg-[var(--app-panel)]"
@@ -85,7 +85,7 @@ export function MessageBubble({
                             className={[
                                 "grid h-9 w-9 place-items-center rounded-[8px]",
                                 isUser
-                                    ? "bg-[var(--app-accent)] text-[var(--app-accent-ink)]"
+                                    ? "border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
                                     : "bg-[var(--app-bg-muted)] text-[var(--app-text-muted)]"
                             ].join(" ")}
                         >

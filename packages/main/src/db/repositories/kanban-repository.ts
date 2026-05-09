@@ -250,6 +250,7 @@ export class KanbanRepository {
         if (!validPriorities.has(nextPriority)) {
             throw new Error(`Invalid Kanban priority: ${nextPriority}`);
         }
+        const hasDueDatePatch = Object.prototype.hasOwnProperty.call(input.patch, "dueDate");
         const updatedAt = Date.now();
         this.database
             .prepare(
@@ -263,7 +264,7 @@ export class KanbanRepository {
                 input.patch.descriptionJson === undefined ? serializeRichText(current.descriptionJson) : serializeRichText(input.patch.descriptionJson),
                 input.patch.descriptionText === undefined ? current.descriptionText ?? null : normalizeOptionalText(input.patch.descriptionText) ?? null,
                 nextPriority,
-                input.patch.dueDate === undefined ? current.dueDate ?? null : input.patch.dueDate ?? null,
+                hasDueDatePatch ? input.patch.dueDate ?? null : current.dueDate ?? null,
                 updatedAt,
                 input.id
             );

@@ -48,7 +48,7 @@ export function Workbench(): JSX.Element {
   return (
     <div className="grid h-screen grid-cols-[280px_minmax(0,1fr)] bg-[#08090a] text-[#e8ece7]">
       <aside className="flex min-h-0 flex-col border-r border-white/8 bg-[#0d0f10]">
-        <div className="flex h-14 items-center gap-3 px-4">
+        <div className="flex h-14 items-center gap-3 pl-[88px] pr-4">
           <div className="grid h-8 w-8 place-items-center rounded-[8px] bg-[#d1ff4a] text-[#11140d] shadow-[0_0_24px_rgba(209,255,74,0.22)]">
             <Wrench size={17} />
           </div>
@@ -88,14 +88,10 @@ export function Workbench(): JSX.Element {
         </div>
       </aside>
       <main className="min-h-0 overflow-hidden bg-[#08090a]">
-        <header className="flex h-14 items-center justify-between border-b border-white/8 px-6">
+        <header className="flex h-14 items-center border-b border-white/8 px-6">
           <div>
             <div className="text-[13px] text-[#858c85]">Current tool</div>
             <h1 className="text-[17px] font-semibold tracking-[-0.012em] text-[#f2f5ef]">{active.title}</h1>
-          </div>
-          <div className="flex items-center gap-2 text-[12px] text-[#a5ada3]">
-            <span className="rounded-[8px] bg-[#d1ff4a]/12 px-2.5 py-1 text-[#d1ff4a]">local-first</span>
-            <span className="rounded-[8px] bg-white/[0.045] px-2.5 py-1">macOS</span>
           </div>
         </header>
         <div className="h-[calc(100vh-56px)] overflow-y-auto px-6 py-5">

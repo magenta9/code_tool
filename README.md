@@ -49,17 +49,19 @@ Install dependencies once:
 pnpm install
 ```
 
-Start package watchers and the renderer dev server:
+Start package watchers, the renderer dev server, and Electron:
 
 ```bash
-pnpm dev
+make dev
 ```
 
-Launch Electron in a second shell:
+Start only package watchers and the renderer dev server:
 
 ```bash
-pnpm dev:electron
+make dev-watch
 ```
+
+`make dev-electron` remains available when you want to launch Electron against an already-running renderer server and current build output.
 
 ## Build and Test
 

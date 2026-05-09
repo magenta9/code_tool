@@ -4,12 +4,13 @@ DIST_DIRS := packages/shared/dist packages/preload/dist packages/main/dist packa
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev dev-electron build typecheck test test-watch verify package-mac deploy clean
+.PHONY: help install dev dev-watch dev-electron build typecheck test test-watch verify package-mac deploy clean
 
 help:
 	@printf "Available targets:\n"
 	@printf "  make install        Install workspace dependencies\n"
-	@printf "  make dev            Start workspace watch processes\n"
+	@printf "  make dev            Start workspace watch processes and launch Electron\n"
+	@printf "  make dev-watch      Start workspace watch processes only\n"
 	@printf "  make dev-electron   Launch Electron against the current build\n"
 	@printf "  make build          Build all workspace packages\n"
 	@printf "  make typecheck      Run TypeScript type checks\n"
@@ -25,6 +26,9 @@ install:
 
 dev:
 	$(PNPM) dev
+
+dev-watch:
+	$(PNPM) dev:watch
 
 dev-electron:
 	$(PNPM) dev:electron

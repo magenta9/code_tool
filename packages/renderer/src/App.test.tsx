@@ -7,6 +7,8 @@ describe("App smoke", () => {
   it("renders the shell and all catalog tools in navigation", () => {
     render(<App />);
     expect(screen.getByText("CodeTool")).toBeInTheDocument();
+    expect(screen.queryByText("local-first")).not.toBeInTheDocument();
+    expect(screen.queryByText("macOS")).not.toBeInTheDocument();
     for (const tool of toolCatalog) {
       expect(screen.getAllByText(tool.title).length).toBeGreaterThan(0);
     }

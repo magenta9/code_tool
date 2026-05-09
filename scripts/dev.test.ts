@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
     BUILD_OUTPUTS,
     DEFAULT_RENDERER_DEV_PORT,
+    ELECTRON_NATIVE_MODULES,
     buildDevCommands,
+    buildElectronRebuildArgs,
     buildWaitOnArgs,
     findAvailablePort,
     getRendererUrl,
@@ -35,6 +37,10 @@ describe("dev launcher", () => {
 
     it("builds wait-on arguments from the resolved renderer URL", () => {
         expect(buildWaitOnArgs(getRendererUrl(5201))).toEqual(["exec", "wait-on", "http://127.0.0.1:5201", ...BUILD_OUTPUTS]);
+    });
+
+    it("builds Electron native rebuild arguments", () => {
+        expect(buildElectronRebuildArgs()).toEqual(["exec", "electron-rebuild", "-f", "-w", ELECTRON_NATIVE_MODULES.join(",")]);
     });
 
     it("picks the next available renderer port when the preferred port is busy", async () => {

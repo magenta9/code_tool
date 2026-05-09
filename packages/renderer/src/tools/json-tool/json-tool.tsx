@@ -37,7 +37,7 @@ export function JsonToolPage(): JSX.Element {
         <Panel
           title="Result"
           actions={
-            <span className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[#687169]">
+            <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-bg-muted)] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--app-text-muted)]">
               Read only
             </span>
           }

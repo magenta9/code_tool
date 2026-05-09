@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 import { openCodeToolDatabase } from "./db/services";
 import { HistoryRepository } from "./db/repositories/history-repository";
+import { KanbanRepository } from "./db/repositories/kanban-repository";
 import { SettingsRepository } from "./db/repositories/settings-repository";
 import { AssetStore } from "./storage/asset-store";
 import { resolveCodeToolPaths } from "./storage/path-service";
@@ -45,6 +46,7 @@ app.whenReady().then(async () => {
   const database = openCodeToolDatabase(paths.databasePath);
   registerIpc({
     history: new HistoryRepository(database),
+    kanban: new KanbanRepository(database),
     settings: new SettingsRepository(database),
     assets: new AssetStore(database, paths.assetRoot),
     logger: new AppLogger(database, paths.logRoot),

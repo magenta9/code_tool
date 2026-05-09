@@ -56,12 +56,30 @@ export const toolCatalog = [
     capabilities: ["history"]
   },
   {
+    id: "kanban",
+    title: "Kanban",
+    description: "Plan local boards in List or Kanban view with rich task details.",
+    category: "devTools",
+    icon: "KanbanSquare",
+    routePath: "/tools/kanban",
+    capabilities: ["history"]
+  },
+  {
     id: "aiChat",
     title: "AI Chat",
     description: "Stream MiniMax chat responses with history and diagnostics.",
     category: "aiTools",
     icon: "MessagesSquare",
     routePath: "/tools/ai-chat",
+    capabilities: ["history", "ai", "streaming"]
+  },
+  {
+    id: "piAgent",
+    title: "Pi Agent",
+    description: "Run Pi coding-agent sessions with real tool calls, queue state, and workflow traces.",
+    category: "aiTools",
+    icon: "Bot",
+    routePath: "/tools/pi-agent",
     capabilities: ["history", "ai", "streaming"]
   },
   {

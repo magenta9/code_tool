@@ -26,7 +26,7 @@ export function AiChatPage(): JSX.Element {
                   {task.submittedPrompt}
                 </MessageBubble>
               ) : (
-                <div className="rounded-[22px] border border-dashed border-white/[0.08] bg-white/[0.025] px-5 py-8 text-center text-[13px] leading-6 text-[var(--app-text-muted)]">
+                <div className="rounded-[8px] border border-dashed border-[var(--app-border)] bg-[var(--app-bg-muted)] px-5 py-8 text-center text-[13px] leading-6 text-[var(--app-text-muted)]">
                   Draft a prompt below to start a streaming MiniMax conversation.
                 </div>
               )}

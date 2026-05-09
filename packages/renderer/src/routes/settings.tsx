@@ -27,7 +27,7 @@ export function SettingsPage(): JSX.Element {
             onChange={(event) => setKey(event.target.value)}
             type="password"
             placeholder={status?.configured ? "Enter a new key to replace current value" : "MiniMax API key"}
-            className="h-10 min-w-0 rounded-[8px] bg-[#050607] px-3 text-[13px] text-[#e8ece7] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] outline-none focus:shadow-[inset_0_0_0_1px_rgba(209,255,74,0.55)]"
+            className="h-10 min-w-0 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] px-3 text-[13px] text-[var(--app-text)] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-[var(--app-text-dim)] focus:border-[var(--app-border-strong)] focus:shadow-[0_0_0_4px_rgba(36,36,36,0.06)]"
           />
           <div className="flex gap-2">
             <PrimaryButton
@@ -54,7 +54,7 @@ export function SettingsPage(): JSX.Element {
             </SecondaryButton>
           </div>
         </div>
-        <p className="mt-3 text-[12px] text-[#9da69b]">{message}</p>
+        <p className="mt-3 text-[12px] text-[var(--app-text-muted)]">{message}</p>
       </Panel>
     </ToolLayout>
   );

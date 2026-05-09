@@ -10,6 +10,7 @@ export const BUILD_OUTPUTS = [
     "packages/preload/dist/index.js",
     "packages/main/dist/index.js"
 ];
+export const ELECTRON_NATIVE_MODULES = ["better-sqlite3", "keytar"];
 
 export function parseRendererPort(value) {
     const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -41,6 +42,10 @@ export function buildDevCommands(port, includeElectron = true) {
 
 export function buildWaitOnArgs(rendererUrl) {
     return ["exec", "wait-on", rendererUrl, ...BUILD_OUTPUTS];
+}
+
+export function buildElectronRebuildArgs() {
+    return ["exec", "electron-rebuild", "-f", "-w", ELECTRON_NATIVE_MODULES.join(",")];
 }
 
 export async function isPortAvailable(port, host = DEFAULT_RENDERER_DEV_HOST) {
@@ -128,6 +133,13 @@ async function runElectronWhenReady(env) {
 
     if (waitResult.code !== 0 || waitResult.signal) {
         applyProcessResult(waitResult);
+        return;
+    }
+
+    process.stdout.write("Rebuilding native modules for Electron...\n");
+    const rebuildResult = await runPnpm(buildElectronRebuildArgs(), env);
+    if (rebuildResult.code !== 0 || rebuildResult.signal) {
+        applyProcessResult(rebuildResult);
         return;
     }
 

@@ -32,16 +32,16 @@ export function DiagnosticsPage(): JSX.Element {
       <Panel title="Recent events">
         <div className="grid gap-2">
           {events.length === 0 ? (
-            <div className="text-[13px] text-[#8c948b]">No diagnostics yet.</div>
+            <div className="text-[13px] text-[var(--app-text-muted)]">No diagnostics yet.</div>
           ) : (
             events.map((event) => (
-              <div key={event.id} className="rounded-[8px] bg-[#050607] p-3 text-[12px] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
-                <div className="flex flex-wrap items-center gap-2 text-[#dce2d9]">
-                  <span className="font-mono text-[#d1ff4a]">{event.level}</span>
+              <div key={event.id} className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-3 text-[12px] shadow-[0_8px_22px_rgba(24,24,22,0.04)]">
+                <div className="flex flex-wrap items-center gap-2 text-[var(--app-text)]">
+                  <span className="font-mono text-[var(--app-danger)]">{event.level}</span>
                   <span>{event.timestamp}</span>
-                  {event.referenceId ? <span className="font-mono text-[#aeb7ab]">{event.referenceId}</span> : null}
+                  {event.referenceId ? <span className="font-mono text-[var(--app-text-muted)]">{event.referenceId}</span> : null}
                 </div>
-                <div className="mt-1 text-[#9da69b]">{event.message}</div>
+                <div className="mt-1 text-[var(--app-text-muted)]">{event.message}</div>
               </div>
             ))
           )}

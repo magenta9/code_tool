@@ -152,7 +152,7 @@ export function WordCloudPage(): JSX.Element {
       wordCloud.stop();
       wordCloud(canvas, {
         list: result.tokens.slice(0, 60).map((token) => [token.text, Math.round(18 + token.weight * 72)]),
-        backgroundColor: "#050607",
+        backgroundColor: "#ffffff",
         clearCanvas: true,
         color: pickPreviewColor,
         fontFamily: '"Aptos", "Segoe UI", system-ui, sans-serif',
@@ -237,7 +237,7 @@ export function WordCloudPage(): JSX.Element {
           <Panel title="Preview" className="overflow-hidden">
             <div
               ref={previewRef}
-              className="relative min-h-[420px] overflow-hidden rounded-[16px] border border-white/[0.06] bg-[radial-gradient(circle_at_top,_rgba(216,255,99,0.14),_transparent_36%),linear-gradient(180deg,_rgba(255,255,255,0.035),_rgba(255,255,255,0))]"
+              className="relative min-h-[420px] overflow-hidden rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)]"
             >
               <canvas ref={canvasRef} className="h-full w-full" />
               {previewPhase === "idle" ? (
@@ -253,7 +253,7 @@ export function WordCloudPage(): JSX.Element {
                 <EmptyState title="Preview unavailable" description={previewError ?? "Canvas rendering is unavailable in this environment."} />
               ) : null}
               {previewPhase === "drawing" ? (
-                <div className="pointer-events-none absolute inset-x-4 top-4 rounded-[14px] border border-white/[0.06] bg-[#050607]/76 px-3.5 py-2.5 text-[12px] text-[#dbe1d7] backdrop-blur">
+                <div className="pointer-events-none absolute inset-x-4 top-4 rounded-[8px] border border-[var(--app-border)] bg-[rgba(255,255,255,0.88)] px-3.5 py-2.5 text-[12px] text-[var(--app-text)] backdrop-blur">
                   Rendering preview for {result?.tokens.length ?? 0} ranked terms...
                 </div>
               ) : null}
@@ -271,9 +271,9 @@ export function WordCloudPage(): JSX.Element {
 
 function MetricCard({ label, value }: { label: string; value: string }): JSX.Element {
   return (
-    <div className="rounded-[14px] border border-white/[0.06] bg-black/18 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      <div className="text-[11px] uppercase tracking-[0.16em] text-[#97ad88]">{label}</div>
-      <div className="mt-1.5 text-[16px] font-semibold tracking-[-0.02em] text-[#f3f7ef]">{value}</div>
+    <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] px-3.5 py-3">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--app-text-muted)]">{label}</div>
+      <div className="mt-1.5 text-[16px] font-semibold tracking-normal text-[var(--app-text)]">{value}</div>
     </div>
   );
 }
@@ -281,9 +281,9 @@ function MetricCard({ label, value }: { label: string; value: string }): JSX.Ele
 function EmptyState({ title, description }: { title: string; description: string }): JSX.Element {
   return (
     <div className="absolute inset-0 grid place-items-center p-6 text-center">
-      <div className="max-w-sm rounded-[18px] border border-white/[0.06] bg-[#050607]/72 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-sm">
-        <div className="text-[15px] font-semibold tracking-[-0.012em] text-[#eef2eb]">{title}</div>
-        <div className="mt-2 text-[13px] leading-6 text-[#96a096]">{description}</div>
+      <div className="max-w-sm rounded-[8px] border border-[var(--app-border)] bg-[rgba(255,255,255,0.9)] px-5 py-4 shadow-[0_10px_28px_rgba(24,24,22,0.08)] backdrop-blur-sm">
+        <div className="text-[15px] font-semibold tracking-normal text-[var(--app-text)]">{title}</div>
+        <div className="mt-2 text-[13px] leading-6 text-[var(--app-text-muted)]">{description}</div>
       </div>
     </div>
   );

@@ -7,7 +7,9 @@ export type ToolId =
   | "timestampConverter"
   | "jwtTool"
   | "wordCloud"
+  | "kanban"
   | "aiChat"
+  | "piAgent"
   | "aiSpeech"
   | "aiImage"
   | "aiMusic";

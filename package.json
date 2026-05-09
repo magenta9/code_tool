@@ -12,6 +12,7 @@
     "dev:electron:wait": "node scripts/dev.mjs --electron-only",
     "build": "pnpm -r run build",
     "typecheck": "pnpm --filter @codetool/shared build && pnpm -r run typecheck",
+    "pretest": "pnpm rebuild better-sqlite3",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "package:mac": "pnpm run build && electron-builder --config electron-builder.yml --publish never --mac dmg"

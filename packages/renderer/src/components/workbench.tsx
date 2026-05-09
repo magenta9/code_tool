@@ -3,12 +3,14 @@ import { useMemo, useState } from "react";
 import { toolCatalog, type ToolCatalogEntry } from "@codetool/shared";
 import {
   AudioLines,
+  Bot,
   Braces,
   Clock3,
   Cloud,
   GitCompare,
   Image,
   Images,
+  KanbanSquare,
   KeyRound,
   MessagesSquare,
   Music,
@@ -20,12 +22,14 @@ import {
 
 const icons = {
   AudioLines,
+  Bot,
   Braces,
   Clock3,
   Cloud,
   GitCompare,
   Image,
   Images,
+  KanbanSquare,
   KeyRound,
   MessagesSquare,
   Music
@@ -47,35 +51,35 @@ export function Workbench(): JSX.Element {
   );
 
   return (
-    <div className="grid h-screen grid-cols-[292px_minmax(0,1fr)] grid-rows-[var(--app-titlebar-height)_minmax(0,1fr)] bg-[var(--app-bg)] text-[var(--app-text)]">
-      <div className="app-drag-region col-span-2 flex h-[var(--app-titlebar-height)] items-center justify-between border-b border-[var(--app-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] px-5 text-[var(--app-text-dim)] backdrop-blur-md">
+    <div className="grid h-screen grid-cols-[276px_minmax(0,1fr)] grid-rows-[var(--app-titlebar-height)_minmax(0,1fr)] bg-[var(--app-bg)] text-[var(--app-text)]">
+      <div className="app-drag-region col-span-2 flex h-[var(--app-titlebar-height)] items-center justify-between border-b border-[var(--app-border)] bg-[rgba(255,255,255,0.88)] px-5 text-[var(--app-text-dim)] backdrop-blur-md">
         <div className="w-[var(--app-traffic-light-safe-width)] shrink-0" />
         <div className="flex-1" />
-        <div className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.24em] text-[var(--app-text-muted)]">
+        <div className="rounded-full border border-[var(--app-border)] bg-[var(--app-panel)] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--app-text-muted)]">
           Workspace
         </div>
       </div>
-      <aside className="app-no-drag flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[linear-gradient(180deg,#0e131b_0%,#0b1016_100%)]">
+      <aside className="app-no-drag flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-sidebar)]">
         <div className="px-4 pb-4 pt-5">
-          <div className="rounded-[24px] border border-white/[0.06] bg-white/[0.03] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_10px_28px_rgba(24,24,22,0.05)]">
             <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[linear-gradient(180deg,#8ea7ff_0%,#6f8eff_100%)] text-[var(--app-accent-ink)] shadow-[0_12px_32px_rgba(124,150,255,0.26)]">
+              <div className="grid h-10 w-10 place-items-center rounded-[8px] bg-[var(--app-accent)] text-[var(--app-accent-ink)] shadow-[0_6px_16px_rgba(24,24,22,0.12)]">
                 <Wrench size={18} />
               </div>
               <div className="min-w-0">
-                <div className="text-[15px] font-semibold tracking-[-0.02em] text-[var(--app-text)]">CodeTool</div>
+                <div className="text-[15px] font-semibold tracking-normal text-[var(--app-text)]">CodeTool</div>
                 <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">React workbench</div>
               </div>
             </div>
           </div>
         </div>
-        <label className="app-no-drag mx-4 mb-4 flex h-11 items-center gap-3 rounded-[16px] border border-white/[0.06] bg-white/[0.045] px-3.5 text-[var(--app-text-muted)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color] duration-150 focus-within:border-[var(--app-accent-soft-strong)] focus-within:bg-white/[0.06]">
+        <label className="app-no-drag mx-4 mb-4 flex h-10 items-center gap-3 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] px-3.5 text-[var(--app-text-muted)] transition-[background-color,border-color,box-shadow] duration-150 focus-within:border-[var(--app-border-strong)] focus-within:shadow-[0_0_0_4px_rgba(36,36,36,0.06)]">
           <Search size={15} />
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search tools"
-            className="app-no-drag min-w-0 flex-1 bg-transparent text-[13px] text-[var(--app-text)] outline-none placeholder:text-[#747c74]"
+            className="app-no-drag min-w-0 flex-1 bg-transparent text-[13px] text-[var(--app-text)] outline-none placeholder:text-[var(--app-text-dim)]"
           />
         </label>
         <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 pb-5">
@@ -86,26 +90,26 @@ export function Workbench(): JSX.Element {
           <button
             type="button"
             onClick={() => navigate("/settings")}
-            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6dde8] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
+            className="app-no-drag flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[12px] font-medium text-[var(--app-text)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-[var(--app-border-strong)] [@media(hover:hover)]:hover:bg-[var(--app-panel-strong)]"
           >
             <Settings size={14} /> Settings
           </button>
           <button
             type="button"
             onClick={() => navigate("/diagnostics")}
-            className="app-no-drag flex h-11 items-center justify-center gap-2 rounded-[14px] border border-white/[0.06] bg-white/[0.045] text-[12px] font-medium text-[#d6dde8] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-white/[0.1] [@media(hover:hover)]:hover:bg-white/[0.065]"
+            className="app-no-drag flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[12px] font-medium text-[var(--app-text)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-[var(--app-border-strong)] [@media(hover:hover)]:hover:bg-[var(--app-panel-strong)]"
           >
             <Activity size={14} /> Logs
           </button>
         </div>
       </aside>
-      <main className="app-no-drag flex min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(124,150,255,0.12),transparent_24%),linear-gradient(180deg,#0b1016_0%,#070b11_100%)]">
+      <main className="app-no-drag flex min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
         <div className="min-h-0 flex-1 overflow-y-auto px-7 py-7">
           <div className="mb-6 flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-[var(--app-accent-soft-strong)] bg-[var(--app-accent-soft)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#dce5ff]">
+            <span className="rounded-full border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--app-text)]">
               {activeGroupLabel}
             </span>
-            <div className="h-px w-6 bg-white/8" />
+            <div className="h-px w-6 bg-[var(--app-border)]" />
             <span className="text-[13px] text-[var(--app-text-dim)]">{active.title}</span>
           </div>
           <Outlet />
@@ -119,14 +123,14 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
   if (tools.length === 0) {
     return (
       <section>
-        <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[#727a72]">{title}</h2>
-        <div className="px-2 text-[12px] text-[#666d66]">No matches</div>
+        <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--app-text-dim)]">{title}</h2>
+        <div className="px-2 text-[12px] text-[var(--app-text-dim)]">No matches</div>
       </section>
     );
   }
   return (
     <section>
-      <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[#727a72]">{title}</h2>
+      <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--app-text-dim)]">{title}</h2>
       <div className="space-y-2">
         {tools.map((tool) => {
           const Icon = icons[tool.icon as keyof typeof icons];
@@ -136,10 +140,10 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
               to={tool.routePath}
               className={({ isActive }) =>
                 [
-                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[18px] border border-transparent px-3 py-3 transition-[background-color,box-shadow,transform,color,border-color] duration-150 active:scale-[0.985]",
+                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[8px] border border-transparent px-3 py-3 transition-[background-color,box-shadow,transform,color,border-color] duration-150 active:scale-[0.985]",
                   isActive
-                    ? "border-[var(--app-accent-soft-strong)] bg-[linear-gradient(180deg,rgba(124,150,255,0.16),rgba(124,150,255,0.08))] text-[var(--app-text)] shadow-[0_18px_48px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)]"
-                    : "text-[#c9d3e1] [@media(hover:hover)]:hover:bg-white/[0.04] [@media(hover:hover)]:hover:text-[var(--app-text)]"
+                    ? "border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-text)] shadow-[0_8px_22px_rgba(24,24,22,0.05)]"
+                    : "text-[var(--app-text-muted)] [@media(hover:hover)]:hover:bg-[rgba(36,36,36,0.045)] [@media(hover:hover)]:hover:text-[var(--app-text)]"
                 ].join(" ")
               }
             >
@@ -147,16 +151,16 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
                 <>
                   <span
                     className={[
-                      "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[12px] transition-[background-color,color,box-shadow] duration-150",
+                      "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "bg-[linear-gradient(180deg,#8ea7ff_0%,#6f8eff_100%)] text-[var(--app-accent-ink)] shadow-[0_10px_24px_rgba(124,150,255,0.2)]"
-                        : "bg-white/[0.045] text-[#8d9ab0] [@media(hover:hover)]:group-hover:bg-white/[0.065] [@media(hover:hover)]:group-hover:text-[#dbe5ff]"
+                        ? "bg-[var(--app-accent)] text-[var(--app-accent-ink)] shadow-[0_6px_16px_rgba(24,24,22,0.12)]"
+                        : "bg-[rgba(36,36,36,0.055)] text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:bg-[rgba(36,36,36,0.08)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
                     ].join(" ")}
                   >
                     <Icon size={16} />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium tracking-[-0.01em]">{tool.title}</span>
+                    <span className="block truncate text-[13px] font-medium tracking-normal">{tool.title}</span>
                     <span className="mt-1 block truncate text-[11px] leading-4 opacity-65">{tool.description}</span>
                   </span>
                 </>

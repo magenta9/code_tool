@@ -25,4 +25,12 @@ describe("App smoke", () => {
     expect(screen.getByRole("button", { name: "Generate cloud" })).toBeInTheDocument();
     expect(screen.queryByText("Tokens")).not.toBeInTheDocument();
   });
+
+  it("renders the Pi agent workspace with the prompt composer", () => {
+    window.location.hash = "#/tools/pi-agent";
+    render(<App />);
+    expect(screen.getByRole("heading", { name: "Pi Agent" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run prompt" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("/Users/you/code/project")).toBeInTheDocument();
+  });
 });

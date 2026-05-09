@@ -27,19 +27,19 @@ export function resolveTaskState(status: string, running: boolean): AiTaskStepSt
 export function TaskStateTag({ state, label }: { state: AiTaskStepState; label: string }): JSX.Element {
     const config = {
         idle: {
-            className: "border-white/[0.08] bg-white/[0.045] text-[var(--app-text-muted)]",
+            className: "border-[var(--app-border)] bg-[var(--app-bg-muted)] text-[var(--app-text-muted)]",
             icon: <Clock3 size={12} />
         },
         running: {
-            className: "border-[var(--app-accent-soft-strong)] bg-[var(--app-accent-soft)] text-[#dce5ff]",
+            className: "border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] text-[var(--app-text)]",
             icon: <LoaderCircle size={12} className="animate-spin" />
         },
         success: {
-            className: "border-[rgba(89,193,142,0.25)] bg-[rgba(89,193,142,0.12)] text-[#b8f0d0]",
+            className: "border-[rgba(32,180,134,0.22)] bg-[rgba(32,180,134,0.1)] text-[#157b61]",
             icon: <CheckCircle2 size={12} />
         },
         error: {
-            className: "border-[rgba(255,125,145,0.24)] bg-[rgba(255,125,145,0.12)] text-[#ffc2cb]",
+            className: "border-[rgba(194,65,45,0.22)] bg-[rgba(194,65,45,0.1)] text-[#a73424]",
             icon: <AlertTriangle size={12} />
         }
     }[state];
@@ -73,26 +73,26 @@ export function MessageBubble({
         <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
             <div
                 className={[
-                    "max-w-[92%] rounded-[24px] border p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+                    "max-w-[92%] rounded-[12px] border p-5 shadow-[0_10px_26px_rgba(24,24,22,0.04)]",
                     isUser
-                        ? "border-[var(--app-accent-soft-strong)] bg-[linear-gradient(180deg,rgba(124,150,255,0.16),rgba(124,150,255,0.08))]"
-                        : "border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))]"
+                        ? "border-[var(--app-border-strong)] bg-[var(--app-accent-soft)]"
+                        : "border-[var(--app-border)] bg-[var(--app-panel)]"
                 ].join(" ")}
             >
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                         <span
                             className={[
-                                "grid h-9 w-9 place-items-center rounded-[14px]",
+                                "grid h-9 w-9 place-items-center rounded-[8px]",
                                 isUser
-                                    ? "bg-[linear-gradient(180deg,#8ea7ff_0%,#6f8eff_100%)] text-[var(--app-accent-ink)]"
-                                    : "bg-white/[0.06] text-[#dbe5ff]"
+                                    ? "bg-[var(--app-accent)] text-[var(--app-accent-ink)]"
+                                    : "bg-[var(--app-bg-muted)] text-[var(--app-text-muted)]"
                             ].join(" ")}
                         >
                             {isUser ? <User size={15} /> : <Bot size={15} />}
                         </span>
                         <div>
-                            <div className="text-[13px] font-semibold tracking-[-0.01em] text-[var(--app-text)]">{title}</div>
+                            <div className="text-[13px] font-semibold tracking-normal text-[var(--app-text)]">{title}</div>
                             {caption ? <div className="mt-1 text-[12px] text-[var(--app-text-muted)]">{caption}</div> : null}
                         </div>
                     </div>
@@ -100,7 +100,7 @@ export function MessageBubble({
                 </div>
                 <div className="whitespace-pre-wrap text-[14px] leading-7 text-[var(--app-text)]">{children}</div>
                 {streaming ? (
-                    <div className="mt-4 flex items-center gap-2 text-[12px] text-[#c7d5ff]">
+                    <div className="mt-4 flex items-center gap-2 text-[12px] text-[var(--app-text-muted)]">
                         <LoaderCircle size={12} className="animate-spin" />
                         Streaming response
                     </div>
@@ -121,7 +121,7 @@ export function WorkflowSteps({
 }): JSX.Element {
     if (steps.length === 0) {
         return (
-            <div className="rounded-[20px] border border-white/[0.06] bg-white/[0.03] p-4 text-sm text-[var(--app-text-muted)]">
+            <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 text-sm text-[var(--app-text-muted)]">
                 <div className="text-[13px] font-medium text-[var(--app-text)]">{emptyTitle}</div>
                 <div className="mt-2 leading-6">{emptyDescription}</div>
             </div>
@@ -131,14 +131,14 @@ export function WorkflowSteps({
     return (
         <div className="space-y-3">
             {steps.map((step) => (
-                <div key={step.id} className="rounded-[20px] border border-white/[0.06] bg-[rgba(255,255,255,0.028)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div key={step.id} className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_8px_22px_rgba(24,24,22,0.04)]">
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
-                            <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[14px] bg-white/[0.05] text-[#dbe5ff]">
+                            <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-[var(--app-bg-muted)] text-[var(--app-text-muted)]">
                                 {iconForStep(step)}
                             </span>
                             <div className="min-w-0">
-                                <div className="text-[13px] font-medium tracking-[-0.01em] text-[var(--app-text)]">{step.title}</div>
+                                <div className="text-[13px] font-medium tracking-normal text-[var(--app-text)]">{step.title}</div>
                                 <div className="mt-1 text-[12px] leading-5 text-[var(--app-text-muted)]">{step.detail}</div>
                             </div>
                         </div>
@@ -154,7 +154,7 @@ export function WorkflowSteps({
 export function ArtifactCard({ artifact, summary }: { artifact: GeneratedArtifact | null; summary: string }): JSX.Element {
     if (!artifact) {
         return (
-            <div className="rounded-[20px] border border-white/[0.06] bg-white/[0.03] p-4 text-sm text-[var(--app-text-muted)]">
+            <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 text-sm text-[var(--app-text-muted)]">
                 <div className="text-[13px] font-medium text-[var(--app-text)]">Artifact pending</div>
                 <div className="mt-2 leading-6">{summary}</div>
             </div>
@@ -171,10 +171,10 @@ export function ArtifactCard({ artifact, summary }: { artifact: GeneratedArtifac
 
     return (
         <div className="space-y-3">
-            <div className="rounded-[20px] border border-white/[0.06] bg-white/[0.03] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_8px_22px_rgba(24,24,22,0.04)]">
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <span className="grid h-10 w-10 place-items-center rounded-[14px] bg-[var(--app-accent-soft)] text-[#dce5ff]">
+                        <span className="grid h-10 w-10 place-items-center rounded-[8px] bg-[var(--app-accent-soft)] text-[var(--app-text)]">
                             {iconForArtifact(artifact)}
                         </span>
                         <div>

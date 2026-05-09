@@ -160,12 +160,16 @@ function labelForTool(toolId: AiTaskRequest["toolId"]): string {
   switch (toolId) {
     case "aiChat":
       return "AI Chat";
+    case "piAgent":
+      return "Pi Agent";
     case "aiSpeech":
       return "AI Speech";
     case "aiImage":
       return "AI Image";
     case "aiMusic":
       return "AI Music";
+    default:
+      return toolId;
   }
 }
 

@@ -20,6 +20,7 @@ export function allDeclaredInvokeChannels(): string[] {
     ...Object.values(ipcChannels.secrets),
     ipcChannels.ai.createTask,
     ipcChannels.ai.cancelTask,
+    ...Object.values(ipcChannels.kanban),
     ...Object.values(ipcChannels.log)
   ];
 }

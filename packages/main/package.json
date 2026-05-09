@@ -1,0 +1,16 @@
+{
+  "name": "@codetool/main",
+  "version": "0.2.0-electron",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs --external electron --external better-sqlite3 --external keytar --external @codetool/shared && tsc -p tsconfig.json --noEmit",
+    "dev": "tsup src/index.ts --format cjs --watch --external electron --external better-sqlite3 --external keytar --external @codetool/shared",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@codetool/shared": "workspace:*",
+    "better-sqlite3": "^12.8.0",
+    "keytar": "^7.9.0"
+  }
+}

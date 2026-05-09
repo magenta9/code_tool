@@ -13,5 +13,11 @@ DerivedData/
 .swiftpm/
 .worktrees/
 
+# Node/Electron
+node_modules/
+packages/*/dist/
+packages/*/tsconfig.tsbuildinfo
+release-electron/
+
 # macOS
 .DS_Store

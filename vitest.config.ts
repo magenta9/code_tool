@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    include: ["packages/**/*.{test,spec}.{ts,tsx}"],
+    include: ["packages/**/*.{test,spec}.{ts,tsx}", "scripts/**/*.{test,spec}.{ts,tsx,js,mjs}"],
     setupFiles: ["packages/renderer/src/test/setup.ts"]
   },
   resolve: {

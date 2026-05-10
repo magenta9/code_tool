@@ -1,6 +1,6 @@
 # CodeTool
 
-CodeTool is a macOS Electron workbench for local-first developer utilities and MiniMax-powered AI tools.
+CodeTool is a macOS Electron workbench for local-first developer utilities, MiniMax-powered generators, and Pi coding-agent sessions.
 
 ## Features
 
@@ -10,7 +10,9 @@ CodeTool is a macOS Electron workbench for local-first developer utilities and M
 - **Timestamp Converter** – Convert timestamps, ISO strings, and local dates
 - **JWT Tool** – Decode and inspect JWT headers, payloads, and expiry claims
 - **Word Cloud** – Tokenize text and rank terms for deterministic word clouds
+- **Kanban** – Plan local boards in List or Kanban view with rich task details
 - **AI Chat** – Stream MiniMax chat responses with history and diagnostics
+- **Pi Agent** – Run Pi coding-agent sessions with real tool calls, queue state, and workflow traces
 - **AI Speech** – Generate speech audio with MiniMax and keep output history
 - **AI Image** – Generate images with MiniMax prompts and aspect settings
 - **AI Music** – Generate MiniMax music tasks with timeout diagnostics

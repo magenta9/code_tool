@@ -4,6 +4,7 @@ export * from "./ipc-contract";
 export * from "./types/ai";
 export * from "./types/diagnostics";
 export * from "./types/history";
+export * from "./types/kanban";
 export * from "./types/settings";
 export * from "./types/tools";
 export * from "./tools";

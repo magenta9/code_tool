@@ -9,10 +9,12 @@ import { JsonDiffPage } from "./tools/json-diff/json-diff";
 import { TimestampConverterPage } from "./tools/timestamp-converter/timestamp-converter";
 import { JwtToolPage } from "./tools/jwt-tool/jwt-tool";
 import { WordCloudPage } from "./tools/word-cloud/word-cloud";
+import { KanbanPage } from "./tools/kanban/kanban";
 import { AiChatPage } from "./tools/ai-chat/ai-chat";
 import { AiSpeechPage } from "./tools/ai-speech/ai-speech";
 import { AiImagePage } from "./tools/ai-image/ai-image";
 import { AiMusicPage } from "./tools/ai-music/ai-music";
+import { PiAgentPage } from "./tools/pi-agent/pi-agent";
 
 export function App(): JSX.Element {
   return (
@@ -28,7 +30,9 @@ export function App(): JSX.Element {
           <Route path="tools/timestamp" element={<TimestampConverterPage />} />
           <Route path="tools/jwt" element={<JwtToolPage />} />
           <Route path="tools/word-cloud" element={<WordCloudPage />} />
+          <Route path="tools/kanban" element={<KanbanPage />} />
           <Route path="tools/ai-chat" element={<AiChatPage />} />
+          <Route path="tools/pi-agent" element={<PiAgentPage />} />
           <Route path="tools/ai-speech" element={<AiSpeechPage />} />
           <Route path="tools/ai-image" element={<AiImagePage />} />
           <Route path="tools/ai-music" element={<AiMusicPage />} />

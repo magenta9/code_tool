@@ -9,7 +9,9 @@ files:
   - packages/preload/dist/**
   - packages/renderer/dist/**
   - packages/shared/dist/**
+  - build/icon.png
 mac:
+  icon: build/icon.icns
   category: public.app-category.developer-tools
   target:
     - dmg

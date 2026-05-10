@@ -1,5 +1,7 @@
 import type { AiTaskRequest, GeneratedArtifact } from "@codetool/shared";
 
+type MiniMaxTaskRequest = Extract<AiTaskRequest, { provider: "minimax" }>;
+
 export interface MiniMaxClientResult {
   text?: string;
   artifact?: {
@@ -20,7 +22,7 @@ export const minimaxDefaults = {
   musicModel: "music-2.5"
 };
 
-export function buildMiniMaxRequest(input: AiTaskRequest): { path: string; body: Record<string, unknown> } {
+export function buildMiniMaxRequest(input: MiniMaxTaskRequest): { path: string; body: Record<string, unknown> } {
   switch (input.toolId) {
     case "aiChat":
       return {
@@ -87,7 +89,7 @@ export class MiniMaxClient {
     }
   }
 
-  async run(input: AiTaskRequest, signal: AbortSignal): Promise<MiniMaxClientResult> {
+  async run(input: MiniMaxTaskRequest, signal: AbortSignal): Promise<MiniMaxClientResult> {
     switch (input.toolId) {
       case "aiChat":
         return { text: await this.chat(input, signal) };
@@ -100,7 +102,7 @@ export class MiniMaxClient {
     }
   }
 
-  private async chat(input: Extract<AiTaskRequest, { toolId: "aiChat" }>, signal: AbortSignal): Promise<string> {
+  private async chat(input: Extract<MiniMaxTaskRequest, { toolId: "aiChat" }>, signal: AbortSignal): Promise<string> {
     const json = await this.requestJson(
       "/chat/completions",
       {
@@ -120,7 +122,7 @@ export class MiniMaxClient {
     return content;
   }
 
-  private async speech(input: Extract<AiTaskRequest, { toolId: "aiSpeech" }>, signal: AbortSignal) {
+  private async speech(input: Extract<MiniMaxTaskRequest, { toolId: "aiSpeech" }>, signal: AbortSignal) {
     const json = await this.requestJson(
       "/t2a_v2",
       {
@@ -155,7 +157,7 @@ export class MiniMaxClient {
     };
   }
 
-  private async image(input: Extract<AiTaskRequest, { toolId: "aiImage" }>, signal: AbortSignal) {
+  private async image(input: Extract<MiniMaxTaskRequest, { toolId: "aiImage" }>, signal: AbortSignal) {
     const json = await this.requestJson(
       "/image_generation",
       {
@@ -198,7 +200,7 @@ export class MiniMaxClient {
     };
   }
 
-  private async music(input: Extract<AiTaskRequest, { toolId: "aiMusic" }>, signal: AbortSignal) {
+  private async music(input: Extract<MiniMaxTaskRequest, { toolId: "aiMusic" }>, signal: AbortSignal) {
     const lyrics = normalizedLyrics(input.lyrics);
     const json = await this.requestJson(
       "/music_generation",

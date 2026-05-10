@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
 import type { IpcContract } from "@codetool/shared";
 
-const noopUnsubscribe = () => {};
+const noopUnsubscribe = () => { };
 
 Object.defineProperty(window, "api", {
   configurable: true,
@@ -38,6 +38,31 @@ Object.defineProperty(window, "api", {
       createTask: vi.fn(),
       cancelTask: vi.fn(),
       onTaskEvent: vi.fn(() => noopUnsubscribe)
+    },
+    kanban: {
+      listBoards: vi.fn(async () => []),
+      createBoard: vi.fn(),
+      renameBoard: vi.fn(),
+      deleteBoard: vi.fn(),
+      listColumns: vi.fn(async () => []),
+      createColumn: vi.fn(),
+      updateColumn: vi.fn(),
+      reorderColumn: vi.fn(),
+      archiveColumn: vi.fn(),
+      restoreColumn: vi.fn(),
+      listCards: vi.fn(async () => []),
+      createCard: vi.fn(),
+      updateCard: vi.fn(),
+      deleteCard: vi.fn(),
+      archiveCard: vi.fn(),
+      restoreCard: vi.fn(),
+      reorderCard: vi.fn(),
+      listLabels: vi.fn(async () => []),
+      createLabel: vi.fn(),
+      deleteLabel: vi.fn(),
+      setCardLabels: vi.fn(),
+      exportBoard: vi.fn(),
+      importBoard: vi.fn()
     },
     log: {
       write: vi.fn(),

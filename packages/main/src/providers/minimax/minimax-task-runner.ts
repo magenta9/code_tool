@@ -6,6 +6,8 @@ import { HistoryRepository } from "../../db/repositories/history-repository";
 import { AppLogger } from "../../logger/app-logger";
 import { MiniMaxClient, buildMiniMaxRequest } from "./minimax-client";
 
+type MiniMaxTaskRequest = Extract<AiTaskRequest, { provider: "minimax" }>;
+
 export class MiniMaxTaskRunner {
   private readonly emitter = new EventEmitter();
   private readonly activeTasks = new Map<string, AbortController>();
@@ -22,7 +24,7 @@ export class MiniMaxTaskRunner {
     return () => this.emitter.off("event", callback);
   }
 
-  createTask(input: AiTaskRequest): { taskId: string } {
+  createTask(input: MiniMaxTaskRequest): { taskId: string } {
     const taskId = randomUUID();
     const referenceId = `MM-${taskId.slice(0, 8).toUpperCase()}`;
     const controller = new AbortController();
@@ -45,7 +47,7 @@ export class MiniMaxTaskRunner {
   private async runTask(
     taskId: string,
     referenceId: string,
-    input: AiTaskRequest,
+    input: MiniMaxTaskRequest,
     controller: AbortController
   ): Promise<void> {
     const startedAt = Date.now();
@@ -136,7 +138,7 @@ export class MiniMaxTaskRunner {
     }
   }
 
-  private async generateArtifact(input: AiTaskRequest, taskId: string, controller: AbortController): Promise<GeneratedArtifact> {
+  private async generateArtifact(input: MiniMaxTaskRequest, taskId: string, controller: AbortController): Promise<GeneratedArtifact> {
     this.emit({ type: "progress", taskId, stage: "request", message: "Calling MiniMax" });
     const result = await this.client.run(input, controller.signal);
     if (result.text) {
@@ -182,7 +184,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function titleForRequest(input: AiTaskRequest): string {
+function titleForRequest(input: MiniMaxTaskRequest): string {
   switch (input.toolId) {
     case "aiChat":
     case "aiImage":
@@ -193,7 +195,7 @@ function titleForRequest(input: AiTaskRequest): string {
   }
 }
 
-function summaryForRequest(input: AiTaskRequest): string {
+function summaryForRequest(input: MiniMaxTaskRequest): string {
   switch (input.toolId) {
     case "aiChat":
       return "MiniMax chat stream";
@@ -206,14 +208,14 @@ function summaryForRequest(input: AiTaskRequest): string {
   }
 }
 
-function diagnosticMetadata(input: AiTaskRequest, extra: Record<string, unknown>): Record<string, unknown> {
+function diagnosticMetadata(input: MiniMaxTaskRequest, extra: Record<string, unknown>): Record<string, unknown> {
   return {
     category: diagnosticCategory(input.toolId),
     ...extra
   };
 }
 
-function diagnosticCategory(toolId: AiToolId): string {
+function diagnosticCategory(toolId: MiniMaxTaskRequest["toolId"]): string {
   switch (toolId) {
     case "aiChat":
       return "aichat";

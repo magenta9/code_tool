@@ -120,7 +120,7 @@ function UtilityGroup(): JSX.Element {
                 [
                   "app-no-drag group flex min-h-12 items-start gap-3 rounded-[8px] border-l-2 border-transparent px-3 py-2.5 transition-[background-color,transform,color,border-color] duration-150 active:scale-[0.985]",
                   isActive
-                    ? "border-l-[var(--app-accent)] bg-transparent text-[var(--app-text)]"
+                    ? "border-l-[var(--app-accent)] bg-[rgba(117,104,88,0.09)] text-[var(--app-text)]"
                     : "text-[var(--app-text-muted)] [@media(hover:hover)]:hover:bg-[rgba(36,36,36,0.045)] [@media(hover:hover)]:hover:text-[var(--app-text)]"
                 ].join(" ")
               }
@@ -131,7 +131,7 @@ function UtilityGroup(): JSX.Element {
                     className={[
                       "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "bg-transparent text-[var(--app-accent)]"
+                        ? "bg-[rgba(117,104,88,0.14)] text-[var(--app-accent)]"
                         : "bg-transparent text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
                     ].join(" ")}
                   >
@@ -174,7 +174,7 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
                 [
                   "app-no-drag group flex min-h-14 items-start gap-3 rounded-[8px] border-l-2 border-transparent px-3 py-3 transition-[background-color,transform,color,border-color] duration-150 active:scale-[0.985]",
                   isActive
-                    ? "border-l-[var(--app-accent)] bg-transparent text-[var(--app-text)]"
+                    ? "border-l-[var(--app-accent)] bg-[rgba(117,104,88,0.09)] text-[var(--app-text)]"
                     : "text-[var(--app-text-muted)] [@media(hover:hover)]:hover:bg-[rgba(36,36,36,0.045)] [@media(hover:hover)]:hover:text-[var(--app-text)]"
                 ].join(" ")
               }
@@ -185,7 +185,7 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
                     className={[
                       "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "bg-transparent text-[var(--app-accent)]"
+                        ? "bg-[rgba(117,104,88,0.14)] text-[var(--app-accent)]"
                         : "bg-transparent text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
                     ].join(" ")}
                   >

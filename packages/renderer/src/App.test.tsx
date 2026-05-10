@@ -1,17 +1,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { toolCatalog, type KanbanBoard, type KanbanCard, type KanbanColumn } from "@codetool/shared";
 import { App } from "./App";
 
 describe("App smoke", () => {
   beforeEach(() => {
+    const api = getMockApi();
     vi.clearAllMocks();
     window.location.hash = "#/";
-    vi.mocked(window.api.kanban.listBoards).mockResolvedValue([]);
-    vi.mocked(window.api.kanban.listColumns).mockResolvedValue([]);
-    vi.mocked(window.api.kanban.listCards).mockResolvedValue([]);
-    vi.mocked(window.api.kanban.listLabels).mockResolvedValue([]);
-    vi.mocked(window.api.secrets.getMiniMaxStatus).mockResolvedValue({ provider: "minimax", configured: false });
+    vi.mocked(api.kanban.listBoards).mockResolvedValue([]);
+    vi.mocked(api.kanban.listColumns).mockResolvedValue([]);
+    vi.mocked(api.kanban.listCards).mockResolvedValue([]);
+    vi.mocked(api.kanban.listLabels).mockResolvedValue([]);
+    vi.mocked(api.secrets.getMiniMaxStatus).mockResolvedValue({ provider: "minimax", configured: false });
     vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
@@ -42,24 +43,26 @@ describe("App smoke", () => {
   });
 
   it("renders usable Kanban task controls", async () => {
+    const api = getMockApi();
     const board = createBoardFixture();
     const column = createColumnFixture(board.id);
     const card = createCardFixture(board.id, column.id);
 
-    vi.mocked(window.api.kanban.listBoards).mockResolvedValue([board]);
-    vi.mocked(window.api.kanban.listColumns).mockResolvedValue([column]);
-    vi.mocked(window.api.kanban.listCards).mockResolvedValue([card]);
-    vi.mocked(window.api.kanban.createCard).mockResolvedValue({ ...card, id: "card-2", title: "Draft task" });
+    vi.mocked(api.kanban.listBoards).mockResolvedValue([board]);
+    vi.mocked(api.kanban.listColumns).mockResolvedValue([column]);
+    vi.mocked(api.kanban.listCards).mockResolvedValue([card]);
+    vi.mocked(api.kanban.createCard).mockResolvedValue({ ...card, id: "card-2", title: "Draft task" });
 
     window.location.hash = "#/tools/kanban";
     render(<App />);
 
     expect(await screen.findByText("Fix task")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add task to Todo" }));
     fireEvent.change(screen.getByPlaceholderText("Task title"), { target: { value: "Draft task" } });
     fireEvent.click(screen.getByRole("button", { name: "Add task to Todo" }));
 
     await waitFor(() => {
-      expect(window.api.kanban.createCard).toHaveBeenCalledWith({ boardId: board.id, columnId: column.id, title: "Draft task" });
+      expect(api.kanban.createCard).toHaveBeenCalledWith({ boardId: board.id, columnId: column.id, title: "Draft task" });
     });
     expect(screen.getByRole("button", { name: "Edit Fix task" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive Fix task" })).toBeInTheDocument();
@@ -80,8 +83,9 @@ describe("App smoke", () => {
   });
 
   it("places Kanban import and export on settings", async () => {
+    const api = getMockApi();
     const board = createBoardFixture();
-    vi.mocked(window.api.kanban.listBoards).mockResolvedValue([board]);
+    vi.mocked(api.kanban.listBoards).mockResolvedValue([board]);
 
     window.location.hash = "#/settings";
     render(<App />);
@@ -91,6 +95,13 @@ describe("App smoke", () => {
     expect(screen.getByRole("button", { name: "Import board" })).toBeInTheDocument();
   });
 });
+
+function getMockApi(): NonNullable<typeof window.api> {
+  if (!window.api) {
+    throw new Error("window.api test mock is not installed");
+  }
+  return window.api;
+}
 
 function createBoardFixture(): KanbanBoard {
   return {

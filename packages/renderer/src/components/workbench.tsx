@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { toolCatalog, type ToolCatalogEntry } from "@codetool/shared";
 import {
@@ -36,7 +36,6 @@ const icons = {
 
 export function Workbench(): JSX.Element {
   const [query, setQuery] = useState("");
-  const navigate = useNavigate();
   const location = useLocation();
   const active = toolCatalog.find((tool) => location.pathname === tool.routePath) ?? toolCatalog[0];
   const activeGroupLabel = active.category === "aiTools" ? "AI Tools" : "Dev Tools";
@@ -59,20 +58,18 @@ export function Workbench(): JSX.Element {
         </div>
       </div>
       <aside className="app-no-drag flex min-h-0 flex-col border-r border-[var(--app-border)] bg-[var(--app-sidebar)]">
-        <div className="px-4 pb-4 pt-5">
-          <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_10px_28px_rgba(24,24,22,0.05)]">
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-[8px] border border-[var(--app-border-strong)] bg-[var(--app-panel-strong)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
-                <img src="./codetool-icon.svg" alt="" className="h-full w-full" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[15px] font-semibold tracking-normal text-[var(--app-text)]">CodeTool</div>
-                <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">Local workbench</div>
-              </div>
+        <div className="px-5 pb-4 pt-5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-[8px] text-[var(--app-accent)]">
+              <img src="./codetool-icon.svg" alt="" className="h-full w-full" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[15px] font-semibold tracking-normal text-[var(--app-text)]">CodeTool</div>
+              <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">Local workbench</div>
             </div>
           </div>
         </div>
-        <label className="app-no-drag mx-4 mb-4 flex h-10 items-center gap-3 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] px-3.5 text-[var(--app-text-muted)] transition-[background-color,border-color,box-shadow] duration-150 focus-within:border-[var(--app-border-strong)] focus-within:shadow-[0_0_0_4px_rgba(36,36,36,0.06)]">
+        <label className="app-no-drag mx-4 mb-4 flex h-10 items-center gap-3 rounded-[8px] bg-[rgba(36,36,36,0.045)] px-3.5 text-[var(--app-text-muted)] transition-[background-color,box-shadow] duration-150 focus-within:bg-[rgba(36,36,36,0.065)] focus-within:shadow-[0_0_0_3px_rgba(36,36,36,0.045)]">
           <Search size={15} />
           <input
             value={query}
@@ -84,25 +81,8 @@ export function Workbench(): JSX.Element {
         <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 pb-5">
           <ToolGroup title="Dev Tools" tools={filtered.filter((tool) => tool.category === "devTools")} />
           <ToolGroup title="AI Tools" tools={filtered.filter((tool) => tool.category === "aiTools")} />
+          <UtilityGroup />
         </nav>
-        <div className="grid grid-cols-2 gap-2 border-t border-[var(--app-border)] p-4 pt-3">
-          <button
-            type="button"
-            onClick={() => navigate("/settings")}
-            className="app-no-drag flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[12px] font-medium text-[var(--app-text)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-[var(--app-border-strong)] [@media(hover:hover)]:hover:bg-[var(--app-panel-strong)]"
-          >
-            <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"><Settings size={14} /></span>
-            Settings
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/diagnostics")}
-            className="app-no-drag flex h-10 items-center justify-center gap-2 rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] text-[12px] font-medium text-[var(--app-text)] transition-[background-color,transform,border-color] duration-150 active:scale-[0.98] [@media(hover:hover)]:hover:border-[var(--app-border-strong)] [@media(hover:hover)]:hover:bg-[var(--app-panel-strong)]"
-          >
-            <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"><Activity size={14} /></span>
-            Logs
-          </button>
-        </div>
       </aside>
       <main className="app-no-drag flex min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
         <div className="min-h-0 flex-1 overflow-y-auto px-7 py-7">
@@ -117,6 +97,57 @@ export function Workbench(): JSX.Element {
         </div>
       </main>
     </div>
+  );
+}
+
+function UtilityGroup(): JSX.Element {
+  const utilities = [
+    { routePath: "/settings", title: "Settings", description: "Credentials and data import", icon: Settings },
+    { routePath: "/diagnostics", title: "Logs", description: "Local diagnostics output", icon: Activity }
+  ];
+
+  return (
+    <section>
+      <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--app-text-dim)]">Utilities</h2>
+      <div className="space-y-2">
+        {utilities.map((utility) => {
+          const Icon = utility.icon;
+          return (
+            <NavLink
+              key={utility.routePath}
+              to={utility.routePath}
+              className={({ isActive }) =>
+                [
+                  "app-no-drag group flex min-h-12 items-start gap-3 rounded-[8px] border-l-2 border-transparent px-3 py-2.5 transition-[background-color,transform,color,border-color] duration-150 active:scale-[0.985]",
+                  isActive
+                    ? "border-l-[var(--app-accent)] bg-transparent text-[var(--app-text)]"
+                    : "text-[var(--app-text-muted)] [@media(hover:hover)]:hover:bg-[rgba(36,36,36,0.045)] [@media(hover:hover)]:hover:text-[var(--app-text)]"
+                ].join(" ")
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={[
+                      "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
+                      isActive
+                        ? "bg-transparent text-[var(--app-accent)]"
+                        : "bg-transparent text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
+                    ].join(" ")}
+                  >
+                    <Icon size={15} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium tracking-normal">{utility.title}</span>
+                    <span className="mt-0.5 block truncate text-[11px] leading-4 opacity-65">{utility.description}</span>
+                  </span>
+                </>
+              )}
+            </NavLink>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -141,9 +172,9 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
               to={tool.routePath}
               className={({ isActive }) =>
                 [
-                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[8px] border border-transparent px-3 py-3 transition-[background-color,box-shadow,transform,color,border-color] duration-150 active:scale-[0.985]",
+                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[8px] border-l-2 border-transparent px-3 py-3 transition-[background-color,transform,color,border-color] duration-150 active:scale-[0.985]",
                   isActive
-                    ? "border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-text)] shadow-[0_8px_22px_rgba(24,24,22,0.05)]"
+                    ? "border-l-[var(--app-accent)] bg-transparent text-[var(--app-text)]"
                     : "text-[var(--app-text-muted)] [@media(hover:hover)]:hover:bg-[rgba(36,36,36,0.045)] [@media(hover:hover)]:hover:text-[var(--app-text)]"
                 ].join(" ")
               }
@@ -154,8 +185,8 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
                     className={[
                       "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] text-[var(--app-accent)]"
-                        : "bg-[rgba(36,36,36,0.055)] text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:bg-[rgba(36,36,36,0.08)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
+                        ? "bg-transparent text-[var(--app-accent)]"
+                        : "bg-transparent text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
                     ].join(" ")}
                   >
                     <Icon size={16} />

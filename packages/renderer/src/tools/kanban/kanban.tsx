@@ -19,23 +19,29 @@ import type { KanbanBoard, KanbanCard, KanbanCardPatch, KanbanColumn, KanbanLabe
 import {
     Archive,
     Bold,
+    CalendarDays,
     ChevronDown,
     Columns3,
-    GripVertical,
     Italic,
     KanbanSquare,
     List,
     Pencil,
     Plus,
     RotateCcw,
+    Save,
     Search,
+    Tag,
     Trash2,
     X
 } from "lucide-react";
 import { getApi } from "../../api";
 
 type ViewMode = "kanban" | "list" | "archive";
-type ThemeMode = "light" | "dark";
+
+interface SelectOption {
+    value: string;
+    label: string;
+}
 
 interface TextDialogState {
     title: string;
@@ -62,11 +68,11 @@ export function KanbanPage(): JSX.Element {
     const [labels, setLabels] = useState<KanbanLabel[]>([]);
     const [selectedCardId, setSelectedCardId] = useState<string>("");
     const [view, setView] = useState<ViewMode>("kanban");
-    const [theme, setTheme] = useState<ThemeMode>("light");
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [draftCardTitles, setDraftCardTitles] = useState<Record<string, string>>({});
+    const [activeComposerColumnId, setActiveComposerColumnId] = useState<string>("");
     const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
     const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
     const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -211,6 +217,7 @@ export function KanbanPage(): JSX.Element {
         try {
             const card = await getApi().kanban.createCard({ boardId: selectedBoardId, columnId, title });
             setDraftCardTitles((current) => ({ ...current, [columnId]: "" }));
+            setActiveComposerColumnId("");
             await loadBoardData(selectedBoardId);
             setSelectedCardId(card.id);
             setError(null);
@@ -322,7 +329,7 @@ export function KanbanPage(): JSX.Element {
     }
 
     return (
-        <section className={`kanban-tool kanban-${theme}`}>
+        <section className="kanban-tool">
             <aside className="kanban-boards" aria-label="Boards">
                 <div className="kanban-brand">
                     <KanbanSquare size={18} />
@@ -365,9 +372,6 @@ export function KanbanPage(): JSX.Element {
                             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search cards" />
                         </div>
                         <Segmented value={view} onChange={setView} />
-                        <button type="button" className="kanban-icon-button" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
-                            {theme === "light" ? "Dark" : "Light"}
-                        </button>
                         <button type="button" className="kanban-icon-button" onClick={renameBoard} disabled={!selectedBoard}>Rename</button>
                         <button type="button" className="kanban-danger-button" onClick={deleteBoard} disabled={!selectedBoard}>
                             <Trash2 size={15} />
@@ -391,7 +395,10 @@ export function KanbanPage(): JSX.Element {
                                             cards={activeCards.filter((card) => card.columnId === column.id).sort((left, right) => left.sortOrder - right.sortOrder)}
                                             labels={labels}
                                             draftTitle={draftCardTitles[column.id] ?? ""}
+                                            composerOpen={activeComposerColumnId === column.id}
                                             onDraftTitleChange={(value) => setDraftCardTitle(column.id, value)}
+                                            onOpenComposer={() => setActiveComposerColumnId(column.id)}
+                                            onCloseComposer={() => { setDraftCardTitle(column.id, ""); setActiveComposerColumnId(""); }}
                                             onCreateCard={() => void createCard(column.id)}
                                             onOpenCard={setSelectedCardId}
                                             onRenameCard={(card) => void renameCard(card)}
@@ -421,7 +428,7 @@ export function KanbanPage(): JSX.Element {
                             />
                         ) : null}
 
-                        {view === "archive" ? <ArchiveView key="archive" cards={archivedCards} labels={labels} onRestore={restoreCard} onDelete={deleteCard} /> : null}
+                        {view === "archive" ? <ArchiveView key="archive" cards={archivedCards} labels={labels} onOpenCard={setSelectedCardId} onRestore={restoreCard} onDelete={deleteCard} /> : null}
                         <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
                             {activeDraggingCard ? <CardDragPreview card={activeDraggingCard} labels={labels} /> : null}
                             {activeDraggingColumn ? <ColumnDragPreview column={activeDraggingColumn} /> : null}
@@ -565,7 +572,10 @@ function SortableColumn({
     cards,
     labels,
     draftTitle,
+    composerOpen,
     onDraftTitleChange,
+    onOpenComposer,
+    onCloseComposer,
     onCreateCard,
     onOpenCard,
     onRenameCard,
@@ -578,7 +588,10 @@ function SortableColumn({
     cards: KanbanCard[];
     labels: KanbanLabel[];
     draftTitle: string;
+    composerOpen: boolean;
     onDraftTitleChange: (value: string) => void;
+    onOpenComposer: () => void;
+    onCloseComposer: () => void;
     onCreateCard: () => void;
     onOpenCard: (id: string) => void;
     onRenameCard: (card: KanbanCard) => void;
@@ -587,18 +600,18 @@ function SortableColumn({
     onRename: () => void;
     onArchive: () => void;
 }): JSX.Element {
-    const { attributes, isOver, listeners, setNodeRef, transform, transition } = useSortable({ id: `column:${column.id}` });
+    const { attributes, isDragging, isOver, listeners, setNodeRef, transform, transition } = useSortable({ id: `column:${column.id}` });
     return (
-        <section ref={setNodeRef} className={`kanban-column ${isOver ? "over" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }}>
+        <section ref={setNodeRef} className={`kanban-column ${isOver ? "over" : ""} ${isDragging ? "dragging" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }}>
             <header>
-                <button type="button" className="kanban-drag-handle" {...attributes} {...listeners} aria-label={`Drag ${column.name}`}>
-                    <GripVertical size={15} />
-                </button>
                 <span className="kanban-column-dot" style={{ background: column.color ?? "#9ca3af" }} />
-                <strong>{column.name}</strong>
-                <small>{cards.length}</small>
-                <button type="button" onClick={onRename}>Rename</button>
-                <button type="button" onClick={onArchive}>Archive</button>
+                <div className="kanban-column-title" {...attributes} {...listeners} aria-label={`Drag ${column.name}`}>
+                    <strong>{column.name}</strong>
+                    <small>{cards.length} cards</small>
+                </div>
+                <span className="kanban-column-count">{cards.length}</span>
+                <button type="button" onClick={onRename} aria-label={`Rename ${column.name}`}><Pencil size={13} /></button>
+                <button type="button" onClick={onArchive} aria-label={`Archive ${column.name}`}><Archive size={13} /></button>
             </header>
             <SortableContext items={cards.map((card) => `card:${card.id}`)} strategy={verticalListSortingStrategy}>
                 <div className="kanban-card-stack">
@@ -616,12 +629,23 @@ function SortableColumn({
                     {cards.length === 0 ? <div className="kanban-column-empty">Drop cards here</div> : null}
                 </div>
             </SortableContext>
-            <form className="kanban-card-composer" onSubmit={(event) => { event.preventDefault(); onCreateCard(); }}>
-                <input value={draftTitle} onChange={(event) => onDraftTitleChange(event.target.value)} placeholder="Task title" />
-                <button type="submit" disabled={!draftTitle.trim()} aria-label={`Add task to ${column.name}`}>
-                    <Plus size={14} /> Add
+            {composerOpen ? (
+                <form className="kanban-card-composer open" onSubmit={(event) => { event.preventDefault(); onCreateCard(); }}>
+                    <input value={draftTitle} onChange={(event) => onDraftTitleChange(event.target.value)} placeholder="Task title" autoFocus />
+                    <div className="kanban-card-composer-actions">
+                        <button type="submit" disabled={!draftTitle.trim()} aria-label={`Add task to ${column.name}`}>
+                            <Plus size={14} /> Add
+                        </button>
+                        <button type="button" onClick={onCloseComposer} aria-label={`Cancel task in ${column.name}`}>
+                            <X size={14} />
+                        </button>
+                    </div>
+                </form>
+            ) : (
+                <button type="button" className="kanban-card-add-trigger" onClick={onOpenComposer} aria-label={`Add task to ${column.name}`}>
+                    <Plus size={14} /> Add card
                 </button>
-            </form>
+            )}
         </section>
     );
 }
@@ -630,10 +654,17 @@ function ColumnDragPreview({ column }: { column: KanbanColumn }): JSX.Element {
     return (
         <section className="kanban-column kanban-drag-preview">
             <header>
-                <GripVertical size={15} />
                 <span className="kanban-column-dot" style={{ background: column.color ?? "#9ca3af" }} />
-                <strong>{column.name}</strong>
+                <div className="kanban-column-title">
+                    <strong>{column.name}</strong>
+                    <small>Moving column</small>
+                </div>
             </header>
+            <div className="kanban-column-preview-fill">
+                <span />
+                <span />
+                <span />
+            </div>
         </section>
     );
 }
@@ -642,12 +673,15 @@ function CardDragPreview({ card, labels }: { card: KanbanCard; labels: KanbanLab
     const cardLabels = labels.filter((label) => card.labelIds.includes(label.id));
     return (
         <article className="kanban-card kanban-drag-preview">
+            <div className="kanban-card-topline">
+                <PriorityBadge priority={card.priority} />
+                <span>{formatDisplayDate(card.updatedAt)}</span>
+            </div>
             <div className="kanban-card-open">
                 <span>{card.title}</span>
                 {card.descriptionText ? <small>{card.descriptionText}</small> : null}
             </div>
-            <div className="kanban-card-meta">
-                <PriorityBadge priority={card.priority} />
+            <div className="kanban-card-meta-band">
                 {cardLabels.map((label) => <LabelChip key={label.id} label={label} />)}
             </div>
         </article>
@@ -665,24 +699,26 @@ function SortableCard({ card, labels, onOpen, onRename, onArchive, onDelete }: {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `card:${card.id}` });
     const cardLabels = labels.filter((label) => card.labelIds.includes(label.id));
     return (
-        <article ref={setNodeRef} className={`kanban-card ${isDragging ? "dragging" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }}>
-            <button type="button" className="kanban-card-open" onClick={onOpen}>
-                <span>{card.title}</span>
-                {card.descriptionText ? <small>{card.descriptionText}</small> : null}
-            </button>
-            <div className="kanban-card-meta">
-                <button type="button" className="kanban-drag-handle" {...attributes} {...listeners} aria-label={`Drag ${card.title}`}>
-                    <GripVertical size={14} />
-                </button>
+        <article ref={setNodeRef} className={`kanban-card ${isDragging ? "dragging" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }} {...attributes} {...listeners} aria-label={`Drag ${card.title}`}>
+            <div className="kanban-card-topline">
                 <PriorityBadge priority={card.priority} />
-                {cardLabels.map((label) => <LabelChip key={label.id} label={label} />)}
-                {card.dueDate ? <span>{new Date(card.dueDate).toLocaleDateString()}</span> : null}
+                <span className="kanban-card-id">Updated {formatDisplayDate(card.updatedAt)}</span>
                 <span className="kanban-card-actions">
                     <button type="button" onClick={onOpen} aria-label={`Edit ${card.title}`}><Pencil size={13} /></button>
                     <button type="button" onClick={onRename} aria-label={`Rename ${card.title}`}>Title</button>
                     <button type="button" onClick={onArchive} aria-label={`Archive ${card.title}`}><Archive size={13} /></button>
                     <button type="button" onClick={onDelete} aria-label={`Delete ${card.title}`}><Trash2 size={13} /></button>
                 </span>
+            </div>
+            <button type="button" className="kanban-card-open" onClick={onOpen}>
+                <span>{card.title}</span>
+                {card.descriptionText ? <small>{card.descriptionText}</small> : null}
+            </button>
+            <div className="kanban-card-meta-band">
+                {cardLabels.length > 0 ? cardLabels.map((label) => <LabelChip key={label.id} label={label} />) : <span className="kanban-card-muted"><Tag size={12} /> No labels</span>}
+            </div>
+            <div className="kanban-card-footerline">
+                <span className="kanban-date-chip"><CalendarDays size={12} /> {card.dueDate ? formatDisplayDate(card.dueDate) : "No due date"}</span>
             </div>
         </article>
     );
@@ -702,21 +738,27 @@ function ListView({ columns, cards, labels, onOpenCard, onMoveCard, onArchiveCar
             {columns.map((column) => {
                 const columnCards = cards.filter((card) => card.columnId === column.id).sort((left, right) => left.sortOrder - right.sortOrder);
                 return (
-                    <section key={column.id}>
-                        <h3><span style={{ background: column.color ?? "#9ca3af" }} />{column.name}<small>{columnCards.length}</small></h3>
+                    <section key={column.id} className="kanban-list-section">
+                        <h3><span style={{ background: column.color ?? "#9ca3af" }} />{column.name}<small>{columnCards.length} cards</small></h3>
                         {columnCards.map((card) => (
-                            <div className="kanban-list-row" key={card.id}>
-                                <button type="button" onClick={() => onOpenCard(card.id)}>{card.title}</button>
-                                <PriorityBadge priority={card.priority} />
+                            <article className="kanban-list-row" key={card.id}>
+                                <button type="button" className="kanban-list-title" onClick={() => onOpenCard(card.id)}>
+                                    <span>{card.title}</span>
+                                    <small>{card.descriptionText || `Updated ${formatDisplayDate(card.updatedAt)}`}</small>
+                                </button>
                                 <span className="kanban-list-labels">
                                     {labels.filter((label) => card.labelIds.includes(label.id)).map((label) => <LabelChip key={label.id} label={label} />)}
                                 </span>
+                                <PriorityBadge priority={card.priority} />
+                                <span className="kanban-date-chip"><CalendarDays size={12} /> {card.dueDate ? formatDisplayDate(card.dueDate) : "No due"}</span>
                                 <select value={card.columnId} onChange={(event) => onMoveCard(card.id, event.target.value)}>
                                     {columns.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
                                 </select>
-                                <button type="button" onClick={() => onArchiveCard(card.id)}><Archive size={14} /> Archive</button>
-                                <button type="button" onClick={() => onDeleteCard(card.id)}><Trash2 size={14} /> Delete</button>
-                            </div>
+                                <span className="kanban-list-actions">
+                                    <button type="button" onClick={() => onArchiveCard(card.id)} aria-label={`Archive ${card.title}`}><Archive size={14} /></button>
+                                    <button type="button" onClick={() => onDeleteCard(card.id)} aria-label={`Delete ${card.title}`}><Trash2 size={14} /></button>
+                                </span>
+                            </article>
                         ))}
                     </section>
                 );
@@ -725,26 +767,33 @@ function ListView({ columns, cards, labels, onOpenCard, onMoveCard, onArchiveCar
     );
 }
 
-function ArchiveView({ cards, labels, onRestore, onDelete }: {
+function ArchiveView({ cards, labels, onOpenCard, onRestore, onDelete }: {
     cards: KanbanCard[];
     labels: KanbanLabel[];
+    onOpenCard: (id: string) => void;
     onRestore: (id: string) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
 }): JSX.Element {
     return (
-        <div className="kanban-list-view kanban-view-panel">
-            <section>
+        <div className="kanban-list-view kanban-archive-view kanban-view-panel">
+            <section className="kanban-list-section">
                 <h3><Archive size={15} /> Archived cards <small>{cards.length}</small></h3>
                 {cards.map((card) => (
-                    <div className="kanban-list-row" key={card.id}>
-                        <button type="button">{card.title}</button>
-                        <PriorityBadge priority={card.priority} />
+                    <article className="kanban-list-row" key={card.id}>
+                        <button type="button" className="kanban-list-title" onClick={() => onOpenCard(card.id)}>
+                            <span>{card.title}</span>
+                            <small>Archived {card.archivedAt ? formatDisplayDate(card.archivedAt) : "recently"}</small>
+                        </button>
                         <span className="kanban-list-labels">
                             {labels.filter((label) => card.labelIds.includes(label.id)).map((label) => <LabelChip key={label.id} label={label} />)}
                         </span>
-                        <button type="button" onClick={() => void onRestore(card.id)}><RotateCcw size={14} /> Restore</button>
-                        <button type="button" onClick={() => void onDelete(card.id)}><Trash2 size={14} /> Delete</button>
-                    </div>
+                        <PriorityBadge priority={card.priority} />
+                        <span className="kanban-date-chip"><CalendarDays size={12} /> {card.dueDate ? formatDisplayDate(card.dueDate) : "No due"}</span>
+                        <span className="kanban-list-actions">
+                            <button type="button" onClick={() => void onRestore(card.id)} aria-label={`Restore ${card.title}`}><RotateCcw size={14} /></button>
+                            <button type="button" onClick={() => void onDelete(card.id)} aria-label={`Delete ${card.title}`}><Trash2 size={14} /></button>
+                        </span>
+                    </article>
                 ))}
             </section>
         </div>
@@ -781,30 +830,90 @@ function CardDetails({ card, columns, labels, onClose, onSave, onArchive, onDele
     return (
         <aside className="kanban-details" aria-label="Card details">
             <header>
-                <strong>Card details</strong>
+                <div>
+                    <strong>Card details</strong>
+                    <span>Updated {formatDisplayDate(card.updatedAt)}</span>
+                </div>
                 <button type="button" onClick={onClose} aria-label="Close details"><X size={16} /></button>
             </header>
-            <input className="kanban-title-input" value={title} onChange={(event) => setTitle(event.target.value)} />
-            <div className="kanban-field-grid">
-                <label>Column<select value={columnId} onChange={(event) => setColumnId(event.target.value)}>{columns.map((column) => <option key={column.id} value={column.id}>{column.name}</option>)}</select></label>
-                <label>Priority<select value={priority} onChange={(event) => setPriority(event.target.value as KanbanPriority)}>{priorities.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                <label>Due<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+            <div className="kanban-details-body">
+                <div className="kanban-details-main">
+                    <label className="kanban-title-label">
+                        <span>Title</span>
+                        <input className="kanban-title-input" value={title} onChange={(event) => setTitle(event.target.value)} />
+                    </label>
+                    <section className="kanban-detail-section">
+                        <h4>Labels</h4>
+                        <div className="kanban-labels">
+                            {labels.map((label) => (
+                                <button type="button" key={label.id} className={`label-toggle ${card.labelIds.includes(label.id) ? "active" : ""}`} onClick={() => void onToggleLabel(card, label.id)}>
+                                    <LabelChip label={label} />
+                                </button>
+                            ))}
+                            <button type="button" className="kanban-label-create" onClick={() => void onCreateLabel()}><Plus size={14} /> Label</button>
+                        </div>
+                    </section>
+                    <section className="kanban-detail-section kanban-detail-description">
+                        <h4>Description</h4>
+                        <RichTextEditor value={descriptionJson} onChange={(json, text) => { setDescriptionJson(json); setDescriptionText(text); }} />
+                    </section>
+                </div>
+                <aside className="kanban-details-meta" aria-label="Card metadata">
+                    <CustomSelect label="Column" value={columnId} options={columns.map((column) => ({ value: column.id, label: column.name }))} onChange={setColumnId} />
+                    <CustomSelect label="Priority" value={priority} options={priorities.map((item) => ({ value: item, label: item }))} onChange={(value) => setPriority(value as KanbanPriority)} />
+                    <label>Due<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+                    <button type="button" className="kanban-command primary" onClick={() => void onSave(card.id, { title, columnId, priority, dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null, descriptionJson, descriptionText })}><Save size={14} /> Save</button>
+                    <button type="button" onClick={() => void onArchive(card.id)}><Archive size={14} /> Archive</button>
+                    <button type="button" className="danger" onClick={() => void onDelete(card.id)}><Trash2 size={14} /> Delete</button>
+                </aside>
             </div>
-            <div className="kanban-labels">
-                {labels.map((label) => (
-                    <button type="button" key={label.id} className={`label-toggle ${card.labelIds.includes(label.id) ? "active" : ""}`} onClick={() => void onToggleLabel(card, label.id)}>
-                        <LabelChip label={label} />
-                    </button>
-                ))}
-                <button type="button" className="kanban-label-create" onClick={() => void onCreateLabel()}><Plus size={14} /> Label</button>
-            </div>
-            <RichTextEditor value={descriptionJson} onChange={(json, text) => { setDescriptionJson(json); setDescriptionText(text); }} />
             <footer>
-                <button type="button" className="kanban-command primary" onClick={() => void onSave(card.id, { title, columnId, priority, dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null, descriptionJson, descriptionText })}>Save</button>
+                <button type="button" className="kanban-command primary" onClick={() => void onSave(card.id, { title, columnId, priority, dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null, descriptionJson, descriptionText })}><Save size={14} /> Save</button>
                 <button type="button" onClick={() => void onArchive(card.id)}><Archive size={14} /> Archive</button>
                 <button type="button" className="danger" onClick={() => void onDelete(card.id)}><Trash2 size={14} /> Delete</button>
             </footer>
         </aside>
+    );
+}
+
+function CustomSelect({ label, value, options, onChange }: {
+    label: string;
+    value: string;
+    options: SelectOption[];
+    onChange: (value: string) => void;
+}): JSX.Element {
+    const [open, setOpen] = useState(false);
+    const selected = options.find((option) => option.value === value) ?? options[0];
+
+    return (
+        <div
+            className={`kanban-select ${open ? "open" : ""}`}
+            onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+            }}
+        >
+            <span className="kanban-select-label">{label}</span>
+            <button type="button" className="kanban-select-trigger" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
+                <span>{selected?.label ?? "Select"}</span>
+                <ChevronDown size={14} />
+            </button>
+            {open ? (
+                <div className="kanban-select-menu" role="listbox" aria-label={label}>
+                    {options.map((option) => (
+                        <button
+                            type="button"
+                            key={option.value}
+                            className={option.value === value ? "active" : ""}
+                            role="option"
+                            aria-selected={option.value === value}
+                            onClick={() => { onChange(option.value); setOpen(false); }}
+                        >
+                            <span>{option.label}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+        </div>
     );
 }
 
@@ -854,6 +963,10 @@ function randomLabelColor(index: number): string {
 
 function dateInputValue(timestamp: number): string {
     return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function formatDisplayDate(timestamp: number): string {
+    return new Date(timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function errorMessage(error: unknown): string {

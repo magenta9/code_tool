@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from "electron";
 import { join } from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 import { openCodeToolDatabase } from "./db/services";
@@ -11,15 +11,56 @@ import { AppLogger } from "./logger/app-logger";
 import { registerIpc } from "./ipc/register";
 
 let mainWindow: BrowserWindow | null = null;
+const appName = "CodeTool";
+const appIconPath = join(__dirname, "../../../build/icon.png");
+
+app.name = appName;
+app.setName(appName);
+app.setAboutPanelOptions({ applicationName: appName });
+
+function configureApplicationMenu(): void {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  const template = [
+    {
+      label: appName,
+      submenu: [
+        { role: "about", label: `About ${appName}` },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide", label: `Hide ${appName}` },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit", label: `Quit ${appName}` }
+      ]
+    },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" }
+  ] satisfies MenuItemConstructorOptions[];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 async function createWindow(): Promise<void> {
   const preloadPath = join(__dirname, "../../preload/dist/index.js");
+  const hasAppIcon = existsSync(appIconPath);
+
+  if (process.platform === "darwin" && hasAppIcon) {
+    app.dock?.setIcon(appIconPath);
+  }
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 840,
     minWidth: 980,
     minHeight: 640,
     title: "CodeTool",
+    ...(hasAppIcon ? { icon: appIconPath } : {}),
     backgroundColor: "#08090a",
     titleBarStyle: "hiddenInset",
     webPreferences: {
@@ -40,6 +81,8 @@ async function createWindow(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  configureApplicationMenu();
+
   const paths = resolveCodeToolPaths();
   mkdirSync(paths.assetRoot, { recursive: true });
   mkdirSync(paths.logRoot, { recursive: true });

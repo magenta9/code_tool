@@ -16,8 +16,7 @@ import {
   Music,
   Search,
   Settings,
-  Activity,
-  Wrench
+  Activity
 } from "lucide-react";
 
 const icons = {
@@ -63,12 +62,12 @@ export function Workbench(): JSX.Element {
         <div className="px-4 pb-4 pt-5">
           <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] p-4 shadow-[0_10px_28px_rgba(24,24,22,0.05)]">
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-[8px] border border-[var(--app-border-strong)] bg-[var(--app-accent-soft)] text-[var(--app-accent)]">
-                <Wrench size={18} />
+              <div className="grid h-10 w-10 place-items-center overflow-hidden rounded-[8px] border border-[var(--app-border-strong)] bg-[var(--app-panel-strong)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+                <img src="./codetool-icon.svg" alt="" className="h-full w-full" />
               </div>
               <div className="min-w-0">
                 <div className="text-[15px] font-semibold tracking-normal text-[var(--app-text)]">CodeTool</div>
-                <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">React workbench</div>
+                <div className="mt-1 text-[11px] text-[var(--app-text-muted)]">Local workbench</div>
               </div>
             </div>
           </div>

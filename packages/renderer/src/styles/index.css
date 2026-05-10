@@ -323,29 +323,63 @@ textarea {
 }
 
 .kanban-segmented {
-  display: inline-flex;
-  gap: 2px;
+  display: inline-grid;
+  position: relative;
+  grid-template-columns: repeat(3, minmax(76px, 1fr));
   border: 1px solid var(--kanban-border);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--kanban-surface-soft);
   padding: 2px;
+  isolation: isolate;
+  box-shadow: inset 0 1px 2px rgba(36, 36, 36, 0.05);
+}
+
+.kanban-segmented-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / 3);
+  border-radius: 999px;
+  background: var(--kanban-surface);
+  box-shadow:
+    0 1px 2px rgba(24, 24, 22, 0.08),
+    0 8px 18px rgba(24, 24, 22, 0.08);
+  transform: translateX(0);
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.kanban-segmented[data-view="list"] .kanban-segmented-thumb {
+  transform: translateX(100%);
+}
+
+.kanban-segmented[data-view="archive"] .kanban-segmented-thumb {
+  transform: translateX(200%);
 }
 
 .kanban-segmented button {
   display: inline-flex;
+  position: relative;
+  z-index: 1;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 30px;
+  min-width: 0;
+  height: 32px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 999px;
   background: transparent;
-  padding: 0 10px;
+  padding: 0 12px;
+  color: var(--kanban-muted);
   font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: color 0.18s ease, transform 0.15s ease;
 }
 
 .kanban-segmented button.active {
-  background: var(--kanban-surface);
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08);
+  color: var(--kanban-text);
 }
 
 .kanban-view-panel {

@@ -5,7 +5,7 @@ import { CodeBlock, Panel, PrimaryButton, StatusStrip, TextArea, ToolLayout } fr
 
 export function JsonDiffPage(): JSX.Element {
   const [left, setLeft] = useState('{"name":"CodeTool","count":1}');
-  const [right, setRight] = useState('{"name":"CodeTool","count":2,"electron":true}');
+  const [right, setRight] = useState('{"name":"CodeTool","count":2,"local":true}');
   const [result, setResult] = useState<JsonDiffResult | null>(null);
 
   return (

@@ -526,17 +526,27 @@ function ConfirmDialog({ state, onClose }: { state: ConfirmDialogState; onClose:
 }
 
 function Segmented({ value, onChange }: { value: ViewMode; onChange: (value: ViewMode) => void }): JSX.Element {
+    const options: Array<{ value: ViewMode; label: string; icon: JSX.Element }> = [
+        { value: "kanban", label: "Kanban", icon: <Columns3 size={14} /> },
+        { value: "list", label: "List", icon: <List size={14} /> },
+        { value: "archive", label: "Archive", icon: <Archive size={14} /> }
+    ];
+
     return (
-        <div className="kanban-segmented" role="tablist" aria-label="View mode">
-            <button type="button" className={value === "kanban" ? "active" : ""} onClick={() => onChange("kanban")}>
-                <Columns3 size={14} /> Kanban
-            </button>
-            <button type="button" className={value === "list" ? "active" : ""} onClick={() => onChange("list")}>
-                <List size={14} /> List
-            </button>
-            <button type="button" className={value === "archive" ? "active" : ""} onClick={() => onChange("archive")}>
-                <Archive size={14} /> Archive
-            </button>
+        <div className="kanban-segmented" role="tablist" aria-label="View mode" data-view={value}>
+            <span className="kanban-segmented-thumb" aria-hidden="true" />
+            {options.map((option) => (
+                <button
+                    key={option.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={value === option.value}
+                    className={value === option.value ? "active" : ""}
+                    onClick={() => onChange(option.value)}
+                >
+                    {option.icon} {option.label}
+                </button>
+            ))}
         </div>
     );
 }

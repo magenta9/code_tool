@@ -1,0 +1,2200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Card Detail Prototypes</title>
+    <style>
+        :root {
+            --bg: #f4f2ed;
+            --ink: #24231f;
+            --muted: #706d65;
+            --faint: #969186;
+            --line: #ded8cc;
+            --line-strong: #c9c0b1;
+            --paper: #fffdf8;
+            --paper-2: #f9f6ef;
+            --paper-3: #efe9de;
+            --charcoal: #30312d;
+            --blue: #315f8c;
+            --green: #48745a;
+            --red: #9b4d45;
+            --amber: #a7682a;
+            --violet: #675a87;
+            --shadow: 0 18px 48px rgba(59, 53, 43, 0.15);
+            --shadow-soft: 0 8px 24px rgba(59, 53, 43, 0.1);
+            --radius: 8px;
+            --mono: "SF Mono", "Cascadia Code", "Menlo", monospace;
+            --sans: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: var(--sans);
+            letter-spacing: 0;
+            text-wrap: pretty;
+        }
+
+        body {
+            overflow: hidden;
+        }
+
+        button,
+        input,
+        textarea,
+        select {
+            font: inherit;
+        }
+
+        button {
+            border: 0;
+            cursor: pointer;
+        }
+
+        .shell {
+            display: grid;
+            height: 100vh;
+            grid-template-columns: 300px minmax(0, 1fr);
+        }
+
+        .study-panel {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            border-right: 1px solid var(--line);
+            background: #ebe5d9;
+            padding: 18px;
+        }
+
+        .study-title {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 760;
+            line-height: 1.12;
+        }
+
+        .study-note {
+            margin: 10px 0 18px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .reference {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .reference h2,
+        .switcher h2 {
+            margin: 0 0 4px;
+            color: var(--faint);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .ref-card {
+            display: grid;
+            gap: 6px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 253, 248, 0.56);
+            padding: 10px;
+        }
+
+        .ref-card strong {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .ref-card small {
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.45;
+        }
+
+        .stars {
+            border: 1px solid var(--line-strong);
+            border-radius: 999px;
+            padding: 2px 7px;
+            color: var(--muted);
+            font-family: var(--mono);
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .switcher {
+            display: grid;
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .switcher button {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+            align-items: start;
+            width: 100%;
+            border: 1px solid transparent;
+            border-radius: var(--radius);
+            background: transparent;
+            padding: 10px 8px;
+            color: var(--muted);
+            text-align: left;
+        }
+
+        .switcher button:hover,
+        .switcher button.active {
+            border-color: var(--line-strong);
+            background: rgba(255, 253, 248, 0.65);
+            color: var(--ink);
+        }
+
+        .switcher b {
+            display: grid;
+            place-items: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: var(--charcoal);
+            color: #fffdf8;
+            font-family: var(--mono);
+            font-size: 11px;
+        }
+
+        .switcher button>div {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .switcher button>span {
+            flex: 1 1 calc(100% - 40px);
+            min-width: 0;
+        }
+
+        .switcher button>small {
+            flex: 0 0 calc(100% - 33px);
+            margin-left: 33px;
+            min-width: 0;
+        }
+
+        .switcher span {
+            display: block;
+            font-size: 13px;
+            font-weight: 760;
+        }
+
+        .switcher small {
+            display: block;
+            margin-top: 3px;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        .stage {
+            position: relative;
+            min-width: 0;
+            overflow: hidden;
+            background:
+                linear-gradient(rgba(115, 109, 98, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(115, 109, 98, 0.08) 1px, transparent 1px),
+                var(--bg);
+            background-size: 28px 28px;
+        }
+
+        .board {
+            display: grid;
+            height: 100%;
+            grid-template-rows: auto minmax(0, 1fr);
+            opacity: 0.68;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(255, 253, 248, 0.72);
+            padding: 15px 20px;
+            backdrop-filter: blur(12px);
+        }
+
+        .topbar h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+        }
+
+        .pill,
+        .toolbar button,
+        .plain-button {
+            display: inline-flex;
+            min-height: 30px;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            border: 1px solid var(--line);
+            border-radius: 7px;
+            background: var(--paper);
+            padding: 0 10px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .columns {
+            display: grid;
+            min-height: 0;
+            grid-template-columns: repeat(4, 272px);
+            gap: 14px;
+            overflow: auto;
+            padding: 18px;
+        }
+
+        .col {
+            display: flex;
+            min-height: 0;
+            flex-direction: column;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255, 253, 248, 0.56);
+        }
+
+        .col header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--line);
+            padding: 10px;
+        }
+
+        .col header strong {
+            font-size: 13px;
+        }
+
+        .stack {
+            display: grid;
+            gap: 9px;
+            overflow: auto;
+            padding: 10px;
+        }
+
+        .card {
+            display: grid;
+            gap: 8px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--paper);
+            padding: 11px;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .card.active {
+            border-color: #9d8e75;
+            box-shadow: 0 0 0 2px rgba(157, 142, 117, 0.18), var(--shadow-soft);
+        }
+
+        .card strong {
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .card small {
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .tag-row,
+        .meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            min-height: 20px;
+            border: 1px solid currentColor;
+            border-radius: 999px;
+            padding: 0 7px;
+            color: var(--blue);
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .tag.green {
+            color: var(--green);
+        }
+
+        .tag.red {
+            color: var(--red);
+        }
+
+        .tag.amber {
+            color: var(--amber);
+        }
+
+        .tag.violet {
+            color: var(--violet);
+        }
+
+        .prototype {
+            position: absolute;
+            inset: 0;
+            display: none;
+        }
+
+        .prototype.active {
+            display: block;
+        }
+
+        .detail-drawer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            display: grid;
+            width: min(820px, calc(100vw - 340px));
+            grid-template-rows: auto minmax(0, 1fr);
+            border-left: 1px solid var(--line-strong);
+            background: var(--paper);
+            box-shadow: -24px 0 64px rgba(48, 49, 45, 0.18);
+        }
+
+        .detail-head {
+            display: grid;
+            gap: 14px;
+            border-bottom: 1px solid var(--line);
+            background: var(--paper);
+            padding: 16px 18px 14px;
+        }
+
+        .detail-kicker {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 760;
+        }
+
+        .detail-kicker.actions-only {
+            justify-content: flex-end;
+        }
+
+        .title-line {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .title-line h1 {
+            max-width: 620px;
+            margin: 0;
+            font-size: 26px;
+            line-height: 1.08;
+            letter-spacing: 0;
+        }
+
+        .head-actions,
+        .side-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .primary {
+            border-color: var(--charcoal);
+            background: var(--charcoal);
+            color: #fffdf8;
+        }
+
+        .danger-action {
+            border-color: rgba(155, 77, 69, 0.34);
+            background: rgba(155, 77, 69, 0.08);
+            color: var(--red);
+        }
+
+        .detail-body {
+            display: grid;
+            min-height: 0;
+            grid-template-columns: minmax(0, 1fr) 240px;
+        }
+
+        .detail-main {
+            min-width: 0;
+            overflow: auto;
+            padding: 18px;
+        }
+
+        .detail-side {
+            display: grid;
+            align-content: start;
+            gap: 12px;
+            overflow: auto;
+            border-left: 1px solid var(--line);
+            background: var(--paper-2);
+            padding: 14px;
+        }
+
+        .section {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .section h3 {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 0;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 820;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .editor,
+        .comment-box,
+        .field-card,
+        .activity-item,
+        .checklist {
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--paper);
+        }
+
+        .editor {
+            min-height: 170px;
+            padding: 14px;
+        }
+
+        .editor p {
+            margin: 0 0 12px;
+            color: #46433c;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .editor ul {
+            margin: 0;
+            padding-left: 18px;
+            color: #46433c;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .checklist {
+            display: grid;
+            gap: 0;
+            padding: 4px;
+        }
+
+        .check-item {
+            display: grid;
+            grid-template-columns: 20px minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+            min-height: 36px;
+            border-radius: 6px;
+            padding: 0 8px;
+            font-size: 13px;
+        }
+
+        .check-item:hover {
+            background: var(--paper-2);
+        }
+
+        .box {
+            display: grid;
+            place-items: center;
+            width: 15px;
+            height: 15px;
+            border: 1px solid var(--line-strong);
+            border-radius: 4px;
+        }
+
+        .box.done {
+            border-color: var(--green);
+            background: var(--green);
+        }
+
+        .box.done::after {
+            width: 7px;
+            height: 4px;
+            border-bottom: 2px solid #fff;
+            border-left: 2px solid #fff;
+            content: "";
+            transform: rotate(-45deg) translate(1px, -1px);
+        }
+
+        .field-card {
+            display: grid;
+            gap: 7px;
+            padding: 10px;
+        }
+
+        .field-card label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            color: var(--faint);
+            font-size: 10px;
+            font-weight: 820;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .field-card label strong {
+            color: var(--ink);
+            font-size: 11px;
+            letter-spacing: 0;
+        }
+
+        .select-like,
+        .input-like {
+            display: flex;
+            min-height: 32px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border: 1px solid var(--line);
+            border-radius: 7px;
+            background: var(--paper);
+            padding: 0 9px;
+            color: var(--ink);
+            font-size: 12px;
+            font-weight: 720;
+        }
+
+        .timeline {
+            display: grid;
+            gap: 9px;
+        }
+
+        .activity-item {
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr);
+            gap: 9px;
+            padding: 10px;
+        }
+
+        .avatar {
+            display: grid;
+            place-items: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            background: var(--charcoal);
+            color: #fffdf8;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .activity-item p {
+            margin: 0;
+            color: #46433c;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .activity-item time {
+            color: var(--faint);
+            font-size: 11px;
+        }
+
+        .modal-scrim {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            background: rgba(36, 35, 31, 0.34);
+            padding: 36px;
+            backdrop-filter: blur(2px);
+        }
+
+        .detail-modal {
+            display: grid;
+            width: min(980px, 100%);
+            max-height: calc(100vh - 72px);
+            grid-template-rows: auto minmax(0, 1fr);
+            border: 1px solid #bfb5a6;
+            border-radius: 10px;
+            background: var(--paper);
+            box-shadow: var(--shadow);
+        }
+
+        .modal-grid {
+            display: grid;
+            min-height: 0;
+            grid-template-columns: minmax(0, 1fr) 258px;
+            overflow: hidden;
+        }
+
+        .modal-main {
+            overflow: auto;
+            padding: 18px 20px 22px;
+        }
+
+        .modal-rail {
+            display: grid;
+            align-content: start;
+            gap: 10px;
+            overflow: auto;
+            border-left: 1px solid var(--line);
+            background: var(--paper-2);
+            padding: 14px;
+        }
+
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .quick-grid button {
+            justify-content: flex-start;
+        }
+
+        .doc-sheet {
+            position: absolute;
+            inset: 18px 24px 18px 24px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 292px;
+            border: 1px solid var(--line-strong);
+            border-radius: 10px;
+            background: var(--paper);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .doc-main {
+            min-width: 0;
+            overflow: auto;
+            padding: 28px 42px 40px;
+        }
+
+        .doc-path {
+            color: var(--faint);
+            font-size: 12px;
+            font-weight: 720;
+        }
+
+        .doc-title {
+            margin: 14px 0 16px;
+            font-size: 32px;
+            line-height: 1.08;
+        }
+
+        .property-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin: 0 0 22px;
+        }
+
+        .property {
+            display: grid;
+            gap: 5px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--paper-2);
+            padding: 9px;
+        }
+
+        .property span {
+            color: var(--faint);
+            font-size: 10px;
+            font-weight: 820;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .property strong {
+            font-size: 13px;
+        }
+
+        .doc-rail {
+            display: grid;
+            align-content: start;
+            gap: 12px;
+            border-left: 1px solid var(--line);
+            background: #f0ebe1;
+            padding: 16px;
+        }
+
+        .mini-board {
+            display: grid;
+            gap: 8px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--paper);
+            padding: 10px;
+        }
+
+        .mini-lane {
+            display: grid;
+            grid-template-columns: 72px minmax(0, 1fr);
+            gap: 8px;
+            align-items: center;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .mini-bar {
+            height: 8px;
+            border-radius: 999px;
+            background: var(--paper-3);
+            overflow: hidden;
+        }
+
+        .mini-bar span {
+            display: block;
+            width: var(--w);
+            height: 100%;
+            background: var(--blue);
+        }
+
+        .ops-layout {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            background: rgba(255, 253, 248, 0.84);
+        }
+
+        .ops-header {
+            display: grid;
+            gap: 12px;
+            border-bottom: 1px solid var(--line);
+            background: var(--paper);
+            padding: 16px 20px 14px;
+        }
+
+        .ops-header-main {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .ops-header-main h1 {
+            max-width: 760px;
+            margin: 0;
+            font-size: 28px;
+            line-height: 1.08;
+        }
+
+        .summary-strip {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .summary-cell {
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--paper-2);
+            padding: 9px;
+        }
+
+        .summary-cell span {
+            display: block;
+            color: var(--faint);
+            font-size: 10px;
+            font-weight: 820;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .summary-cell strong {
+            display: block;
+            margin-top: 3px;
+            font-size: 13px;
+        }
+
+        .ops-body {
+            display: grid;
+            min-height: 0;
+            grid-template-columns: 220px minmax(0, 1fr) 278px;
+        }
+
+        .ops-nav,
+        .ops-side {
+            overflow: auto;
+            background: var(--paper-2);
+            padding: 14px;
+        }
+
+        .ops-nav {
+            border-right: 1px solid var(--line);
+        }
+
+        .ops-side {
+            border-left: 1px solid var(--line);
+        }
+
+        .ops-nav button {
+            justify-content: flex-start;
+            width: 100%;
+            margin-bottom: 7px;
+        }
+
+        .ops-feed {
+            overflow: auto;
+            padding: 18px 22px;
+        }
+
+        .comment-box {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding: 12px;
+        }
+
+        .comment-box textarea {
+            min-height: 82px;
+            resize: vertical;
+            border: 1px solid var(--line);
+            border-radius: 7px;
+            background: var(--paper);
+            padding: 10px;
+            color: var(--ink);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 6px;
+            border-bottom: 1px solid var(--line);
+            margin-bottom: 16px;
+        }
+
+        .tabs button {
+            border-bottom: 2px solid transparent;
+            background: transparent;
+            padding: 9px 10px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 760;
+        }
+
+        .tabs button.active {
+            border-color: var(--charcoal);
+            color: var(--ink);
+        }
+
+        .source-links {
+            margin-top: 18px;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.55;
+        }
+
+        .source-links a {
+            color: var(--blue);
+            text-decoration: none;
+        }
+
+        #drawer.active {
+            display: grid;
+            align-items: start;
+            justify-items: center;
+            background: #0b0b0b;
+            padding: 28px;
+        }
+
+        #drawer .detail-drawer {
+            position: relative;
+            inset: auto;
+            display: grid;
+            width: min(1180px, 100%);
+            height: clamp(620px, calc(100vh - 56px), 720px);
+            grid-template-columns: 224px minmax(0, 1fr) 292px;
+            grid-template-rows: 46px minmax(0, 1fr);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            background: #050505;
+            box-shadow: 0 26px 76px rgba(0, 0, 0, 0.46);
+            color: #f3f3f1;
+        }
+
+        .tasktrove-nav {
+            display: grid;
+            min-height: 0;
+            grid-column: 1;
+            grid-row: 1 / 3;
+            grid-template-rows: auto auto minmax(0, 1fr) auto;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            background: #151518;
+            padding: 20px 14px 16px;
+        }
+
+        .tasktrove-logo {
+            margin-bottom: 30px;
+            color: #fbfbf7;
+            font-family: var(--mono);
+            font-size: 17px;
+            font-weight: 900;
+            letter-spacing: 0.38em;
+        }
+
+        .tasktrove-quick {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .quick-tile,
+        .tasktrove-icon-button,
+        .tasktrove-add,
+        .detail-chip,
+        .label-chip,
+        .shortcut-key {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 7px;
+            background: #0c0c0d;
+            color: #e7e6e2;
+            font-size: 12px;
+            font-weight: 760;
+        }
+
+        .quick-tile {
+            min-height: 66px;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .quick-icon {
+            color: #ffffff;
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .tasktrove-menu {
+            overflow: auto;
+            padding-right: 4px;
+        }
+
+        .tasktrove-group {
+            margin: 18px 0 0;
+        }
+
+        .tasktrove-group-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 0 0 7px;
+            color: #77777b;
+            font-size: 10px;
+            font-weight: 850;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .tasktrove-nav-item {
+            display: grid;
+            grid-template-columns: 18px minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+            min-height: 28px;
+            border-radius: 6px;
+            padding: 0 7px;
+            color: #c7c6c2;
+            font-size: 12px;
+        }
+
+        .tasktrove-nav-item.active,
+        .tasktrove-nav-item:hover {
+            background: #2a2a2e;
+            color: #ffffff;
+        }
+
+        .nav-count {
+            color: #a8a7a2;
+            font-family: var(--mono);
+            font-size: 10px;
+        }
+
+        .nav-dot {
+            width: 11px;
+            height: 11px;
+            border: 1px solid currentColor;
+            border-radius: 3px;
+        }
+
+        .nav-dot.work {
+            color: #65c7d2;
+        }
+
+        .nav-dot.study {
+            color: #f28db5;
+        }
+
+        .nav-dot.health {
+            color: #69a8ff;
+        }
+
+        .nav-dot.chores {
+            color: #9b7cff;
+        }
+
+        .nav-dot.learning {
+            border-radius: 999px;
+            color: #4798ff;
+        }
+
+        .tasktrove-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            padding-top: 12px;
+            color: #77777b;
+            font-size: 11px;
+        }
+
+        .tasktrove-list {
+            display: grid;
+            min-width: 0;
+            min-height: 0;
+            grid-column: 2;
+            grid-row: 2;
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            background: #030303;
+        }
+
+        .tasktrove-topbar,
+        .tasktrove-toolbar,
+        .tasktrove-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .tasktrove-topbar {
+            grid-column: 2 / 4;
+            grid-row: 1;
+            min-height: 46px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            padding: 0 18px;
+        }
+
+        .tasktrove-path {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #f1f0ed;
+            font-size: 16px;
+            font-weight: 760;
+        }
+
+        .tasktrove-path small {
+            color: #67676d;
+            font-size: 12px;
+        }
+
+        .tasktrove-icon-row {
+            display: flex;
+            gap: 7px;
+        }
+
+        .tasktrove-icon-button {
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            color: #a7a6a2;
+        }
+
+        .tasktrove-toolbar {
+            padding: 16px 18px 12px;
+        }
+
+        .tasktrove-tools-left,
+        .tasktrove-filter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tasktrove-filter {
+            min-height: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 7px;
+            background: #101012;
+            padding: 0 10px;
+            color: #d9d8d5;
+            font-size: 12px;
+        }
+
+        .tasktrove-search {
+            color: #a4a39f;
+            font-size: 13px;
+        }
+
+        .tasktrove-add {
+            min-height: 28px;
+            border-color: #fbfbf7;
+            background: #fbfbf7;
+            color: #111112;
+            padding: 0 12px;
+        }
+
+        .tasktrove-list-scroll {
+            min-height: 0;
+            overflow: auto;
+            padding: 10px 18px 18px;
+        }
+
+        .tasktrove-lane-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 12px;
+            color: #a8a7a2;
+            font-size: 12px;
+            font-weight: 760;
+        }
+
+        .tasktrove-caret {
+            color: #68686e;
+            font-size: 11px;
+        }
+
+        .tasktrove-task-card {
+            display: grid;
+            grid-template-columns: 24px minmax(0, 1fr);
+            gap: 10px;
+            min-height: 88px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-left: 2px solid #d46d2f;
+            border-radius: 8px;
+            background: #0a0a0b;
+            padding: 14px 12px;
+            box-shadow: 0 0 0 1px rgba(212, 109, 47, 0.08), 0 18px 32px rgba(0, 0, 0, 0.22);
+        }
+
+        .tasktrove-check-ring {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #707076;
+            border-radius: 999px;
+            margin-top: 2px;
+        }
+
+        .tasktrove-task-main {
+            min-width: 0;
+        }
+
+        .tasktrove-task-title {
+            margin: 0;
+            color: #f5f4f1;
+            font-size: 13px;
+            font-weight: 720;
+            line-height: 1.35;
+        }
+
+        .tasktrove-task-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            align-items: center;
+            margin-top: 22px;
+            color: #9b6943;
+            font-size: 11px;
+        }
+
+        .tasktrove-task-labels {
+            display: flex;
+            gap: 7px;
+            margin-left: auto;
+        }
+
+        .detail-chip,
+        .label-chip {
+            min-height: 18px;
+            padding: 0 7px;
+            font-size: 10px;
+        }
+
+        .label-chip.blue {
+            border-color: #2b74db;
+            background: #2d7df0;
+            color: #ffffff;
+        }
+
+        .label-chip.ghost {
+            border-color: rgba(94, 144, 213, 0.28);
+            background: rgba(94, 144, 213, 0.07);
+            color: #9ebeea;
+        }
+
+        .tasktrove-footer {
+            min-height: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            padding: 0 18px;
+            color: #8a8985;
+            font-size: 11px;
+        }
+
+        .tasktrove-detail {
+            display: grid;
+            min-height: 0;
+            grid-column: 3;
+            grid-row: 2;
+            grid-template-rows: auto minmax(0, 1fr) auto;
+            background: #121214;
+        }
+
+        .tasktrove-detail-head {
+            display: grid;
+            grid-template-columns: 18px minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: start;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            padding: 20px 16px 18px;
+        }
+
+        .tasktrove-detail-title {
+            margin: 0;
+            color: #f4f3ef;
+            font-size: 14px;
+            font-weight: 760;
+            line-height: 1.35;
+        }
+
+        .tasktrove-close {
+            width: 24px;
+            height: 24px;
+            border: 0;
+            background: transparent;
+            color: #8b8a86;
+            font-size: 18px;
+        }
+
+        .tasktrove-detail-scroll {
+            min-height: 0;
+            overflow: auto;
+            padding: 16px;
+        }
+
+        .tasktrove-field {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .tasktrove-field label,
+        .tasktrove-section-title {
+            color: #e2e1dd;
+            font-size: 12px;
+            font-weight: 760;
+        }
+
+        .detail-input,
+        .detail-textarea,
+        .detail-row-action {
+            display: flex;
+            align-items: center;
+            min-height: 36px;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 7px;
+            background: #18181a;
+            color: #d9d8d4;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+
+        .detail-input.warning {
+            border-color: rgba(196, 89, 39, 0.42);
+            background: rgba(118, 45, 20, 0.32);
+            color: #f0a06e;
+        }
+
+        .detail-two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .detail-textarea {
+            align-items: flex-start;
+            min-height: 52px;
+            padding-top: 10px;
+            color: #77777b;
+        }
+
+        .detail-row-action {
+            justify-content: space-between;
+            color: #9f9e99;
+        }
+
+        .tasktrove-label-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+
+        .label-chip.plus {
+            border-color: rgba(255, 255, 255, 0.08);
+            background: #171719;
+            color: #8f8e89;
+        }
+
+        .tasktrove-detail-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            padding: 10px 16px;
+            color: #8d8c87;
+            font-size: 11px;
+        }
+
+        .shortcut-key {
+            min-height: 20px;
+            border-color: rgba(255, 255, 255, 0.07);
+            background: #1b1b1d;
+            padding: 0 7px;
+            color: #b3b2ad;
+            font-family: var(--mono);
+            font-size: 10px;
+        }
+
+        #drawer.active {
+            background:
+                linear-gradient(rgba(115, 109, 98, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(115, 109, 98, 0.08) 1px, transparent 1px),
+                var(--bg);
+            background-size: 28px 28px;
+            padding: 18px 24px;
+        }
+
+        #drawer .detail-drawer {
+            width: min(1120px, 100%);
+            height: clamp(620px, calc(100vh - 36px), 720px);
+            grid-template-columns: 224px minmax(0, 1fr) 286px;
+            border: 1px solid var(--line-strong);
+            border-radius: 10px;
+            background: var(--paper);
+            box-shadow: var(--shadow);
+            color: var(--ink);
+        }
+
+        .tasktrove-nav {
+            border-right: 1px solid var(--line);
+            background: #ede7dc;
+        }
+
+        .tasktrove-logo {
+            color: var(--ink);
+            letter-spacing: 0.28em;
+        }
+
+        .quick-tile,
+        .tasktrove-icon-button,
+        .tasktrove-add,
+        .detail-chip,
+        .label-chip,
+        .shortcut-key {
+            border-color: var(--line);
+            background: var(--paper);
+            color: var(--ink);
+        }
+
+        .quick-tile:hover,
+        .tasktrove-icon-button:hover,
+        .tasktrove-filter:hover,
+        .detail-row-action:hover {
+            border-color: var(--line-strong);
+            background: var(--paper-2);
+        }
+
+        .quick-icon,
+        .tasktrove-field label,
+        .tasktrove-section-title {
+            color: var(--ink);
+        }
+
+        .tasktrove-group-title,
+        .tasktrove-status,
+        .tasktrove-path small,
+        .tasktrove-search,
+        .tasktrove-footer,
+        .tasktrove-detail-footer,
+        .shortcut-key {
+            color: var(--muted);
+        }
+
+        .tasktrove-nav-item {
+            border: 1px solid transparent;
+            color: var(--muted);
+        }
+
+        .tasktrove-nav-item.active,
+        .tasktrove-nav-item:hover {
+            border-color: var(--line);
+            background: rgba(255, 253, 248, 0.7);
+            color: var(--ink);
+        }
+
+        .nav-count {
+            color: var(--muted);
+        }
+
+        .nav-dot.work {
+            color: var(--blue);
+        }
+
+        .nav-dot.study {
+            color: var(--violet);
+        }
+
+        .nav-dot.health,
+        .nav-dot.learning {
+            color: var(--green);
+        }
+
+        .nav-dot.chores {
+            color: var(--amber);
+        }
+
+        .tasktrove-status {
+            border-top-color: var(--line);
+        }
+
+        .tasktrove-list {
+            border-right: 1px solid var(--line);
+            background: var(--paper);
+        }
+
+        .tasktrove-topbar {
+            border-bottom-color: var(--line);
+            background: rgba(255, 253, 248, 0.82);
+        }
+
+        .tasktrove-path {
+            color: var(--ink);
+        }
+
+        .tasktrove-filter {
+            border-color: var(--line);
+            background: var(--paper);
+            color: var(--muted);
+        }
+
+        .tasktrove-add {
+            border-color: var(--charcoal);
+            background: var(--charcoal);
+            color: #fffdf8;
+        }
+
+        .tasktrove-lane-head {
+            color: var(--muted);
+        }
+
+        .tasktrove-caret {
+            color: var(--faint);
+        }
+
+        .tasktrove-task-card {
+            border-color: var(--line);
+            border-left-color: var(--amber);
+            background: var(--paper);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .tasktrove-check-ring {
+            border-color: var(--line-strong);
+        }
+
+        .tasktrove-task-title,
+        .tasktrove-detail-title {
+            color: var(--ink);
+        }
+
+        .tasktrove-task-meta {
+            color: var(--amber);
+        }
+
+        .label-chip.blue {
+            border-color: rgba(49, 95, 140, 0.38);
+            background: rgba(49, 95, 140, 0.1);
+            color: var(--blue);
+        }
+
+        .label-chip.ghost {
+            border-color: rgba(72, 116, 90, 0.32);
+            background: rgba(72, 116, 90, 0.09);
+            color: var(--green);
+        }
+
+        .label-chip.plus {
+            border-color: var(--line);
+            background: var(--paper-2);
+            color: var(--muted);
+        }
+
+        .tasktrove-footer {
+            border-top-color: var(--line);
+            background: var(--paper-2);
+        }
+
+        .tasktrove-detail {
+            background: var(--paper-2);
+        }
+
+        .tasktrove-detail-head,
+        .tasktrove-detail-footer {
+            border-color: var(--line);
+            background: var(--paper);
+        }
+
+        .tasktrove-close {
+            color: var(--muted);
+        }
+
+        .detail-input,
+        .detail-textarea,
+        .detail-row-action {
+            border-color: var(--line);
+            background: var(--paper);
+            color: var(--ink);
+        }
+
+        .detail-input.warning {
+            border-color: rgba(167, 104, 42, 0.34);
+            background: rgba(167, 104, 42, 0.08);
+            color: var(--amber);
+        }
+
+        .detail-textarea,
+        .detail-row-action {
+            color: var(--muted);
+        }
+
+        @media (max-width: 980px) {
+            body {
+                overflow: auto;
+            }
+
+            .shell {
+                height: auto;
+                min-height: 100vh;
+                grid-template-columns: 1fr;
+            }
+
+            .study-panel {
+                border-right: 0;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .stage {
+                min-height: 900px;
+            }
+
+            .detail-drawer,
+            .doc-sheet {
+                inset: 0;
+                width: 100%;
+            }
+
+            .detail-body,
+            .modal-grid,
+            .doc-sheet,
+            .ops-body {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-side,
+            .modal-rail,
+            .doc-rail,
+            .ops-nav,
+            .ops-side {
+                border-left: 0;
+                border-right: 0;
+                border-top: 1px solid var(--line);
+            }
+
+            .summary-strip,
+            .property-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            #drawer.active {
+                align-items: stretch;
+                padding: 0;
+            }
+
+            #drawer .detail-drawer {
+                height: auto;
+                min-height: 900px;
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+                border-radius: 0;
+            }
+
+            .tasktrove-nav,
+            .tasktrove-topbar,
+            .tasktrove-list,
+            .tasktrove-detail {
+                grid-column: auto;
+                grid-row: auto;
+            }
+
+            .tasktrove-nav,
+            .tasktrove-list,
+            .tasktrove-detail {
+                border-right: 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="shell">
+        <aside class="study-panel">
+            <h1 class="study-title">Kanban card detail 原型方案</h1>
+            <p class="study-note">从流行开源看板里抽取 detail 模式，再套到 CodeTool 当前“个人/小团队工具”的密度上。左侧切换 4 个方案，右侧是同一张卡的不同详情结构。</p>
+
+            <section class="reference">
+                <h2>GitHub references</h2>
+                <article class="ref-card">
+                    <strong>Focalboard <span class="stars">26.1k</span></strong>
+                    <small>Notion/Asana 类属性页思路，强调字段、视图和文档式编辑。当前仓库已提示不再维护，但信息架构仍值得参考。</small>
+                </article>
+                <article class="ref-card">
+                    <strong>WeKan <span class="stars">20.9k</span></strong>
+                    <small>Trello-like card modal，卡片 detail 内聚描述、清单、成员、标签、自定义字段和活动。</small>
+                </article>
+                <article class="ref-card">
+                    <strong>PLANKA <span class="stars">11.9k</span></strong>
+                    <small>React 看板，card modal 组合描述、任务、附件、活动、成员、标签、到期日和计时。</small>
+                </article>
+                <article class="ref-card">
+                    <strong>Kanboard <span class="stars">9.6k</span></strong>
+                    <small>偏工程化任务页，任务属性、子任务、评论、附件、任务迁移记录和分析分区清楚。</small>
+                </article>
+            </section>
+
+            <nav class="switcher" aria-label="Prototype switcher">
+                <h2>Prototypes</h2>
+                <button type="button" class="active" data-target="drawer">
+                    <b>A</b>
+                    <div>
+                        <span>Workspace Detail</span>
+                        <small>参考图片结构：左侧导航，中间任务列表，右侧属性详情。</small>
+                    </div>
+                </button>
+                <button type="button" data-target="modal">
+                    <b>B</b>
+                    <div>
+                        <span>Focused Modal</span>
+                        <small>Trello/PLANKA 风格：居中弹窗，主内容和操作栏边界明确。</small>
+                    </div>
+                </button>
+                <button type="button" data-target="doc">
+                    <b>C</b>
+                    <div>
+                        <span>Property Doc</span>
+                        <small>Focalboard/Notion 风格：字段先行，正文像文档一样连续编辑。</small>
+                    </div>
+                </button>
+                <button type="button" data-target="ops">
+                    <b>D</b>
+                    <div>
+                        <span>Activity First</span>
+                        <small>更适合 AI/Agent 任务：时间线和评论成为主视图。</small>
+                    </div>
+                </button>
+            </nav>
+
+            <p class="source-links">
+                Sources: <a href="https://github.com/mattermost-community/focalboard">Focalboard</a>,
+                <a href="https://github.com/wekan/wekan">WeKan</a>,
+                <a href="https://github.com/plankanban/planka">PLANKA</a>,
+                <a href="https://github.com/kanboard/kanboard">Kanboard</a>.
+            </p>
+        </aside>
+
+        <main class="stage">
+            <div class="board" aria-hidden="true">
+                <header class="topbar">
+                    <div>
+                        <h2>Product Roadmap</h2>
+                        <span class="pill">4 columns · 18 active cards</span>
+                    </div>
+                    <div class="toolbar">
+                        <button type="button">Search cards</button>
+                        <button type="button">Kanban</button>
+                        <button type="button">New card</button>
+                    </div>
+                </header>
+                <div class="columns">
+                    <section class="col">
+                        <header><strong>Backlog</strong><span class="pill">5</span></header>
+                        <div class="stack">
+                            <article class="card"><strong>Define workspace restore states</strong><small>Persist
+                                    selected tool, split ratio and last board.</small><span class="tag-row"><span
+                                        class="tag">product</span></span></article>
+                            <article class="card"><strong>Import board from markdown checklist</strong><small>Parse
+                                    headings as columns and list items as cards.</small><span class="tag-row"><span
+                                        class="tag amber">import</span></span></article>
+                        </div>
+                    </section>
+                    <section class="col">
+                        <header><strong>In Progress</strong><span class="pill">4</span></header>
+                        <div class="stack">
+                            <article class="card active"><strong>Redesign card detail information
+                                    architecture</strong><small>Current drawer mixes title, actions and metadata with
+                                    weak hierarchy.</small><span class="tag-row"><span class="tag">design</span><span
+                                        class="tag green">kanban</span></span></article>
+                            <article class="card"><strong>Polish drag overlay motion</strong><small>Keep drop preview
+                                    stable at high scroll velocity.</small></article>
+                        </div>
+                    </section>
+                    <section class="col">
+                        <header><strong>Review</strong><span class="pill">6</span></header>
+                        <div class="stack">
+                            <article class="card"><strong>Batch archive list view rows</strong><small>Needs confirmation
+                                    flow and keyboard affordance.</small><span class="tag-row"><span
+                                        class="tag red">risk</span></span></article>
+                        </div>
+                    </section>
+                    <section class="col">
+                        <header><strong>Done</strong><span class="pill">3</span></header>
+                        <div class="stack">
+                            <article class="card"><strong>Persist label colors</strong><small>Local DB schema and IPC
+                                    handlers shipped.</small><span class="tag-row"><span
+                                        class="tag green">done</span></span></article>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <section class="prototype active" id="drawer">
+                <article class="detail-drawer">
+                    <aside class="tasktrove-nav" aria-label="Task navigation">
+                        <div class="tasktrove-logo">CODETOOL</div>
+                        <div class="tasktrove-quick">
+                            <button class="quick-tile" type="button"><span
+                                    class="quick-icon">⌕</span><span>Search</span></button>
+                            <button class="quick-tile" type="button"><span
+                                    class="quick-icon">+</span><span>New</span></button>
+                        </div>
+                        <div class="tasktrove-menu">
+                            <section class="tasktrove-group">
+                                <div class="tasktrove-nav-item"><span>☰</span><span>All Cards</span><span
+                                        class="nav-count">22</span></div>
+                                <div class="tasktrove-nav-item"><span>□</span><span>Backlog</span><span
+                                        class="nav-count">5</span></div>
+                                <div class="tasktrove-nav-item"><span>◷</span><span>Today</span><span
+                                        class="nav-count">4</span></div>
+                                <div class="tasktrove-nav-item"><span>○</span><span>Review</span><span
+                                        class="nav-count">6</span></div>
+                                <div class="tasktrove-nav-item"><span>✓</span><span>Done</span><span></span></div>
+                            </section>
+                            <section class="tasktrove-group">
+                                <h3 class="tasktrove-group-title"><span>Boards</span><span>+</span></h3>
+                                <div class="tasktrove-nav-item"><span
+                                        class="nav-dot work"></span><span>Product</span><span
+                                        class="nav-count">10</span></div>
+                                <div class="tasktrove-nav-item"><span
+                                        class="nav-dot study"></span><span>Research</span><span
+                                        class="nav-count">3</span></div>
+                                <div class="tasktrove-nav-item active"><span
+                                        class="nav-dot health"></span><span>Roadmap</span><span
+                                        class="nav-count">1</span></div>
+                                <div class="tasktrove-nav-item"><span
+                                        class="nav-dot chores"></span><span>Maintenance</span><span
+                                        class="nav-count">1</span></div>
+                            </section>
+                            <section class="tasktrove-group">
+                                <h3 class="tasktrove-group-title"><span>Labels</span><span>+</span></h3>
+                                <div class="tasktrove-nav-item"><span
+                                        class="nav-dot learning"></span><span>learning</span><span
+                                        class="nav-count">0</span></div>
+                                <div class="tasktrove-nav-item"><span
+                                        class="nav-dot chores"></span><span>workflow</span><span
+                                        class="nav-count">1</span></div>
+                                <div class="tasktrove-nav-item"><span
+                                        class="nav-dot health"></span><span>kanban</span><span
+                                        class="nav-count">1</span></div>
+                            </section>
+                        </div>
+                        <div class="tasktrove-status"><span>Settings</span><span>⌘</span></div>
+                    </aside>
+
+                    <header class="tasktrove-topbar">
+                        <div class="tasktrove-path"><small>‹</small><span
+                                class="nav-dot health"></span><span>Roadmap</span><small>○</small></div>
+                        <div class="tasktrove-icon-row">
+                            <button class="tasktrove-icon-button" type="button">⌘</button>
+                            <button class="tasktrove-icon-button" type="button">•</button>
+                            <button class="tasktrove-icon-button" type="button">◐</button>
+                        </div>
+                    </header>
+
+                    <main class="tasktrove-list">
+                        <div class="tasktrove-toolbar">
+                            <div class="tasktrove-tools-left">
+                                <button class="tasktrove-filter" type="button">▽ Filter</button>
+                                <span class="tasktrove-search">⌕</span>
+                            </div>
+                            <button class="tasktrove-add" type="button">+ New Card</button>
+                        </div>
+                        <div class="tasktrove-list-scroll">
+                            <div class="tasktrove-lane-head"><span class="tasktrove-caret">⌄</span><span
+                                    class="nav-dot"></span><span>Default</span><span class="nav-count">1</span></div>
+                            <article class="tasktrove-task-card">
+                                <span class="tasktrove-check-ring"></span>
+                                <div class="tasktrove-task-main">
+                                    <p class="tasktrove-task-title">Redesign card detail information architecture</p>
+                                    <div class="tasktrove-task-meta">
+                                        <span>▦ Today</span>
+                                        <span>P2</span>
+                                        <span class="tasktrove-task-labels"><span
+                                                class="label-chip blue">design</span><span
+                                                class="label-chip ghost">kanban</span></span>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                        <footer class="tasktrove-footer"><span>✓ 3 done this week</span><span>▣ 5 due today</span>
+                        </footer>
+                    </main>
+
+                    <aside class="tasktrove-detail" aria-label="Card detail">
+                        <header class="tasktrove-detail-head">
+                            <span class="tasktrove-check-ring"></span>
+                            <h1 class="tasktrove-detail-title">Redesign card detail information architecture</h1>
+                            <button class="tasktrove-close" type="button">x</button>
+                        </header>
+                        <div class="tasktrove-detail-scroll">
+                            <section class="tasktrove-field">
+                                <label>Due Date</label>
+                                <div class="detail-input warning">▦ Today</div>
+                            </section>
+                            <section class="tasktrove-field">
+                                <label>Category</label>
+                                <div class="detail-two-col">
+                                    <div class="detail-input warning">⚑ P2</div>
+                                    <div class="detail-input">◷ In Progress</div>
+                                </div>
+                            </section>
+                            <section class="tasktrove-field">
+                                <label>Description</label>
+                                <div class="detail-textarea">Add description...</div>
+                            </section>
+                            <section class="tasktrove-field">
+                                <label>Subtasks</label>
+                                <div class="detail-row-action"><span>Add subtasks</span><span>+</span></div>
+                            </section>
+                            <section class="tasktrove-field">
+                                <label>Labels</label>
+                                <div class="tasktrove-label-row"><span class="label-chip blue">design x</span><span
+                                        class="label-chip ghost">kanban x</span><span class="label-chip plus">+</span>
+                                </div>
+                            </section>
+                            <section class="tasktrove-field">
+                                <label>Comments</label>
+                                <div class="detail-row-action"><span>Add comment</span><span>+</span></div>
+                            </section>
+                        </div>
+                        <footer class="tasktrove-detail-footer"><span><span class="shortcut-key">Space</span>
+                                Toggle</span><span><span class="shortcut-key">Esc</span> Close</span></footer>
+                    </aside>
+                </article>
+            </section>
+
+            <section class="prototype" id="modal">
+                <div class="modal-scrim">
+                    <article class="detail-modal">
+                        <header class="detail-head">
+                            <div class="detail-kicker">
+                                <span>In Progress · Card #KAN-42</span>
+                                <div class="head-actions">
+                                    <button class="plain-button danger-action" type="button">Delete</button>
+                                    <button class="plain-button" type="button">Close</button>
+                                </div>
+                            </div>
+                            <div class="title-line">
+                                <h1>Redesign card detail information architecture</h1>
+                                <span class="pill">Markdown syntax</span>
+                            </div>
+                        </header>
+                        <div class="modal-grid">
+                            <main class="modal-main">
+                                <div class="tabs">
+                                    <button type="button" class="active">Overview</button>
+                                    <button type="button">Checklist</button>
+                                    <button type="button">Comments</button>
+                                    <button type="button">Files</button>
+                                </div>
+                                <section class="section">
+                                    <h3>Labels</h3>
+                                    <div class="tag-row"><span class="tag">design</span><span
+                                            class="tag green">kanban</span><span
+                                            class="tag amber">prototype</span><button class="plain-button"
+                                            type="button">Add label</button></div>
+                                </section>
+                                <section class="section">
+                                    <h3>Description</h3>
+                                    <div class="editor">
+                                        <p>This option is the safest Trello-like redesign. It preserves a strong modal
+                                            mental model: board stays behind, card owns focus, and the right rail is
+                                            only actions/properties.</p>
+                                        <ul>
+                                            <li>Best for keyboard-driven quick edits.</li>
+                                            <li>Good separation between content and operations.</li>
+                                            <li>Less convenient for comparing card with board context.</li>
+                                        </ul>
+                                    </div>
+                                </section>
+                                <section class="section">
+                                    <h3>Recent comments</h3>
+                                    <div class="comment-box">
+                                        <textarea>Leave a decision note...</textarea>
+                                        <div class="head-actions"><button class="plain-button primary"
+                                                type="button">Post comment</button><button class="plain-button"
+                                                type="button">Attach file</button></div>
+                                    </div>
+                                </section>
+                            </main>
+                            <aside class="modal-rail">
+                                <div class="quick-grid">
+                                    <button class="plain-button" type="button">Members</button>
+                                    <button class="plain-button" type="button">Labels</button>
+                                    <button class="plain-button" type="button">Due date</button>
+                                    <button class="plain-button" type="button">Checklist</button>
+                                    <button class="plain-button" type="button">Move</button>
+                                    <button class="plain-button" type="button">Copy</button>
+                                </div>
+                                <div class="field-card"><label>Column</label>
+                                    <div class="select-like">In Progress <span>v</span></div>
+                                </div>
+                                <div class="field-card"><label>Priority</label>
+                                    <div class="select-like">High <span>v</span></div>
+                                </div>
+                                <button class="plain-button" type="button">Archive</button>
+                            </aside>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="prototype" id="doc">
+                <article class="doc-sheet">
+                    <main class="doc-main">
+                        <div class="doc-path">Product Roadmap / Kanban / Card detail</div>
+                        <h1 class="doc-title">Redesign card detail information architecture</h1>
+                        <div class="property-grid">
+                            <div class="property"><span>Status</span><strong>In Progress</strong></div>
+                            <div class="property"><span>Priority</span><strong>High</strong></div>
+                            <div class="property"><span>Due</span><strong>May 12</strong></div>
+                            <div class="property"><span>Labels</span><strong>Design, Kanban</strong></div>
+                            <div class="property"><span>Owner</span><strong>Zhang</strong></div>
+                            <div class="property"><span>Updated</span><strong>Today</strong></div>
+                        </div>
+                        <section class="section">
+                            <h3>Design brief</h3>
+                            <div class="editor">
+                                <p>Use this when card detail should behave like a lightweight specification page. It
+                                    front-loads structured fields, then gives the user a clean writing surface for
+                                    decisions, acceptance notes and implementation detail.</p>
+                                <ul>
+                                    <li>Strongest for rich descriptions and long-running tasks.</li>
+                                    <li>Pairs well with future custom fields.</li>
+                                    <li>Autosave status stays visible without adding another action button.</li>
+                                </ul>
+                            </div>
+                        </section>
+                        <section class="section">
+                            <h3>Acceptance notes</h3>
+                            <div class="checklist">
+                                <div class="check-item"><span class="box done"></span><span>Fields visible above the
+                                        fold</span><span></span></div>
+                                <div class="check-item"><span class="box"></span><span>Description supports code blocks
+                                        and lists</span><span></span></div>
+                                <div class="check-item"><span class="box"></span><span>Activity does not crowd the
+                                        writing surface</span><span></span></div>
+                            </div>
+                        </section>
+                    </main>
+                    <aside class="doc-rail">
+                        <button class="plain-button danger-action" type="button">Delete</button>
+                        <button class="plain-button" type="button">Open on board</button>
+                        <button class="plain-button" type="button">Archive</button>
+                        <section class="section">
+                            <h3>Board context</h3>
+                            <div class="mini-board">
+                                <div class="mini-lane"><span>Backlog</span>
+                                    <div class="mini-bar"><span style="--w: 46%"></span></div>
+                                </div>
+                                <div class="mini-lane"><span>Progress</span>
+                                    <div class="mini-bar"><span style="--w: 72%"></span></div>
+                                </div>
+                                <div class="mini-lane"><span>Review</span>
+                                    <div class="mini-bar"><span style="--w: 58%"></span></div>
+                                </div>
+                                <div class="mini-lane"><span>Done</span>
+                                    <div class="mini-bar"><span style="--w: 34%"></span></div>
+                                </div>
+                            </div>
+                        </section>
+                        <section class="section">
+                            <h3>Last activity</h3>
+                            <div class="timeline">
+                                <article class="activity-item"><span class="avatar">AI</span>
+                                    <div>
+                                        <p>Added reference summary.</p><time>3 min ago</time>
+                                    </div>
+                                </article>
+                            </div>
+                        </section>
+                    </aside>
+                </article>
+            </section>
+
+            <section class="prototype" id="ops">
+                <article class="ops-layout">
+                    <header class="ops-header">
+                        <div class="ops-header-main">
+                            <div>
+                                <div class="detail-kicker">Product Roadmap / In Progress / Card #KAN-42</div>
+                                <h1>Redesign card detail information architecture</h1>
+                            </div>
+                            <div class="head-actions">
+                                <button class="plain-button" type="button">Archive</button>
+                                <button class="plain-button danger-action" type="button">Delete</button>
+                            </div>
+                        </div>
+                        <div class="summary-strip">
+                            <div class="summary-cell"><span>Status</span><strong>In Progress</strong></div>
+                            <div class="summary-cell"><span>Priority</span><strong>High</strong></div>
+                            <div class="summary-cell"><span>Due</span><strong>May 12</strong></div>
+                            <div class="summary-cell"><span>Checklist</span><strong>2 / 4</strong></div>
+                            <div class="summary-cell"><span>Activity</span><strong>8 events</strong></div>
+                        </div>
+                    </header>
+                    <div class="ops-body">
+                        <nav class="ops-nav">
+                            <button class="plain-button primary" type="button">Activity</button>
+                            <button class="plain-button" type="button">Description</button>
+                            <button class="plain-button" type="button">Checklist</button>
+                            <button class="plain-button" type="button">Attachments</button>
+                            <button class="plain-button" type="button">History</button>
+                        </nav>
+                        <main class="ops-feed">
+                            <div class="comment-box">
+                                <textarea>Write a decision, status update, or handoff note...</textarea>
+                                <div class="head-actions"><button class="plain-button primary" type="button">Add
+                                        update</button><button class="plain-button" type="button">Run AI
+                                        summary</button></div>
+                            </div>
+                            <div class="timeline">
+                                <article class="activity-item"><span class="avatar">Z</span>
+                                    <div>
+                                        <p>Decision: compare drawer, modal, document and activity-first structures
+                                            before changing production UI.</p><time>Today, 10:31</time>
+                                    </div>
+                                </article>
+                                <article class="activity-item"><span class="avatar">AI</span>
+                                    <div>
+                                        <p>Summarized GitHub references: PLANKA and WeKan use comprehensive card modals;
+                                            Kanboard uses task pages with transitions and analytics; Focalboard favors
+                                            property-led docs.</p><time>Today, 10:28</time>
+                                    </div>
+                                </article>
+                                <article class="activity-item"><span class="avatar">Z</span>
+                                    <div>
+                                        <p>Moved card to In Progress and raised priority to High.</p><time>Today,
+                                            10:12</time>
+                                    </div>
+                                </article>
+                            </div>
+                        </main>
+                        <aside class="ops-side">
+                            <section class="section">
+                                <h3>Metadata</h3>
+                                <div class="field-card"><label>Column</label>
+                                    <div class="select-like">In Progress <span>v</span></div>
+                                </div>
+                                <div class="field-card"><label>Priority</label>
+                                    <div class="select-like">High <span>v</span></div>
+                                </div>
+                                <div class="field-card"><label>Due</label>
+                                    <div class="input-like">May 12, 2026</div>
+                                </div>
+                            </section>
+                            <section class="section">
+                                <h3>Labels</h3>
+                                <div class="tag-row"><span class="tag">design</span><span
+                                        class="tag green">kanban</span><span class="tag amber">prototype</span></div>
+                            </section>
+                            <section class="section">
+                                <h3>Next actions</h3>
+                                <div class="checklist">
+                                    <div class="check-item"><span class="box"></span><span>Pick winning
+                                            layout</span><span></span></div>
+                                    <div class="check-item"><span class="box"></span><span>Patch React detail
+                                            component</span><span></span></div>
+                                </div>
+                            </section>
+                        </aside>
+                    </div>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const buttons = Array.from(document.querySelectorAll(".switcher button"));
+        const prototypes = Array.from(document.querySelectorAll(".prototype"));
+
+        buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const target = button.dataset.target;
+                buttons.forEach((item) => item.classList.toggle("active", item === button));
+                prototypes.forEach((item) => item.classList.toggle("active", item.id === target));
+            });
+        });
+    </script>
+</body>
+
+</html>

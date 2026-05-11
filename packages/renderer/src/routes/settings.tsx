@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { KanbanBoard, KanbanBoardExport, MiniMaxProviderStatus } from "@codetool/shared";
+import { Download, Save, Trash2, Upload, X } from "lucide-react";
 import { getApi } from "../api";
-import { Panel, PrimaryButton, SecondaryButton, SelectField, TextArea, TextInput, ToolLayout } from "../components/tool-layout";
+import { ActionButton, Panel, SelectField, TextArea, TextInput, ToolLayout } from "../components/tool-layout";
 
 export function SettingsPage(): JSX.Element {
   const [status, setStatus] = useState<MiniMaxProviderStatus | null>(null);
@@ -75,8 +76,9 @@ export function SettingsPage(): JSX.Element {
             placeholder={status?.configured ? "Enter a new key to replace current value" : "MiniMax API key"}
           />
           <div className="flex gap-2">
-            <PrimaryButton
+            <ActionButton
               type="button"
+              variant="primary"
               disabled={!key.trim()}
               onClick={async () => {
                 const next = await getApi().secrets.saveMiniMaxKey({ apiKey: key });
@@ -85,18 +87,19 @@ export function SettingsPage(): JSX.Element {
                 setMessage(`Saved MiniMax key: ${next.maskedKey}`);
               }}
             >
-              Save key
-            </PrimaryButton>
-            <SecondaryButton
+              <Save size={14} /> Save key
+            </ActionButton>
+            <ActionButton
               type="button"
+              variant="danger"
               onClick={async () => {
                 const next = await getApi().secrets.clearMiniMaxKey();
                 setStatus(next);
                 setMessage("MiniMax key cleared.");
               }}
             >
-              Clear
-            </SecondaryButton>
+              <Trash2 size={14} /> Clear
+            </ActionButton>
           </div>
         </div>
         <p className="mt-3 text-[12px] text-[var(--app-text-muted)]">{message}</p>
@@ -109,16 +112,16 @@ export function SettingsPage(): JSX.Element {
               {boards.map((board) => <option key={board.id} value={board.id}>{board.name}</option>)}
             </SelectField>
             <div className="flex flex-wrap gap-2">
-              <SecondaryButton type="button" onClick={() => void exportBoard()} disabled={!selectedBoardId}>Export selected board</SecondaryButton>
-              <SecondaryButton type="button" onClick={() => setKanbanExport("")} disabled={!kanbanExport}>Clear export</SecondaryButton>
+              <ActionButton type="button" onClick={() => void exportBoard()} disabled={!selectedBoardId}><Download size={14} /> Export selected board</ActionButton>
+              <ActionButton type="button" onClick={() => setKanbanExport("")} disabled={!kanbanExport}><X size={14} /> Clear export</ActionButton>
             </div>
             <TextArea readOnly value={kanbanExport} placeholder="Exported board JSON appears here" className="min-h-48" />
           </div>
           <div className="grid gap-3">
             <TextArea value={kanbanImport} onChange={(event) => setKanbanImport(event.target.value)} placeholder="Paste board JSON to import" className="min-h-48" />
             <div className="flex flex-wrap gap-2">
-              <PrimaryButton type="button" onClick={() => void importBoard()} disabled={!kanbanImport.trim()}>Import board</PrimaryButton>
-              <SecondaryButton type="button" onClick={() => setKanbanImport("")} disabled={!kanbanImport}>Clear import</SecondaryButton>
+              <ActionButton type="button" variant="primary" onClick={() => void importBoard()} disabled={!kanbanImport.trim()}><Upload size={14} /> Import board</ActionButton>
+              <ActionButton type="button" onClick={() => setKanbanImport("")} disabled={!kanbanImport}><X size={14} /> Clear import</ActionButton>
             </div>
           </div>
         </div>

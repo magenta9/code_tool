@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { TimestampConversionResult } from "@codetool/shared";
+import { Clock3 } from "lucide-react";
 import { getApi } from "../../api";
-import { CodeBlock, Panel, PrimaryButton, StatusStrip, TextInput, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, CodeBlock, Panel, StatusStrip, TextInput, ToolLayout } from "../../components/tool-layout";
 
 export function TimestampConverterPage(): JSX.Element {
   const [value, setValue] = useState(String(Date.now()));
@@ -13,9 +14,9 @@ export function TimestampConverterPage(): JSX.Element {
       title="Timestamp Converter"
       description="Convert seconds, milliseconds, ISO strings, and local date input."
       actions={
-        <PrimaryButton type="button" onClick={async () => setResult(await getApi().tools.convertTimestamp({ value, timezone }))}>
-          Convert
-        </PrimaryButton>
+        <ActionButton type="button" variant="primary" onClick={async () => setResult(await getApi().tools.convertTimestamp({ value, timezone }))}>
+          <Clock3 size={14} /> Convert
+        </ActionButton>
       }
     >
       <Panel title="Convert">

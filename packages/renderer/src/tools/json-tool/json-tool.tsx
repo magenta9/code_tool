@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { JsonToolResult } from "@codetool/shared";
+import { Braces, CheckCircle2, Minimize2 } from "lucide-react";
 import { getApi } from "../../api";
-import { Panel, PrimaryButton, SecondaryButton, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
 
 export function JsonToolPage(): JSX.Element {
   const [input, setInput] = useState('{"hello":"world","items":[1,2,3]}');
@@ -20,15 +21,15 @@ export function JsonToolPage(): JSX.Element {
           title="Input"
           actions={
             <div className="flex flex-wrap gap-2">
-              <PrimaryButton type="button" onClick={() => void run("format")}>
-                Format
-              </PrimaryButton>
-              <SecondaryButton type="button" onClick={() => void run("minify")}>
-                Minify
-              </SecondaryButton>
-              <SecondaryButton type="button" onClick={() => void run("validate")}>
-                Validate
-              </SecondaryButton>
+              <ActionButton type="button" variant="primary" onClick={() => void run("format")}>
+                <Braces size={14} /> Format
+              </ActionButton>
+              <ActionButton type="button" onClick={() => void run("minify")}>
+                <Minimize2 size={14} /> Minify
+              </ActionButton>
+              <ActionButton type="button" onClick={() => void run("validate")}>
+                <CheckCircle2 size={14} /> Validate
+              </ActionButton>
             </div>
           }
         >

@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { AudioLines, Square } from "lucide-react";
 import { useAiTask } from "../shared/use-ai-task";
 import { ArtifactCard, resolveTaskState, TaskStateTag, WorkflowSteps } from "../../components/ai-task-chrome";
-import { Panel, PillTag, PrimaryButton, SecondaryButton, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, PillTag, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
 
 export function AiSpeechPage(): JSX.Element {
   const [voiceId, setVoiceId] = useState("male-qn-qingse");
@@ -16,12 +17,12 @@ export function AiSpeechPage(): JSX.Element {
             title="Speech request"
             actions={
               <div className="flex flex-wrap gap-2">
-                <PrimaryButton type="button" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiSpeech", text: task.prompt, voiceId })}>
-                  Generate
-                </PrimaryButton>
-                <SecondaryButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
-                  Cancel
-                </SecondaryButton>
+                <ActionButton type="button" variant="primary" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiSpeech", text: task.prompt, voiceId })}>
+                  <AudioLines size={14} /> Generate
+                </ActionButton>
+                <ActionButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
+                  <Square size={13} /> Cancel
+                </ActionButton>
               </div>
             }
           >

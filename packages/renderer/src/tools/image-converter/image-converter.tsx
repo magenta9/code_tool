@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { ImageBase64Inspection } from "@codetool/shared";
+import { Save, Search } from "lucide-react";
 import { getApi } from "../../api";
-import { Panel, PrimaryButton, SecondaryButton, StatusStrip, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, StatusStrip, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
 
 export function ImageConverterPage(): JSX.Element {
   const [base64, setBase64] = useState("");
@@ -15,18 +16,19 @@ export function ImageConverterPage(): JSX.Element {
         title="Base64"
         actions={
           <div className="flex flex-wrap gap-2">
-            <SecondaryButton type="button" onClick={async () => setInspection(await getApi().tools.inspectImageBase64({ base64 }))}>
-              Inspect
-            </SecondaryButton>
-            <PrimaryButton
+            <ActionButton type="button" onClick={async () => setInspection(await getApi().tools.inspectImageBase64({ base64 }))}>
+              <Search size={14} /> Inspect
+            </ActionButton>
+            <ActionButton
               type="button"
+              variant="primary"
               onClick={async () => {
                 const asset = await getApi().tools.saveImageBase64({ base64, filename });
                 setMessage(`Saved ${asset.filename} · ${asset.byteLength} bytes`);
               }}
             >
-              Save asset
-            </PrimaryButton>
+              <Save size={14} /> Save asset
+            </ActionButton>
           </div>
         }
       >

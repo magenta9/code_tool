@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { JsonDiffResult } from "@codetool/shared";
+import { GitCompare } from "lucide-react";
 import { getApi } from "../../api";
-import { CodeBlock, Panel, PrimaryButton, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, CodeBlock, Panel, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
 
 export function JsonDiffPage(): JSX.Element {
   const [left, setLeft] = useState('{"name":"CodeTool","count":1}');
@@ -13,9 +14,9 @@ export function JsonDiffPage(): JSX.Element {
       title="JSON Diff"
       description="Compare two JSON documents and inspect changed structural paths."
       actions={
-        <PrimaryButton type="button" onClick={async () => setResult(await getApi().tools.runJsonDiff({ left, right }))}>
-          Compare
-        </PrimaryButton>
+        <ActionButton type="button" variant="primary" onClick={async () => setResult(await getApi().tools.runJsonDiff({ left, right }))}>
+          <GitCompare size={14} /> Compare
+        </ActionButton>
       }
     >
       <div className="grid gap-5 xl:grid-cols-2">

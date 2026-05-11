@@ -117,7 +117,7 @@ function createColumnFixture(boardId: string): KanbanColumn {
     id: "column-1",
     boardId,
     name: "Todo",
-    color: "#756858",
+    color: "#4f6f5f",
     sortOrder: 1000,
     createdAt: 1,
     updatedAt: 2

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { DecodeJwtResult } from "@codetool/shared";
+import { KeyRound } from "lucide-react";
 import { getApi } from "../../api";
-import { Panel, PrimaryButton, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
 
 export function JwtToolPage(): JSX.Element {
   const [token, setToken] = useState("");
@@ -12,9 +13,9 @@ export function JwtToolPage(): JSX.Element {
       <Panel
         title="Token"
         actions={
-          <PrimaryButton type="button" onClick={async () => setResult(await getApi().tools.decodeJwt({ token }))}>
-            Decode
-          </PrimaryButton>
+          <ActionButton type="button" variant="primary" onClick={async () => setResult(await getApi().tools.decodeJwt({ token }))}>
+            <KeyRound size={14} /> Decode
+          </ActionButton>
         }
       >
         <TextArea spellCheck={false} value={token} onChange={(event) => setToken(event.target.value)} placeholder="Paste JWT here" />

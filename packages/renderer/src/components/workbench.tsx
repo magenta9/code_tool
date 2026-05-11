@@ -18,6 +18,7 @@ import {
   Settings,
   Activity
 } from "lucide-react";
+import { SearchField } from "./tool-layout";
 
 const icons = {
   AudioLines,
@@ -34,11 +35,20 @@ const icons = {
   Music
 };
 
+const utilityEntries = [
+  { routePath: "/settings", title: "Settings", description: "Credentials and data import", icon: Settings },
+  { routePath: "/diagnostics", title: "Logs", description: "Local diagnostics output", icon: Activity }
+] as const;
+
+const homeEntry = { routePath: "/", title: "Home", description: "Tool overview", category: "workspace" } as const;
+
 export function Workbench(): JSX.Element {
   const [query, setQuery] = useState("");
   const location = useLocation();
-  const active = toolCatalog.find((tool) => location.pathname === tool.routePath) ?? toolCatalog[0];
-  const activeGroupLabel = active.category === "aiTools" ? "AI Tools" : "Dev Tools";
+  const activeTool = toolCatalog.find((tool) => location.pathname === tool.routePath);
+  const activeUtility = utilityEntries.find((utility) => location.pathname === utility.routePath);
+  const active = location.pathname === "/" ? homeEntry : activeTool ?? activeUtility ?? toolCatalog[0];
+  const activeGroupLabel = activeTool ? (activeTool.category === "aiTools" ? "AI Tools" : "Dev Tools") : activeUtility ? "Utilities" : "Workspace";
   const filtered = useMemo(
     () =>
       toolCatalog.filter((tool) => {
@@ -69,15 +79,14 @@ export function Workbench(): JSX.Element {
             </div>
           </div>
         </div>
-        <label className="app-no-drag mx-4 mb-4 flex h-10 items-center gap-3 rounded-[8px] bg-[rgba(36,36,36,0.045)] px-3.5 text-[var(--app-text-muted)] transition-[background-color,box-shadow] duration-150 focus-within:bg-[rgba(36,36,36,0.065)] focus-within:shadow-[0_0_0_3px_rgba(36,36,36,0.045)]">
-          <Search size={15} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search tools"
-            className="app-no-drag min-w-0 flex-1 bg-transparent text-[13px] text-[var(--app-text)] outline-none placeholder:text-[var(--app-text-dim)]"
-          />
-        </label>
+        <SearchField
+          icon={<Search size={15} />}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search tools"
+          className="app-no-drag mx-4 mb-4 self-stretch bg-[var(--ui-surface-quiet)]"
+          inputClassName="app-no-drag flex-1"
+        />
         <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 pb-5">
           <ToolGroup title="Dev Tools" tools={filtered.filter((tool) => tool.category === "devTools")} />
           <ToolGroup title="AI Tools" tools={filtered.filter((tool) => tool.category === "aiTools")} />
@@ -101,16 +110,11 @@ export function Workbench(): JSX.Element {
 }
 
 function UtilityGroup(): JSX.Element {
-  const utilities = [
-    { routePath: "/settings", title: "Settings", description: "Credentials and data import", icon: Settings },
-    { routePath: "/diagnostics", title: "Logs", description: "Local diagnostics output", icon: Activity }
-  ];
-
   return (
     <section>
       <h2 className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--app-text-dim)]">Utilities</h2>
       <div className="space-y-2">
-        {utilities.map((utility) => {
+        {utilityEntries.map((utility) => {
           const Icon = utility.icon;
           return (
             <NavLink
@@ -118,10 +122,10 @@ function UtilityGroup(): JSX.Element {
               to={utility.routePath}
               className={({ isActive }) =>
                 [
-                  "app-no-drag group flex min-h-12 items-start gap-3 rounded-[8px] border-l-2 border-transparent px-3 py-2.5 transition-[background-color,transform,color,border-color] duration-150 active:scale-[0.985]",
+                  "app-no-drag group flex min-h-12 items-start gap-3 rounded-[8px] border border-transparent px-3 py-2.5 transition-[background-color,color,border-color] duration-150",
                   isActive
-                    ? "border-l-[var(--app-accent)] bg-[rgba(117,104,88,0.09)] text-[var(--app-text)]"
-                    : "text-[var(--app-text-muted)] [@media(hover:hover)]:hover:bg-[rgba(36,36,36,0.045)] [@media(hover:hover)]:hover:text-[var(--app-text)]"
+                    ? "border-[var(--ui-border)] bg-[rgba(25,25,22,0.055)] text-[var(--ui-text)]"
+                    : "text-[var(--ui-text-muted)] [@media(hover:hover)]:hover:border-[var(--ui-border)] [@media(hover:hover)]:hover:bg-[rgba(25,25,22,0.045)] [@media(hover:hover)]:hover:text-[var(--ui-text)]"
                 ].join(" ")
               }
             >
@@ -131,8 +135,8 @@ function UtilityGroup(): JSX.Element {
                     className={[
                       "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "bg-[rgba(117,104,88,0.14)] text-[var(--app-accent)]"
-                        : "bg-transparent text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
+                        ? "bg-[var(--ui-primary-soft)] text-[var(--ui-primary)]"
+                        : "bg-transparent text-[var(--ui-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--ui-text)]"
                     ].join(" ")}
                   >
                     <Icon size={15} />
@@ -172,10 +176,10 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
               to={tool.routePath}
               className={({ isActive }) =>
                 [
-                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[8px] border-l-2 border-transparent px-3 py-3 transition-[background-color,transform,color,border-color] duration-150 active:scale-[0.985]",
+                  "app-no-drag group flex min-h-14 items-start gap-3 rounded-[8px] border border-transparent px-3 py-3 transition-[background-color,color,border-color] duration-150",
                   isActive
-                    ? "border-l-[var(--app-accent)] bg-[rgba(117,104,88,0.09)] text-[var(--app-text)]"
-                    : "text-[var(--app-text-muted)] [@media(hover:hover)]:hover:bg-[rgba(36,36,36,0.045)] [@media(hover:hover)]:hover:text-[var(--app-text)]"
+                    ? "border-[var(--ui-border)] bg-[rgba(25,25,22,0.055)] text-[var(--ui-text)]"
+                    : "text-[var(--ui-text-muted)] [@media(hover:hover)]:hover:border-[var(--ui-border)] [@media(hover:hover)]:hover:bg-[rgba(25,25,22,0.045)] [@media(hover:hover)]:hover:text-[var(--ui-text)]"
                 ].join(" ")
               }
             >
@@ -185,8 +189,8 @@ function ToolGroup({ title, tools }: { title: string; tools: readonly ToolCatalo
                     className={[
                       "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "bg-[rgba(117,104,88,0.14)] text-[var(--app-accent)]"
-                        : "bg-transparent text-[var(--app-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--app-text)]"
+                        ? "bg-[var(--ui-primary-soft)] text-[var(--ui-primary)]"
+                        : "bg-transparent text-[var(--ui-text-muted)] [@media(hover:hover)]:group-hover:text-[var(--ui-text)]"
                     ].join(" ")}
                   >
                     <Icon size={16} />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
     closestCenter,
     DragOverlay,
@@ -18,11 +18,10 @@ import type { JSONContent } from "@tiptap/react";
 import type { KanbanBoard, KanbanCard, KanbanCardPatch, KanbanColumn, KanbanLabel, KanbanPriority, KanbanRichTextDocument } from "@codetool/shared";
 import {
     Archive,
-    Bold,
     CalendarDays,
     ChevronDown,
     Columns3,
-    Italic,
+    Flag,
     KanbanSquare,
     List,
     Pencil,
@@ -35,6 +34,7 @@ import {
     X
 } from "lucide-react";
 import { getApi } from "../../api";
+import { ActionButton, IconButton, SearchField, SegmentedControl } from "../../components/tool-layout";
 
 type ViewMode = "kanban" | "list" | "archive";
 
@@ -335,9 +335,9 @@ export function KanbanPage(): JSX.Element {
                     <KanbanSquare size={18} />
                     <span>Kanban</span>
                 </div>
-                <button type="button" className="kanban-command" onClick={createBoard}>
+                <ActionButton type="button" onClick={createBoard}>
                     <Plus size={15} /> New board
-                </button>
+                </ActionButton>
                 <div className="kanban-board-list">
                     {boards.map((board) => (
                         <button
@@ -367,89 +367,90 @@ export function KanbanPage(): JSX.Element {
                         <p>{selectedBoard ? `${columns.length} columns, ${cards.filter((card) => !card.archivedAt).length} active cards` : "Create a board to start"}</p>
                     </div>
                     <div className="kanban-actions">
-                        <div className="kanban-search">
-                            <Search size={15} />
-                            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search cards" />
-                        </div>
+                        <SearchField icon={<Search size={15} />} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search cards" inputClassName="w-[170px]" />
                         <Segmented value={view} onChange={setView} />
-                        <button type="button" className="kanban-icon-button" onClick={renameBoard} disabled={!selectedBoard}>Rename</button>
-                        <button type="button" className="kanban-danger-button" onClick={deleteBoard} disabled={!selectedBoard}>
+                        <ActionButton type="button" onClick={renameBoard} disabled={!selectedBoard}>
+                            <Pencil size={14} /> Rename
+                        </ActionButton>
+                        <IconButton type="button" aria-label="Delete board" variant="danger" onClick={deleteBoard} disabled={!selectedBoard}>
                             <Trash2 size={15} />
-                        </button>
+                        </IconButton>
                     </div>
                 </header>
 
-                {error ? <div className="kanban-error">{error}</div> : null}
-                {loading ? <div className="kanban-empty">Loading boards...</div> : null}
-                {!loading && boards.length === 0 ? <EmptyBoard onCreate={createBoard} /> : null}
+                <div className="kanban-main-body">
+                    {error ? <div className="kanban-error">{error}</div> : null}
+                    {loading ? <div className="kanban-empty">Loading boards...</div> : null}
+                    {!loading && boards.length === 0 ? <EmptyBoard onCreate={createBoard} /> : null}
 
-                {selectedBoard ? (
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragCancel={() => setActiveDragId(null)} onDragEnd={(event) => void handleDragEnd(event)}>
-                        {view === "kanban" ? (
-                            <SortableContext items={visibleColumns.map((column) => `column:${column.id}`)} strategy={horizontalListSortingStrategy}>
-                                <div key="kanban" className="kanban-board-canvas kanban-view-panel">
-                                    {visibleColumns.map((column) => (
-                                        <SortableColumn
-                                            key={column.id}
-                                            column={column}
-                                            cards={activeCards.filter((card) => card.columnId === column.id).sort((left, right) => left.sortOrder - right.sortOrder)}
-                                            labels={labels}
-                                            draftTitle={draftCardTitles[column.id] ?? ""}
-                                            composerOpen={activeComposerColumnId === column.id}
-                                            onDraftTitleChange={(value) => setDraftCardTitle(column.id, value)}
-                                            onOpenComposer={() => setActiveComposerColumnId(column.id)}
-                                            onCloseComposer={() => { setDraftCardTitle(column.id, ""); setActiveComposerColumnId(""); }}
-                                            onCreateCard={() => void createCard(column.id)}
-                                            onOpenCard={setSelectedCardId}
-                                            onRenameCard={(card) => void renameCard(card)}
-                                            onArchiveCard={(cardId) => void archiveCard(cardId)}
-                                            onDeleteCard={(cardId) => void deleteCard(cardId)}
-                                            onRename={() => void renameColumn(column)}
-                                            onArchive={() => void archiveColumn(column)}
-                                        />
-                                    ))}
-                                    <button type="button" className="kanban-add-column" onClick={createColumn}>
-                                        <Plus size={15} /> Add column
-                                    </button>
-                                </div>
-                            </SortableContext>
-                        ) : null}
+                    {selectedBoard ? (
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragCancel={() => setActiveDragId(null)} onDragEnd={(event) => void handleDragEnd(event)}>
+                            {view === "kanban" ? (
+                                <SortableContext items={visibleColumns.map((column) => `column:${column.id}`)} strategy={horizontalListSortingStrategy}>
+                                    <div key="kanban" className="kanban-board-canvas kanban-view-panel">
+                                        {visibleColumns.map((column) => (
+                                            <SortableColumn
+                                                key={column.id}
+                                                column={column}
+                                                cards={activeCards.filter((card) => card.columnId === column.id).sort((left, right) => left.sortOrder - right.sortOrder)}
+                                                labels={labels}
+                                                draftTitle={draftCardTitles[column.id] ?? ""}
+                                                composerOpen={activeComposerColumnId === column.id}
+                                                onDraftTitleChange={(value) => setDraftCardTitle(column.id, value)}
+                                                onOpenComposer={() => setActiveComposerColumnId(column.id)}
+                                                onCloseComposer={() => { setDraftCardTitle(column.id, ""); setActiveComposerColumnId(""); }}
+                                                onCreateCard={() => void createCard(column.id)}
+                                                onOpenCard={setSelectedCardId}
+                                                onRenameCard={(card) => void renameCard(card)}
+                                                onArchiveCard={(cardId) => void archiveCard(cardId)}
+                                                onDeleteCard={(cardId) => void deleteCard(cardId)}
+                                                onRename={() => void renameColumn(column)}
+                                                onArchive={() => void archiveColumn(column)}
+                                            />
+                                        ))}
+                                        <button type="button" className="kanban-add-column" onClick={createColumn}>
+                                            <Plus size={15} /> Add column
+                                        </button>
+                                    </div>
+                                </SortableContext>
+                            ) : null}
 
-                        {view === "list" ? (
-                            <ListView
-                                key="list"
-                                columns={visibleColumns}
-                                cards={activeCards}
-                                labels={labels}
-                                onOpenCard={setSelectedCardId}
-                                onMoveCard={(cardId, columnId) => void updateCard(cardId, { columnId })}
-                                onArchiveCard={(cardId) => void archiveCard(cardId)}
-                                onDeleteCard={(cardId) => void deleteCard(cardId)}
-                            />
-                        ) : null}
+                            {view === "list" ? (
+                                <ListView
+                                    key="list"
+                                    columns={visibleColumns}
+                                    cards={activeCards}
+                                    labels={labels}
+                                    onOpenCard={setSelectedCardId}
+                                    onMoveCard={(cardId, columnId) => void updateCard(cardId, { columnId })}
+                                    onArchiveCard={(cardId) => void archiveCard(cardId)}
+                                    onDeleteCard={(cardId) => void deleteCard(cardId)}
+                                />
+                            ) : null}
 
-                        {view === "archive" ? <ArchiveView key="archive" cards={archivedCards} labels={labels} onOpenCard={setSelectedCardId} onRestore={restoreCard} onDelete={deleteCard} /> : null}
-                        <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
-                            {activeDraggingCard ? <CardDragPreview card={activeDraggingCard} labels={labels} /> : null}
-                            {activeDraggingColumn ? <ColumnDragPreview column={activeDraggingColumn} /> : null}
-                        </DragOverlay>
-                    </DndContext>
-                ) : null}
+                            {view === "archive" ? <ArchiveView key="archive" cards={archivedCards} labels={labels} onOpenCard={setSelectedCardId} onRestore={restoreCard} onDelete={deleteCard} /> : null}
+                            <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
+                                {activeDraggingCard ? <CardDragPreview card={activeDraggingCard} labels={labels} /> : null}
+                                {activeDraggingColumn ? <ColumnDragPreview column={activeDraggingColumn} /> : null}
+                            </DragOverlay>
+                        </DndContext>
+                    ) : null}
+
+                    {selectedCard ? (
+                        <CardDetails
+                            card={selectedCard}
+                            columns={visibleColumns}
+                            labels={labels}
+                            onClose={() => setSelectedCardId("")}
+                            onSave={updateCard}
+                            onArchive={archiveCard}
+                            onDelete={deleteCard}
+                            onCreateLabel={createLabel}
+                            onToggleLabel={toggleCardLabel}
+                        />
+                    ) : null}
+                </div>
             </main>
-
-            {selectedCard ? (
-                <CardDetails
-                    card={selectedCard}
-                    columns={visibleColumns}
-                    labels={labels}
-                    onClose={() => setSelectedCardId("")}
-                    onSave={updateCard}
-                    onArchive={archiveCard}
-                    onDelete={deleteCard}
-                    onCreateLabel={createLabel}
-                    onToggleLabel={toggleCardLabel}
-                />
-            ) : null}
             {textDialog ? <TextDialog state={textDialog} onClose={() => setTextDialog(null)} /> : null}
             {confirmDialog ? <ConfirmDialog state={confirmDialog} onClose={() => setConfirmDialog(null)} /> : null}
         </section>
@@ -540,21 +541,7 @@ function Segmented({ value, onChange }: { value: ViewMode; onChange: (value: Vie
     ];
 
     return (
-        <div className="kanban-segmented" role="tablist" aria-label="View mode" data-view={value}>
-            <span className="kanban-segmented-thumb" aria-hidden="true" />
-            {options.map((option) => (
-                <button
-                    key={option.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={value === option.value}
-                    className={value === option.value ? "active" : ""}
-                    onClick={() => onChange(option.value)}
-                >
-                    {option.icon} {option.label}
-                </button>
-            ))}
-        </div>
+        <SegmentedControl value={value} options={options} ariaLabel="View mode" onChange={(nextValue) => onChange(nextValue as ViewMode)} />
     );
 }
 
@@ -817,6 +804,10 @@ function CardDetails({ card, columns, labels, onClose, onSave, onArchive, onDele
     const [dueDate, setDueDate] = useState(card.dueDate ? dateInputValue(card.dueDate) : "");
     const [descriptionJson, setDescriptionJson] = useState<KanbanRichTextDocument | undefined>(card.descriptionJson);
     const [descriptionText, setDescriptionText] = useState(card.descriptionText ?? "");
+    const selectedColumn = columns.find((column) => column.id === columnId);
+    const savePatch = (): void => {
+        void onSave(card.id, { title, columnId, priority, dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null, descriptionJson, descriptionText });
+    };
 
     useEffect(() => {
         setTitle(card.title);
@@ -829,57 +820,67 @@ function CardDetails({ card, columns, labels, onClose, onSave, onArchive, onDele
 
     return (
         <aside className="kanban-details" aria-label="Card details">
-            <header>
-                <div>
-                    <strong>Card details</strong>
+            <header className="kanban-details-header">
+                <label className="kanban-title-label">
+                    <textarea className="kanban-title-input" aria-label="Card title" value={title} rows={2} onChange={(event) => setTitle(event.target.value)} />
                     <span>Updated {formatDisplayDate(card.updatedAt)}</span>
-                </div>
+                </label>
                 <button type="button" onClick={onClose} aria-label="Close details"><X size={16} /></button>
             </header>
             <div className="kanban-details-body">
-                <div className="kanban-details-main">
-                    <label className="kanban-title-label">
-                        <span>Title</span>
-                        <input className="kanban-title-input" value={title} onChange={(event) => setTitle(event.target.value)} />
+                <section className="kanban-detail-section">
+                    <h4>Due Date</h4>
+                    <label className="kanban-detail-control">
+                        <CalendarDays size={14} />
+                        <input aria-label="Due date" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
                     </label>
-                    <section className="kanban-detail-section">
-                        <h4>Labels</h4>
-                        <div className="kanban-labels">
-                            {labels.map((label) => (
-                                <button type="button" key={label.id} className={`label-toggle ${card.labelIds.includes(label.id) ? "active" : ""}`} onClick={() => void onToggleLabel(card, label.id)}>
-                                    <LabelChip label={label} />
-                                </button>
-                            ))}
-                            <button type="button" className="kanban-label-create" onClick={() => void onCreateLabel()}><Plus size={14} /> Label</button>
-                        </div>
-                    </section>
-                    <section className="kanban-detail-section kanban-detail-description">
-                        <h4>Description</h4>
-                        <RichTextEditor value={descriptionJson} onChange={(json, text) => { setDescriptionJson(json); setDescriptionText(text); }} />
-                    </section>
-                </div>
-                <aside className="kanban-details-meta" aria-label="Card metadata">
-                    <CustomSelect label="Column" value={columnId} options={columns.map((column) => ({ value: column.id, label: column.name }))} onChange={setColumnId} />
-                    <CustomSelect label="Priority" value={priority} options={priorities.map((item) => ({ value: item, label: item }))} onChange={(value) => setPriority(value as KanbanPriority)} />
-                    <label>Due<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
-                    <button type="button" className="kanban-command primary" onClick={() => void onSave(card.id, { title, columnId, priority, dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null, descriptionJson, descriptionText })}><Save size={14} /> Save</button>
-                    <button type="button" onClick={() => void onArchive(card.id)}><Archive size={14} /> Archive</button>
-                    <button type="button" className="danger" onClick={() => void onDelete(card.id)}><Trash2 size={14} /> Delete</button>
-                </aside>
+                </section>
+                <section className="kanban-detail-section">
+                    <h4>Category</h4>
+                    <div className="kanban-detail-grid">
+                        <CustomSelect label="Priority" value={priority} options={priorities.map((item) => ({ value: item, label: item }))} icon={<Flag size={14} />} showLabel={false} onChange={(value) => setPriority(value as KanbanPriority)} />
+                        <CustomSelect label="Column" value={columnId} options={columns.map((column) => ({ value: column.id, label: column.name }))} icon={<span className="kanban-column-color-dot" style={{ background: selectedColumn?.color ?? "var(--kanban-primary)" }} />} showLabel={false} onChange={setColumnId} />
+                    </div>
+                </section>
+                <section className="kanban-detail-section kanban-detail-description">
+                    <h4>Description</h4>
+                    <RichTextEditor value={descriptionJson} onChange={(json, text) => { setDescriptionJson(json); setDescriptionText(text); }} />
+                </section>
+                <section className="kanban-detail-section">
+                    <h4>Subtasks</h4>
+                    <div className="kanban-detail-row-empty">Subtasks are not configured for cards yet.</div>
+                </section>
+                <section className="kanban-detail-section">
+                    <h4>Labels</h4>
+                    <div className="kanban-labels">
+                        {labels.map((label) => (
+                            <button type="button" key={label.id} className={`label-toggle ${card.labelIds.includes(label.id) ? "active" : ""}`} onClick={() => void onToggleLabel(card, label.id)}>
+                                <LabelChip label={label} />
+                            </button>
+                        ))}
+                        <button type="button" className="kanban-label-create" onClick={() => void onCreateLabel()}><Plus size={14} /></button>
+                    </div>
+                </section>
+                <section className="kanban-detail-section">
+                    <h4>Comments</h4>
+                    <div className="kanban-detail-row-empty">Comments are not configured for cards yet.</div>
+                </section>
             </div>
             <footer>
-                <button type="button" className="kanban-command primary" onClick={() => void onSave(card.id, { title, columnId, priority, dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null, descriptionJson, descriptionText })}><Save size={14} /> Save</button>
-                <button type="button" onClick={() => void onArchive(card.id)}><Archive size={14} /> Archive</button>
-                <button type="button" className="danger" onClick={() => void onDelete(card.id)}><Trash2 size={14} /> Delete</button>
+                <ActionButton type="button" variant="primary" onClick={savePatch}><Save size={14} /> Save</ActionButton>
+                <ActionButton type="button" onClick={() => void onArchive(card.id)}><Archive size={14} /> Archive</ActionButton>
+                <ActionButton type="button" variant="danger" onClick={() => void onDelete(card.id)}><Trash2 size={14} /> Delete</ActionButton>
             </footer>
         </aside>
     );
 }
 
-function CustomSelect({ label, value, options, onChange }: {
+function CustomSelect({ label, value, options, icon, showLabel = true, onChange }: {
     label: string;
     value: string;
     options: SelectOption[];
+    icon?: ReactNode;
+    showLabel?: boolean;
     onChange: (value: string) => void;
 }): JSX.Element {
     const [open, setOpen] = useState(false);
@@ -892,9 +893,9 @@ function CustomSelect({ label, value, options, onChange }: {
                 if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
             }}
         >
-            <span className="kanban-select-label">{label}</span>
+            {showLabel ? <span className="kanban-select-label">{label}</span> : null}
             <button type="button" className="kanban-select-trigger" onClick={() => setOpen((current) => !current)} aria-expanded={open}>
-                <span>{selected?.label ?? "Select"}</span>
+                <span className="kanban-select-value">{icon}<span>{selected?.label ?? "Select"}</span></span>
                 <ChevronDown size={14} />
             </button>
             {open ? (
@@ -932,12 +933,6 @@ function RichTextEditor({ value, onChange }: { value?: KanbanRichTextDocument; o
 
     return (
         <div className="kanban-editor">
-            <div className="kanban-editor-toolbar">
-                <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()}><Bold size={14} /></button>
-                <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()}><Italic size={14} /></button>
-                <button type="button" onClick={() => editor?.chain().focus().toggleBulletList().run()}>List</button>
-                <button type="button" onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>Code</button>
-            </div>
             <EditorContent editor={editor} />
         </div>
     );

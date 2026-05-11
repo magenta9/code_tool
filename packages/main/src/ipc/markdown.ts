@@ -13,6 +13,7 @@ import type {
     MarkdownSaveImageAssetResult
 } from "@codetool/shared";
 import { BrowserWindow, dialog } from "electron";
+import katex from "katex";
 import { marked } from "marked";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -250,7 +251,8 @@ function exportDefaultName(input: MarkdownExportInput, extension: "html" | "pdf"
 }
 
 async function renderExportHtml(input: MarkdownExportInput, sourceDirectory: string | undefined, target: "html" | "pdf"): Promise<string> {
-    const body = resolveExportReferences(await marked.parse(input.content, { gfm: input.enabledPlugins?.includes("gfm") ?? true }), sourceDirectory, target);
+    const markdown = (input.enabledPlugins?.includes("math") ?? true) ? renderMathMarkdown(input.content) : input.content;
+    const body = resolveExportReferences(await marked.parse(markdown, { gfm: input.enabledPlugins?.includes("gfm") ?? true }), sourceDirectory, target);
     const base = sourceDirectory && target === "html" ? `<base href="${escapeHtml(pathToFileURL(`${sourceDirectory}/`).toString())}">` : "";
     const title = escapeHtml(input.title || "Markdown Export");
     const themeCss = input.themeCss ? input.themeCss : defaultMarkdownExportCss;
@@ -330,13 +332,55 @@ const defaultMarkdownExportCss = `
 .markdown-body h2 { font-size: 1.55em; }
 .markdown-body h3 { font-size: 1.25em; }
 .markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body blockquote, .markdown-body pre, .markdown-body table { margin: 0 0 1em; }
+.markdown-body ul { list-style: disc; padding-left: 1.55em; }
+.markdown-body ol { list-style: decimal; padding-left: 1.55em; }
+.markdown-body li { margin: 0.2em 0; padding-left: 0.15em; }
+.markdown-body li > p { margin: 0.15em 0; }
+.markdown-body li > ul, .markdown-body li > ol { margin: 0.25em 0; }
 .markdown-body code, .markdown-body pre { font-family: "SF Mono", "Cascadia Code", Menlo, monospace; }
 .markdown-body pre { overflow: auto; padding: 14px 16px; border-radius: 8px; background: #f3f3ef; }
 .markdown-body blockquote { border-left: 3px solid #8d8062; color: #66645d; padding-left: 14px; }
 .markdown-body img { max-width: 100%; height: auto; }
 .markdown-body table { width: 100%; border-collapse: collapse; }
 .markdown-body th, .markdown-body td { border: 1px solid #d8d8d0; padding: 6px 8px; }
+.katex-display { overflow-x: auto; overflow-y: hidden; }
 `;
+
+function renderMathMarkdown(markdown: string): string {
+    const lines = markdown.split(/\r?\n/);
+    const output: string[] = [];
+    let inFence = false;
+    let mathBuffer: string[] | null = null;
+    for (const line of lines) {
+        if (/^\s*```/.test(line) || /^\s*~~~/.test(line)) {
+            inFence = !inFence;
+            output.push(line);
+            continue;
+        }
+        if (!inFence && line.trim() === "$$") {
+            if (mathBuffer) {
+                output.push(katex.renderToString(mathBuffer.join("\n"), { displayMode: true, throwOnError: false }));
+                mathBuffer = null;
+            } else {
+                mathBuffer = [];
+            }
+            continue;
+        }
+        if (mathBuffer) {
+            mathBuffer.push(line);
+            continue;
+        }
+        output.push(inFence ? line : renderInlineMath(line));
+    }
+    if (mathBuffer) output.push("$$", ...mathBuffer);
+    return output.join("\n");
+}
+
+function renderInlineMath(line: string): string {
+    return line.replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_match, prefix: string, expression: string) => {
+        return `${prefix}${katex.renderToString(expression, { displayMode: false, throwOnError: false })}`;
+    });
+}
 
 function imageExtension(mimeType: string, filename?: string): string {
     const fromName = filename ? extname(filename).replace(/^\./, "").toLowerCase() : "";

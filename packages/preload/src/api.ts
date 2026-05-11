@@ -15,6 +15,17 @@ export const api: IpcContract = {
     inspectImageBase64: (input) => ipcRenderer.invoke(ipcChannels.tools.inspectImageBase64, input),
     saveImageBase64: (input) => ipcRenderer.invoke(ipcChannels.tools.saveImageBase64, input)
   },
+  markdown: {
+    openFile: () => ipcRenderer.invoke(ipcChannels.markdown.openFile),
+    readFile: (input) => ipcRenderer.invoke(ipcChannels.markdown.readFile, input),
+    saveFile: (input) => ipcRenderer.invoke(ipcChannels.markdown.saveFile, input),
+    saveFileAs: (input) => ipcRenderer.invoke(ipcChannels.markdown.saveFileAs, input),
+    openDirectory: () => ipcRenderer.invoke(ipcChannels.markdown.openDirectory),
+    listDirectory: (input) => ipcRenderer.invoke(ipcChannels.markdown.listDirectory, input),
+    saveImageAsset: (input) => ipcRenderer.invoke(ipcChannels.markdown.saveImageAsset, input),
+    exportHtml: (input) => ipcRenderer.invoke(ipcChannels.markdown.exportHtml, input),
+    exportPdf: (input) => ipcRenderer.invoke(ipcChannels.markdown.exportPdf, input)
+  },
   history: {
     list: (input) => ipcRenderer.invoke(ipcChannels.history.list, input),
     load: (input) => ipcRenderer.invoke(ipcChannels.history.load, input),

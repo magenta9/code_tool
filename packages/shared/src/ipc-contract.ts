@@ -28,6 +28,20 @@ import type {
   TimestampConversionResult,
   WordCloudResult
 } from "./tools";
+import type {
+  MarkdownDirectoryListing,
+  MarkdownExportInput,
+  MarkdownExportResult,
+  MarkdownListDirectoryInput,
+  MarkdownOpenDirectoryResult,
+  MarkdownOpenFileResult,
+  MarkdownReadFileInput,
+  MarkdownSaveFileAsInput,
+  MarkdownSaveFileInput,
+  MarkdownSaveFileResult,
+  MarkdownSaveImageAssetInput,
+  MarkdownSaveImageAssetResult
+} from "./tools/markdown-editor";
 
 export interface SystemStatus {
   appName: "CodeTool";
@@ -54,6 +68,17 @@ export interface IpcContract {
     analyzeWordCloud(input: { text: string }): Promise<WordCloudResult>;
     inspectImageBase64(input: { base64: string }): Promise<ImageBase64Inspection>;
     saveImageBase64(input: SaveImageBase64Input): Promise<AssetRecord>;
+  };
+  markdown: {
+    openFile(): Promise<MarkdownOpenFileResult>;
+    readFile(input: MarkdownReadFileInput): Promise<MarkdownOpenFileResult>;
+    saveFile(input: MarkdownSaveFileInput): Promise<MarkdownSaveFileResult>;
+    saveFileAs(input: MarkdownSaveFileAsInput): Promise<MarkdownSaveFileResult>;
+    openDirectory(): Promise<MarkdownOpenDirectoryResult>;
+    listDirectory(input: MarkdownListDirectoryInput): Promise<MarkdownDirectoryListing>;
+    saveImageAsset(input: MarkdownSaveImageAssetInput): Promise<MarkdownSaveImageAssetResult>;
+    exportHtml(input: MarkdownExportInput): Promise<MarkdownExportResult>;
+    exportPdf(input: MarkdownExportInput): Promise<MarkdownExportResult>;
   };
   history: {
     list(input?: { toolId?: ToolId; limit?: number }): Promise<HistoryEntry[]>;
@@ -117,6 +142,15 @@ export const ipcContractHandlers = [
   "tools.analyzeWordCloud",
   "tools.inspectImageBase64",
   "tools.saveImageBase64",
+  "markdown.openFile",
+  "markdown.readFile",
+  "markdown.saveFile",
+  "markdown.saveFileAs",
+  "markdown.openDirectory",
+  "markdown.listDirectory",
+  "markdown.saveImageAsset",
+  "markdown.exportHtml",
+  "markdown.exportPdf",
   "history.list",
   "history.load",
   "history.create",

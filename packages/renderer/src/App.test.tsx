@@ -34,6 +34,16 @@ describe("App smoke", () => {
     expect(screen.queryByText("Tokens")).not.toBeInTheDocument();
   });
 
+  it("renders the Markdown editor shell", async () => {
+    const api = getMockApi();
+    window.location.hash = "#/tools/markdown-editor";
+    render(<App />);
+    await waitFor(() => expect(api.settings.get).toHaveBeenCalled());
+    expect(screen.getByRole("heading", { name: "Markdown Editor" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Markdown draft" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Write" })).toHaveAttribute("aria-selected", "true");
+  });
+
   it("renders the Pi agent workspace with the prompt composer", () => {
     window.location.hash = "#/tools/pi-agent";
     render(<App />);

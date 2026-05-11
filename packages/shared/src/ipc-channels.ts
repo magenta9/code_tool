@@ -12,6 +12,17 @@ export const ipcChannels = {
     inspectImageBase64: "tools:inspect-image-base64",
     saveImageBase64: "tools:save-image-base64"
   },
+  markdown: {
+    openFile: "markdown:open-file",
+    readFile: "markdown:read-file",
+    saveFile: "markdown:save-file",
+    saveFileAs: "markdown:save-file-as",
+    openDirectory: "markdown:open-directory",
+    listDirectory: "markdown:list-directory",
+    saveImageAsset: "markdown:save-image-asset",
+    exportHtml: "markdown:export-html",
+    exportPdf: "markdown:export-pdf"
+  },
   history: {
     list: "history:list",
     load: "history:load",

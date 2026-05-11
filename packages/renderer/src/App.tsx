@@ -10,6 +10,7 @@ import { TimestampConverterPage } from "./tools/timestamp-converter/timestamp-co
 import { JwtToolPage } from "./tools/jwt-tool/jwt-tool";
 import { WordCloudPage } from "./tools/word-cloud/word-cloud";
 import { KanbanPage } from "./tools/kanban/kanban";
+import { MarkdownEditorPage } from "./tools/markdown-editor/markdown-editor";
 import { AiChatPage } from "./tools/ai-chat/ai-chat";
 import { AiSpeechPage } from "./tools/ai-speech/ai-speech";
 import { AiImagePage } from "./tools/ai-image/ai-image";
@@ -31,6 +32,7 @@ export function App(): JSX.Element {
           <Route path="tools/jwt" element={<JwtToolPage />} />
           <Route path="tools/word-cloud" element={<WordCloudPage />} />
           <Route path="tools/kanban" element={<KanbanPage />} />
+          <Route path="tools/markdown-editor" element={<MarkdownEditorPage />} />
           <Route path="tools/ai-chat" element={<AiChatPage />} />
           <Route path="tools/pi-agent" element={<PiAgentPage />} />
           <Route path="tools/ai-speech" element={<AiSpeechPage />} />

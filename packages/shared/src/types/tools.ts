@@ -8,6 +8,7 @@ export type ToolId =
   | "jwtTool"
   | "wordCloud"
   | "kanban"
+  | "markdownEditor"
   | "aiChat"
   | "piAgent"
   | "aiSpeech"

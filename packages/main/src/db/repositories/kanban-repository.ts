@@ -10,9 +10,11 @@ import type {
     KanbanCardPatch,
     KanbanColumn,
     KanbanColumnPatch,
+    KanbanComment,
     KanbanLabel,
     KanbanPriority,
-    KanbanRichTextDocument
+    KanbanRichTextDocument,
+    KanbanSubtask
 } from "@codetool/shared";
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
@@ -48,6 +50,8 @@ interface CardRow {
     title: string;
     description_json: string | null;
     description_text: string | null;
+    subtasks_json: string;
+    comments_json: string;
     priority: KanbanPriority;
     due_date: number | null;
     sort_order: number;
@@ -232,7 +236,9 @@ export class KanbanRepository {
             sortOrder: this.nextCardOrder(input.columnId),
             createdAt: now,
             updatedAt: now,
-            labelIds: []
+            labelIds: [],
+            subtasks: [],
+            comments: []
         };
         this.insertCard(card);
         this.touchBoard(input.boardId, now);
@@ -255,7 +261,7 @@ export class KanbanRepository {
         this.database
             .prepare(
                 `UPDATE kanban_cards
-         SET title = ?, column_id = ?, description_json = ?, description_text = ?, priority = ?, due_date = ?, updated_at = ?
+         SET title = ?, column_id = ?, description_json = ?, description_text = ?, subtasks_json = ?, comments_json = ?, priority = ?, due_date = ?, updated_at = ?
          WHERE id = ?`
             )
             .run(
@@ -263,6 +269,8 @@ export class KanbanRepository {
                 nextColumnId,
                 input.patch.descriptionJson === undefined ? serializeRichText(current.descriptionJson) : serializeRichText(input.patch.descriptionJson),
                 input.patch.descriptionText === undefined ? current.descriptionText ?? null : normalizeOptionalText(input.patch.descriptionText) ?? null,
+                input.patch.subtasks === undefined ? serializeSubtasks(current.subtasks) : serializeSubtasks(input.patch.subtasks),
+                input.patch.comments === undefined ? serializeComments(current.comments) : serializeComments(input.patch.comments),
                 nextPriority,
                 hasDueDatePatch ? input.patch.dueDate ?? null : current.dueDate ?? null,
                 updatedAt,
@@ -447,13 +455,15 @@ export class KanbanRepository {
         this.database
             .prepare(
                 `INSERT INTO kanban_cards
-         (id, board_id, column_id, title, description_json, description_text, priority, due_date, sort_order, created_at, updated_at, archived_at)
-         VALUES (@id, @boardId, @columnId, @title, @descriptionJson, @descriptionText, @priority, @dueDate, @sortOrder, @createdAt, @updatedAt, @archivedAt)`
+         (id, board_id, column_id, title, description_json, description_text, subtasks_json, comments_json, priority, due_date, sort_order, created_at, updated_at, archived_at)
+         VALUES (@id, @boardId, @columnId, @title, @descriptionJson, @descriptionText, @subtasksJson, @commentsJson, @priority, @dueDate, @sortOrder, @createdAt, @updatedAt, @archivedAt)`
             )
             .run({
                 ...card,
                 descriptionJson: serializeRichText(card.descriptionJson),
                 descriptionText: card.descriptionText ?? null,
+                subtasksJson: serializeSubtasks(card.subtasks),
+                commentsJson: serializeComments(card.comments),
                 dueDate: card.dueDate ?? null,
                 archivedAt: card.archivedAt ?? null
             });
@@ -542,6 +552,8 @@ function rowToCard(row: CardRow): KanbanCard {
         title: row.title,
         descriptionJson: parseRichText(row.description_json),
         descriptionText: row.description_text ?? undefined,
+        subtasks: parseSubtasks(row.subtasks_json),
+        comments: parseComments(row.comments_json),
         priority: row.priority,
         dueDate: row.due_date ?? undefined,
         sortOrder: row.sort_order,
@@ -587,6 +599,57 @@ function parseRichText(value: string | null): KanbanRichTextDocument | undefined
     } catch {
         return undefined;
     }
+}
+
+function serializeSubtasks(value: KanbanSubtask[] | undefined): string {
+    return JSON.stringify(value ?? []);
+}
+
+function parseSubtasks(value: string | null): KanbanSubtask[] {
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        return Array.isArray(parsed) ? parsed.filter(isSubtask) : [];
+    } catch {
+        return [];
+    }
+}
+
+function isSubtask(value: unknown): value is KanbanSubtask {
+    return Boolean(
+        value &&
+        typeof value === "object" &&
+        typeof (value as KanbanSubtask).id === "string" &&
+        typeof (value as KanbanSubtask).title === "string" &&
+        typeof (value as KanbanSubtask).completed === "boolean" &&
+        typeof (value as KanbanSubtask).createdAt === "number" &&
+        typeof (value as KanbanSubtask).updatedAt === "number"
+    );
+}
+
+function serializeComments(value: KanbanComment[] | undefined): string {
+    return JSON.stringify(value ?? []);
+}
+
+function parseComments(value: string | null): KanbanComment[] {
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        return Array.isArray(parsed) ? parsed.filter(isComment) : [];
+    } catch {
+        return [];
+    }
+}
+
+function isComment(value: unknown): value is KanbanComment {
+    return Boolean(
+        value &&
+        typeof value === "object" &&
+        typeof (value as KanbanComment).id === "string" &&
+        typeof (value as KanbanComment).body === "string" &&
+        typeof (value as KanbanComment).createdAt === "number" &&
+        typeof (value as KanbanComment).updatedAt === "number"
+    );
 }
 
 function ensureSameBoard(boardId: string, ...columns: Array<KanbanColumn | undefined>): void {

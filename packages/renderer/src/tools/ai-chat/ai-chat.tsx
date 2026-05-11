@@ -1,6 +1,7 @@
+import { Send, Square } from "lucide-react";
 import { useAiTask } from "../shared/use-ai-task";
 import { ArtifactCard, MessageBubble, resolveTaskState, TaskStateTag, WorkflowSteps } from "../../components/ai-task-chrome";
-import { Panel, PillTag, PrimaryButton, SecondaryButton, TextArea, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, PillTag, TextArea, ToolLayout } from "../../components/tool-layout";
 
 export function AiChatPage(): JSX.Element {
   const task = useAiTask();
@@ -51,12 +52,12 @@ export function AiChatPage(): JSX.Element {
             title="Composer"
             actions={
               <div className="flex flex-wrap gap-2">
-                <PrimaryButton type="button" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiChat", prompt: task.prompt })}>
-                  Send
-                </PrimaryButton>
-                <SecondaryButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
-                  Cancel
-                </SecondaryButton>
+                <ActionButton type="button" variant="primary" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiChat", prompt: task.prompt })}>
+                  <Send size={14} /> Send
+                </ActionButton>
+                <ActionButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
+                  <Square size={13} /> Cancel
+                </ActionButton>
               </div>
             }
           >

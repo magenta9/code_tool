@@ -1,10 +1,9 @@
 import { Bot, RotateCcw, Send, SquareTerminal, Workflow } from "lucide-react";
 import { MessageBubble, TaskStateTag, WorkflowSteps, resolveTaskState } from "../../components/ai-task-chrome";
 import {
+    ActionButton,
     Panel,
     PillTag,
-    PrimaryButton,
-    SecondaryButton,
     SelectField,
     StatusStrip,
     TextArea,
@@ -93,15 +92,15 @@ export function PiAgentPage(): JSX.Element {
                         title="Composer"
                         actions={
                             <div className="flex flex-wrap items-center gap-2">
-                                <SecondaryButton type="button" onClick={resetSession} disabled={running}>
+                                <ActionButton type="button" onClick={resetSession} disabled={running}>
                                     <RotateCcw size={14} /> New session
-                                </SecondaryButton>
-                                <SecondaryButton type="button" onClick={() => void cancel()} disabled={!running}>
+                                </ActionButton>
+                                <ActionButton type="button" onClick={() => void cancel()} disabled={!running}>
                                     <SquareTerminal size={14} /> Cancel
-                                </SecondaryButton>
-                                <PrimaryButton type="button" onClick={() => void start()} disabled={running || !prompt.trim() || !config.workspaceRoot.trim()}>
+                                </ActionButton>
+                                <ActionButton type="button" variant="primary" onClick={() => void start()} disabled={running || !prompt.trim() || !config.workspaceRoot.trim()}>
                                     <Send size={14} /> Run prompt
-                                </PrimaryButton>
+                                </ActionButton>
                             </div>
                         }
                     >

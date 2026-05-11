@@ -60,6 +60,24 @@ describe("KanbanRepository", () => {
         expect(repository.listCards({ boardId: board.id })).toHaveLength(1);
     });
 
+    it("persists card subtasks and comments", () => {
+        const repository = createRepository();
+        const board = repository.createBoard({ name: "Launch" });
+        const [backlog] = repository.listColumns({ boardId: board.id });
+        const card = repository.createCard({ boardId: board.id, columnId: backlog!.id, title: "Ship" });
+
+        const updated = repository.updateCard({
+            id: card.id,
+            patch: {
+                subtasks: [{ id: "subtask-1", title: "Write notes", completed: false, createdAt: 1, updatedAt: 1 }],
+                comments: [{ id: "comment-1", body: "Looks ready", createdAt: 2, updatedAt: 2 }]
+            }
+        });
+
+        expect(updated.subtasks[0]?.title).toBe("Write notes");
+        expect(repository.listCards({ boardId: board.id })[0]?.comments[0]?.body).toBe("Looks ready");
+    });
+
     it("round-trips exported boards with labels", () => {
         const repository = createRepository();
         const board = repository.createBoard({ name: "Launch" });

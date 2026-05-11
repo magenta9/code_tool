@@ -7,6 +7,7 @@ export const ipcChannels = {
     runJsonDiff: "tools:run-json-diff",
     convertTimestamp: "tools:convert-timestamp",
     decodeJwt: "tools:decode-jwt",
+    encodeJwt: "tools:encode-jwt",
     analyzeWordCloud: "tools:analyze-word-cloud",
     inspectImageBase64: "tools:inspect-image-base64",
     saveImageBase64: "tools:save-image-base64"

@@ -15,6 +15,7 @@ Object.defineProperty(window, "api", {
       runJsonDiff: vi.fn(),
       convertTimestamp: vi.fn(),
       decodeJwt: vi.fn(),
+      encodeJwt: vi.fn(),
       analyzeWordCloud: vi.fn(),
       inspectImageBase64: vi.fn(),
       saveImageBase64: vi.fn()

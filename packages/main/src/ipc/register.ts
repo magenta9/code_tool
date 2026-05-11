@@ -61,6 +61,7 @@ export function registerIpc(context: IpcServiceContext): void {
   bindInvoke(ipcMain, ipcChannels.tools.runJsonDiff, (input) => tools.runJsonDiff(input));
   bindInvoke(ipcMain, ipcChannels.tools.convertTimestamp, (input) => tools.convertTimestamp(input));
   bindInvoke(ipcMain, ipcChannels.tools.decodeJwt, (input) => tools.decodeJwt(input));
+  bindInvoke(ipcMain, ipcChannels.tools.encodeJwt, (input) => tools.encodeJwt(input));
   bindInvoke(ipcMain, ipcChannels.tools.analyzeWordCloud, (input) => tools.analyzeWordCloud(input));
   bindInvoke(ipcMain, ipcChannels.tools.inspectImageBase64, (input) => tools.inspectImageBase64(input));
   bindInvoke(ipcMain, ipcChannels.tools.saveImageBase64, (input) => tools.saveImageBase64(input));

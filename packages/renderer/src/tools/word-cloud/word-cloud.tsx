@@ -1,7 +1,8 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import type { WordCloudResult } from "@codetool/shared";
+import { Cloud } from "lucide-react";
 import { getApi } from "../../api";
-import { Panel, PrimaryButton, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, StatusStrip, TextArea, ToolLayout } from "../../components/tool-layout";
 
 type PreviewPhase = "idle" | "drawing" | "ready" | "empty" | "unsupported" | "error";
 
@@ -29,8 +30,8 @@ type WordCloudOptions = {
 };
 
 const sampleText = "CodeTool helps teams inspect logs, compare JSON, decode tokens, and generate reliable word clouds.";
-const previewPalette = ["#d8ff63", "#9ee7ff", "#ffd27a", "#ff9e7a", "#b9f27e"];
-const fallbackPreviewColor = "#d8ff63";
+const previewPalette = ["#756858", "#6f7a43", "#b36a3c", "#8f6f4f", "#9a5f54"];
+const fallbackPreviewColor = "#756858";
 let wordCloudModulePromise: Promise<WordCloudModule> | null = null;
 
 async function loadWordCloudModule(): Promise<WordCloudModule> {
@@ -213,14 +214,14 @@ export function WordCloudPage(): JSX.Element {
         <Panel
           title="Source text"
           actions={
-            <PrimaryButton type="button" onClick={() => void handleAnalyze()} disabled={!text.trim() || isAnalyzing}>
-              {isAnalyzing ? "Generating..." : result ? "Recompute" : "Generate cloud"}
-            </PrimaryButton>
+            <ActionButton type="button" onClick={() => void handleAnalyze()} disabled={!text.trim() || isAnalyzing}>
+              <Cloud size={14} /> {isAnalyzing ? "Generating..." : result ? "Recompute" : "Generate cloud"}
+            </ActionButton>
           }
         >
           <TextArea value={text} onChange={(event) => setText(event.target.value)} className="min-h-[360px]" />
           <div className="mt-3 text-[12px] leading-6 text-[var(--app-text-muted)]">
-            Supports deterministic English ranking and improved Chinese segmentation when the runtime exposes Intl.Segmenter.
+            Filters common stop words and Chinese connector words such as 的, 和, 把 before ranking terms.
           </div>
         </Panel>
         <div className="grid gap-4">
@@ -237,7 +238,7 @@ export function WordCloudPage(): JSX.Element {
           <Panel title="Preview" className="overflow-hidden">
             <div
               ref={previewRef}
-              className="relative min-h-[420px] overflow-hidden rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)]"
+              className="relative min-h-[420px] overflow-hidden rounded-[8px] border border-[var(--ui-border)] bg-[var(--ui-surface)]"
             >
               <canvas ref={canvasRef} className="h-full w-full" />
               {previewPhase === "idle" ? (
@@ -253,12 +254,12 @@ export function WordCloudPage(): JSX.Element {
                 <EmptyState title="Preview unavailable" description={previewError ?? "Canvas rendering is unavailable in this environment."} />
               ) : null}
               {previewPhase === "drawing" ? (
-                <div className="pointer-events-none absolute inset-x-4 top-4 rounded-[8px] border border-[var(--app-border)] bg-[rgba(255,255,255,0.88)] px-3.5 py-2.5 text-[12px] text-[var(--app-text)] backdrop-blur">
+                <div className="pointer-events-none absolute inset-x-4 top-4 rounded-[8px] border border-[var(--ui-border)] bg-[rgba(255,255,255,0.88)] px-3.5 py-2.5 text-[12px] text-[var(--ui-text)] backdrop-blur">
                   Rendering preview for {result?.tokens.length ?? 0} ranked terms...
                 </div>
               ) : null}
             </div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--app-text-muted)]">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--ui-text-muted)]">
               <span>Resize the window to reflow the cloud inside the current panel.</span>
               <span>{result ? `Showing up to ${Math.min(result.tokens.length, 60)} words` : "No preview generated yet"}</span>
             </div>
@@ -271,9 +272,9 @@ export function WordCloudPage(): JSX.Element {
 
 function MetricCard({ label, value }: { label: string; value: string }): JSX.Element {
   return (
-    <div className="rounded-[8px] border border-[var(--app-border)] bg-[var(--app-panel)] px-3.5 py-3">
-      <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--app-text-muted)]">{label}</div>
-      <div className="mt-1.5 text-[16px] font-semibold tracking-normal text-[var(--app-text)]">{value}</div>
+    <div className="rounded-[8px] border border-[var(--ui-border)] bg-[var(--ui-surface)] px-3.5 py-3">
+      <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--ui-text-muted)]">{label}</div>
+      <div className="mt-1.5 text-[16px] font-semibold tracking-normal text-[var(--ui-text)]">{value}</div>
     </div>
   );
 }
@@ -281,9 +282,9 @@ function MetricCard({ label, value }: { label: string; value: string }): JSX.Ele
 function EmptyState({ title, description }: { title: string; description: string }): JSX.Element {
   return (
     <div className="absolute inset-0 grid place-items-center p-6 text-center">
-      <div className="max-w-sm rounded-[8px] border border-[var(--app-border)] bg-[rgba(255,255,255,0.9)] px-5 py-4 shadow-[0_10px_28px_rgba(24,24,22,0.08)] backdrop-blur-sm">
-        <div className="text-[15px] font-semibold tracking-normal text-[var(--app-text)]">{title}</div>
-        <div className="mt-2 text-[13px] leading-6 text-[var(--app-text-muted)]">{description}</div>
+      <div className="max-w-sm rounded-[8px] border border-[var(--ui-border)] bg-[rgba(255,255,255,0.9)] px-5 py-4 shadow-[0_1px_2px_rgba(24,24,22,0.05)] backdrop-blur-sm">
+        <div className="text-[15px] font-semibold tracking-normal text-[var(--ui-text)]">{title}</div>
+        <div className="mt-2 text-[13px] leading-6 text-[var(--ui-text-muted)]">{description}</div>
       </div>
     </div>
   );

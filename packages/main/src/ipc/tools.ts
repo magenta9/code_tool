@@ -1,6 +1,7 @@
 import {
   convertTimestamp,
   decodeJwt,
+  encodeJwt,
   diffJsonText,
   inspectImageBase64,
   runJsonTool,
@@ -14,7 +15,7 @@ export class ToolHandlers {
   constructor(
     private readonly history: HistoryRepository,
     private readonly assets: AssetStore
-  ) {}
+  ) { }
 
   runJsonTool(input: Parameters<typeof runJsonTool>[0]): ReturnType<typeof runJsonTool> {
     const result = runJsonTool(input);
@@ -63,6 +64,19 @@ export class ToolHandlers {
         title: "JWT inspection",
         summary: result.expiresAt ? `exp ${result.expiresAt}` : "Decoded header and payload",
         payload: { input: { tokenPreview: `${input.token.slice(0, 18)}...` }, result }
+      });
+    }
+    return result;
+  }
+
+  encodeJwt(input: Parameters<typeof encodeJwt>[0]): ReturnType<typeof encodeJwt> {
+    const result = encodeJwt(input);
+    if (result.ok) {
+      this.history.create({
+        toolId: "jwtTool",
+        title: "JWT encode",
+        summary: "Encoded header and payload",
+        payload: { input, result }
       });
     }
     return result;

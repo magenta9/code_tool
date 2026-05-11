@@ -7,9 +7,23 @@ export interface DecodeJwtResult {
   error?: string;
 }
 
+export interface EncodeJwtInput {
+  header: string;
+  payload: string;
+  signature?: string;
+}
+
+export interface EncodeJwtResult {
+  ok: boolean;
+  token?: string;
+  header?: unknown;
+  payload?: unknown;
+  error?: string;
+}
+
 export function decodeJwt(token: string): DecodeJwtResult {
   const parts = token.trim().split(".");
-  if (parts.length !== 3 || parts.some((part) => part.length === 0)) {
+  if (parts.length !== 3 || !parts[0] || !parts[1]) {
     return { ok: false, error: "JWT must have header, payload, and signature segments." };
   }
   const [headerSegment, payloadSegment, signatureSegment] = parts as [string, string, string];
@@ -22,7 +36,7 @@ export function decodeJwt(token: string): DecodeJwtResult {
       ok: true,
       header,
       payload,
-      signaturePreview: `${signatureSegment.slice(0, 10)}...${signatureSegment.slice(-6)}`,
+      signaturePreview: signatureSegment ? `${signatureSegment.slice(0, 10)}...${signatureSegment.slice(-6)}` : "(empty)",
       expiresAt: exp
     };
   } catch (error) {
@@ -31,6 +45,40 @@ export function decodeJwt(token: string): DecodeJwtResult {
       error: error instanceof Error ? error.message : "Unable to decode JWT."
     };
   }
+}
+
+export function encodeJwt(input: EncodeJwtInput): EncodeJwtResult {
+  try {
+    const header = JSON.parse(input.header) as unknown;
+    const payload = JSON.parse(input.payload) as unknown;
+    const headerSegment = encodeBase64Url(JSON.stringify(header));
+    const payloadSegment = encodeBase64Url(JSON.stringify(payload));
+    return {
+      ok: true,
+      token: `${headerSegment}.${payloadSegment}.${input.signature?.trim() ?? ""}`,
+      header,
+      payload
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unable to encode JWT."
+    };
+  }
+}
+
+export function encodeBase64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  if (typeof btoa === "function") {
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  }
+  const buffer = (globalThis as { Buffer?: { from(value: Uint8Array): { toString(encoding: "base64"): string } } }).Buffer;
+  if (!buffer) {
+    throw new Error("No base64 encoder is available.");
+  }
+  return buffer.from(bytes).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
 export function decodeBase64Url(segment: string): string {

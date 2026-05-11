@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { AiTaskRequest } from "@codetool/shared";
+import { ImagePlus, Square } from "lucide-react";
 import { useAiTask } from "../shared/use-ai-task";
 import { ArtifactCard, resolveTaskState, TaskStateTag, WorkflowSteps } from "../../components/ai-task-chrome";
-import { Panel, PillTag, PrimaryButton, SecondaryButton, SelectField, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, PillTag, SelectField, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
 
 export function AiImagePage(): JSX.Element {
   const [aspectRatio, setAspectRatio] = useState<Extract<AiTaskRequest, { toolId: "aiImage" }>["aspectRatio"]>("1:1");
@@ -18,12 +19,12 @@ export function AiImagePage(): JSX.Element {
             title="Image request"
             actions={
               <div className="flex flex-wrap gap-2">
-                <PrimaryButton type="button" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiImage", prompt: task.prompt, aspectRatio, count })}>
-                  Generate
-                </PrimaryButton>
-                <SecondaryButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
-                  Cancel
-                </SecondaryButton>
+                <ActionButton type="button" variant="primary" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiImage", prompt: task.prompt, aspectRatio, count })}>
+                  <ImagePlus size={14} /> Generate
+                </ActionButton>
+                <ActionButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
+                  <Square size={13} /> Cancel
+                </ActionButton>
               </div>
             }
           >

@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Music, Square } from "lucide-react";
 import { useAiTask } from "../shared/use-ai-task";
 import { ArtifactCard, resolveTaskState, TaskStateTag, WorkflowSteps } from "../../components/ai-task-chrome";
-import { Panel, PillTag, PrimaryButton, SecondaryButton, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
+import { ActionButton, Panel, PillTag, TextArea, TextInput, ToolLayout } from "../../components/tool-layout";
 
 export function AiMusicPage(): JSX.Element {
   const [lyrics, setLyrics] = useState("");
@@ -18,12 +19,12 @@ export function AiMusicPage(): JSX.Element {
               title="Prompt"
               actions={
                 <div className="flex flex-wrap gap-2">
-                  <PrimaryButton type="button" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiMusic", prompt: task.prompt, lyrics, style })}>
-                    Generate
-                  </PrimaryButton>
-                  <SecondaryButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
-                    Cancel
-                  </SecondaryButton>
+                  <ActionButton type="button" variant="primary" disabled={!task.prompt.trim() || task.running} onClick={() => void task.start({ provider: "minimax", toolId: "aiMusic", prompt: task.prompt, lyrics, style })}>
+                    <Music size={14} /> Generate
+                  </ActionButton>
+                  <ActionButton type="button" disabled={!task.running} onClick={() => void task.cancel()}>
+                    <Square size={13} /> Cancel
+                  </ActionButton>
                 </div>
               }
             >

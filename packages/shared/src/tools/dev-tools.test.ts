@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeWordCloud, convertTimestamp, decodeJwt, diffJsonText, inspectImageBase64, runJsonTool } from "./index";
+import { analyzeWordCloud, convertTimestamp, decodeJwt, diffJsonText, encodeJwt, inspectImageBase64, runJsonTool } from "./index";
 
 describe("DevTools core logic", () => {
   it("formats JSON and collects stats", () => {
@@ -25,6 +25,13 @@ describe("DevTools core logic", () => {
     expect(convertTimestamp({ value: "1700000000000", timezone: "UTC" }).inputKind).toBe("milliseconds");
   });
 
+  it("returns RFC timestamp formats", () => {
+    const result = convertTimestamp({ value: "1700000000", timezone: "UTC" });
+    expect(result.rfc3339).toBe("2023-11-14T22:13:20.000Z");
+    expect(result.rfc2822).toBe("Tue, 14 Nov 2023 22:13:20 +0000");
+    expect(result.rfc7231).toBe("Tue, 14 Nov 2023 22:13:20 GMT");
+  });
+
   it("decodes JWT payload safely", () => {
     const token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjMiLCJleHAiOjE3MDAwMDAwMDB9.signature";
     const result = decodeJwt(token);
@@ -33,10 +40,28 @@ describe("DevTools core logic", () => {
     expect(result.expiresAt).toBe("2023-11-14T22:13:20.000Z");
   });
 
+  it("encodes JWT header and payload without signing", () => {
+    const result = encodeJwt({ header: '{"alg":"none","typ":"JWT"}', payload: '{"sub":"123"}' });
+    expect(result.ok).toBe(true);
+    const decoded = decodeJwt(result.token ?? "");
+    expect(decoded.ok).toBe(true);
+    expect(decoded.payload?.sub).toBe("123");
+    expect(decoded.signaturePreview).toBe("(empty)");
+  });
+
   it("tokenizes word cloud input deterministically", () => {
     const result = analyzeWordCloud("the code code tool test");
     expect(result.tokens[0]).toMatchObject({ text: "code", count: 2 });
     expect(result.tokens.some((token) => token.text === "the")).toBe(false);
+  });
+
+  it("removes common Chinese connector words", () => {
+    const result = analyzeWordCloud("我的工具和你的工具，把日志的内容和 JSON 的内容整理好。工具 工具");
+    const tokens = result.tokens.map((token) => token.text);
+    expect(tokens).toContain("工具");
+    expect(tokens).not.toContain("的");
+    expect(tokens).not.toContain("把");
+    expect(tokens).not.toContain("和");
   });
 
   it("removes stop words and keeps tie ordering stable", () => {

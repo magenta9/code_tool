@@ -18,7 +18,7 @@ export function ToolLayout({
   children: ReactNode;
 }): JSX.Element {
   return (
-    <section className="mx-auto grid max-w-[1180px] gap-5">
+    <section className="grid w-full gap-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-4xl">
           <h2 className="text-[23px] font-semibold leading-[1.14] tracking-normal text-[var(--ui-text)]">{title}</h2>

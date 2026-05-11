@@ -8,7 +8,7 @@ CodeTool is a macOS Electron workbench for local-first developer utilities, Mini
 - **Image Converter** – Convert images between Base64 strings and files
 - **JSON Diff** – Compare two JSON objects and find structural differences
 - **Timestamp Converter** – Convert timestamps, ISO strings, and local dates
-- **JWT Tool** – Decode and inspect JWT headers, payloads, and expiry claims
+- **JWT Tool** – Encode and decode JWT headers, payloads, and expiry claims
 - **Word Cloud** – Tokenize text and rank terms for deterministic word clouds
 - **Kanban** – Plan local boards in List or Kanban view with rich task details
 - **AI Chat** – Stream MiniMax chat responses with history and diagnostics

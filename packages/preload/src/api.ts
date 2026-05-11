@@ -10,6 +10,7 @@ export const api: IpcContract = {
     runJsonDiff: (input) => ipcRenderer.invoke(ipcChannels.tools.runJsonDiff, input),
     convertTimestamp: (input) => ipcRenderer.invoke(ipcChannels.tools.convertTimestamp, input),
     decodeJwt: (input) => ipcRenderer.invoke(ipcChannels.tools.decodeJwt, input),
+    encodeJwt: (input) => ipcRenderer.invoke(ipcChannels.tools.encodeJwt, input),
     analyzeWordCloud: (input) => ipcRenderer.invoke(ipcChannels.tools.analyzeWordCloud, input),
     inspectImageBase64: (input) => ipcRenderer.invoke(ipcChannels.tools.inspectImageBase64, input),
     saveImageBase64: (input) => ipcRenderer.invoke(ipcChannels.tools.saveImageBase64, input)

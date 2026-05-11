@@ -40,7 +40,7 @@ export const toolCatalog = [
   {
     id: "jwtTool",
     title: "JWT Tool",
-    description: "Decode and inspect JWT headers, payloads, and expiry claims.",
+    description: "Encode and decode JWT headers, payloads, and expiry claims.",
     category: "devTools",
     icon: "KeyRound",
     routePath: "/tools/jwt",

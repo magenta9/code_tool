@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
     closestCenter,
     DragOverlay,
@@ -15,7 +15,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { JSONContent } from "@tiptap/react";
-import type { KanbanBoard, KanbanCard, KanbanCardPatch, KanbanColumn, KanbanLabel, KanbanPriority, KanbanRichTextDocument } from "@codetool/shared";
+import type { KanbanBoard, KanbanCard, KanbanCardPatch, KanbanColumn, KanbanComment, KanbanLabel, KanbanPriority, KanbanRichTextDocument, KanbanSubtask } from "@codetool/shared";
 import {
     Archive,
     CalendarDays,
@@ -27,7 +27,6 @@ import {
     Pencil,
     Plus,
     RotateCcw,
-    Save,
     Search,
     Tag,
     Trash2,
@@ -59,6 +58,7 @@ interface ConfirmDialogState {
 }
 
 const priorities: KanbanPriority[] = ["none", "low", "medium", "high", "urgent"];
+const emptyRichTextDocument = { type: "doc", content: [{ type: "paragraph" }] } as KanbanRichTextDocument;
 
 export function KanbanPage(): JSX.Element {
     const [boards, setBoards] = useState<KanbanBoard[]>([]);
@@ -76,6 +76,7 @@ export function KanbanPage(): JSX.Element {
     const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
     const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
     const [activeDragId, setActiveDragId] = useState<string | null>(null);
+    const [boardListCollapsed, setBoardListCollapsed] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -142,18 +143,10 @@ export function KanbanPage(): JSX.Element {
         });
     }
 
-    function renameBoard(): void {
-        if (!selectedBoard) return;
-        setTextDialog({
-            title: "Rename board",
-            label: "Board name",
-            initialValue: selectedBoard.name,
-            confirmLabel: "Save name",
-            onSubmit: async (name) => {
-                await getApi().kanban.renameBoard({ id: selectedBoard.id, name });
-                await loadBoards();
-            }
-        });
+    async function saveBoardName(name: string): Promise<void> {
+        if (!selectedBoard || name === selectedBoard.name) return;
+        await getApi().kanban.renameBoard({ id: selectedBoard.id, name });
+        await loadBoards();
     }
 
     async function deleteBoard(): Promise<void> {
@@ -226,19 +219,6 @@ export function KanbanPage(): JSX.Element {
         }
     }
 
-    function renameCard(card: KanbanCard): void {
-        setTextDialog({
-            title: "Rename task",
-            label: "Task title",
-            initialValue: card.title,
-            confirmLabel: "Save title",
-            onSubmit: async (title) => {
-                if (title === card.title) return;
-                await updateCard(card.id, { title });
-            }
-        });
-    }
-
     async function updateCard(cardId: string, patch: Partial<KanbanCardPatch>): Promise<void> {
         const card = cards.find((item) => item.id === cardId);
         if (!card || !selectedBoardId) return;
@@ -247,7 +227,9 @@ export function KanbanPage(): JSX.Element {
             columnId: patch.columnId,
             descriptionJson: patch.descriptionJson,
             descriptionText: patch.descriptionText,
-            priority: patch.priority
+            priority: patch.priority,
+            subtasks: patch.subtasks,
+            comments: patch.comments
         };
         if (Object.prototype.hasOwnProperty.call(patch, "dueDate")) nextPatch.dueDate = patch.dueDate ?? null;
         await getApi().kanban.updateCard({ id: cardId, patch: nextPatch });
@@ -282,18 +264,11 @@ export function KanbanPage(): JSX.Element {
         });
     }
 
-    async function createLabel(): Promise<void> {
+    async function createAndAttachLabel(card: KanbanCard, name: string): Promise<void> {
         if (!selectedBoardId) return;
-        setTextDialog({
-            title: "New label",
-            label: "Label name",
-            initialValue: "Design",
-            confirmLabel: "Create label",
-            onSubmit: async (name) => {
-                await getApi().kanban.createLabel({ boardId: selectedBoardId, name, color: randomLabelColor(labels.length) });
-                await loadBoardData(selectedBoardId);
-            }
-        });
+        const label = await getApi().kanban.createLabel({ boardId: selectedBoardId, name, color: randomLabelColor(labels.length) });
+        await getApi().kanban.setCardLabels({ cardId: card.id, labelIds: [...card.labelIds, label.id] });
+        await loadBoardData(selectedBoardId);
     }
 
     async function toggleCardLabel(card: KanbanCard, labelId: string): Promise<void> {
@@ -307,36 +282,65 @@ export function KanbanPage(): JSX.Element {
     }
 
     async function handleDragEnd(event: DragEndEvent): Promise<void> {
-        setActiveDragId(null);
-        if (!event.over || !selectedBoardId) return;
-        const activeId = String(event.active.id);
-        const overId = String(event.over.id);
-        if (activeId === overId) return;
+        try {
+            if (!event.over || !selectedBoardId) return;
+            const activeId = String(event.active.id);
+            const overId = String(event.over.id);
+            if (activeId === overId) return;
 
-        if (activeId.startsWith("column:") && overId.startsWith("column:")) {
-            await getApi().kanban.reorderColumn({ id: activeId.slice(7), beforeId: overId.slice(7) });
+            if (activeId.startsWith("column:") && overId.startsWith("column:")) {
+                const columnId = activeId.slice(7);
+                const overColumnId = overId.slice(7);
+                const activeIndex = visibleColumns.findIndex((column) => column.id === columnId);
+                const overIndex = visibleColumns.findIndex((column) => column.id === overColumnId);
+                const position = activeIndex < overIndex ? { beforeId: overColumnId } : { afterId: overColumnId };
+                await getApi().kanban.reorderColumn({ id: columnId, ...position });
+                await loadBoardData(selectedBoardId);
+                return;
+            }
+
+            if (!activeId.startsWith("card:")) return;
+            const cardId = activeId.slice(5);
+            const activeCard = activeCards.find((card) => card.id === cardId);
+            const overCard = overId.startsWith("card:") ? activeCards.find((card) => card.id === overId.slice(5)) : undefined;
+            const toColumnId = overId.startsWith("column:") ? overId.slice(7) : overCard?.columnId;
+            if (!toColumnId) return;
+            const targetCards = activeCards.filter((card) => card.columnId === toColumnId).sort((left, right) => left.sortOrder - right.sortOrder);
+            const lastTargetCard = targetCards.filter((card) => card.id !== cardId).at(-1);
+            const position = overCard
+                ? activeCard?.columnId === overCard.columnId
+                    ? targetCards.findIndex((card) => card.id === cardId) < targetCards.findIndex((card) => card.id === overCard.id)
+                        ? { beforeId: overCard.id }
+                        : { afterId: overCard.id }
+                    : event.delta.y >= 0
+                        ? { beforeId: overCard.id }
+                        : { afterId: overCard.id }
+                : lastTargetCard
+                    ? { beforeId: lastTargetCard.id }
+                    : {};
+            await getApi().kanban.reorderCard({ id: cardId, toColumnId, ...position });
             await loadBoardData(selectedBoardId);
-            return;
+        } finally {
+            setActiveDragId(null);
         }
-
-        if (!activeId.startsWith("card:")) return;
-        const cardId = activeId.slice(5);
-        const overCard = overId.startsWith("card:") ? cards.find((card) => card.id === overId.slice(5)) : undefined;
-        const toColumnId = overId.startsWith("column:") ? overId.slice(7) : overCard?.columnId;
-        if (!toColumnId) return;
-        await getApi().kanban.reorderCard({ id: cardId, toColumnId, beforeId: overCard?.id });
-        await loadBoardData(selectedBoardId);
     }
 
     return (
-        <section className="kanban-tool">
+        <section className={`kanban-tool ${boardListCollapsed ? "board-list-collapsed" : ""}`}>
             <aside className="kanban-boards" aria-label="Boards">
                 <div className="kanban-brand">
-                    <KanbanSquare size={18} />
+                    <button
+                        type="button"
+                        className="kanban-brand-toggle"
+                        aria-label={boardListCollapsed ? "Open board list" : "Collapse board list"}
+                        onClick={() => setBoardListCollapsed((current) => !current)}
+                    >
+                        <KanbanSquare size={18} />
+                    </button>
                     <span>Kanban</span>
                 </div>
                 <ActionButton type="button" onClick={createBoard}>
-                    <Plus size={15} /> New board
+                    <Plus size={15} /> {boardListCollapsed ? null : "New board"}
                 </ActionButton>
                 <div className="kanban-board-list">
                     {boards.map((board) => (
@@ -345,7 +349,9 @@ export function KanbanPage(): JSX.Element {
                             key={board.id}
                             className={board.id === selectedBoardId ? "active" : ""}
                             onClick={() => void selectBoard(board.id)}
+                            aria-label={board.name}
                         >
+                            <BoardGlyph name={board.name} />
                             <span>{board.name}</span>
                             <small>{new Date(board.updatedAt).toLocaleDateString()}</small>
                         </button>
@@ -356,22 +362,12 @@ export function KanbanPage(): JSX.Element {
             <main className="kanban-main">
                 <header className="kanban-topbar">
                     <div>
-                        <label className="kanban-board-select">
-                            <select value={selectedBoardId} onChange={(event) => void selectBoard(event.target.value)}>
-                                {boards.map((board) => (
-                                    <option key={board.id} value={board.id}>{board.name}</option>
-                                ))}
-                            </select>
-                            <ChevronDown size={16} />
-                        </label>
+                        <InlineBoardTitle board={selectedBoard} onSave={saveBoardName} />
                         <p>{selectedBoard ? `${columns.length} columns, ${cards.filter((card) => !card.archivedAt).length} active cards` : "Create a board to start"}</p>
                     </div>
                     <div className="kanban-actions">
                         <SearchField icon={<Search size={15} />} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search cards" inputClassName="w-[170px]" />
                         <Segmented value={view} onChange={setView} />
-                        <ActionButton type="button" onClick={renameBoard} disabled={!selectedBoard}>
-                            <Pencil size={14} /> Rename
-                        </ActionButton>
                         <IconButton type="button" aria-label="Delete board" variant="danger" onClick={deleteBoard} disabled={!selectedBoard}>
                             <Trash2 size={15} />
                         </IconButton>
@@ -401,7 +397,6 @@ export function KanbanPage(): JSX.Element {
                                                 onCloseComposer={() => { setDraftCardTitle(column.id, ""); setActiveComposerColumnId(""); }}
                                                 onCreateCard={() => void createCard(column.id)}
                                                 onOpenCard={setSelectedCardId}
-                                                onRenameCard={(card) => void renameCard(card)}
                                                 onArchiveCard={(cardId) => void archiveCard(cardId)}
                                                 onDeleteCard={(cardId) => void deleteCard(cardId)}
                                                 onRename={() => void renameColumn(column)}
@@ -429,7 +424,7 @@ export function KanbanPage(): JSX.Element {
                             ) : null}
 
                             {view === "archive" ? <ArchiveView key="archive" cards={archivedCards} labels={labels} onOpenCard={setSelectedCardId} onRestore={restoreCard} onDelete={deleteCard} /> : null}
-                            <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" }}>
+                            <DragOverlay dropAnimation={null}>
                                 {activeDraggingCard ? <CardDragPreview card={activeDraggingCard} labels={labels} /> : null}
                                 {activeDraggingColumn ? <ColumnDragPreview column={activeDraggingColumn} /> : null}
                             </DragOverlay>
@@ -443,9 +438,7 @@ export function KanbanPage(): JSX.Element {
                             labels={labels}
                             onClose={() => setSelectedCardId("")}
                             onSave={updateCard}
-                            onArchive={archiveCard}
-                            onDelete={deleteCard}
-                            onCreateLabel={createLabel}
+                            onCreateLabel={createAndAttachLabel}
                             onToggleLabel={toggleCardLabel}
                         />
                     ) : null}
@@ -545,6 +538,65 @@ function Segmented({ value, onChange }: { value: ViewMode; onChange: (value: Vie
     );
 }
 
+function BoardGlyph({ name }: { name: string }): JSX.Element {
+    const glyphs = ["#", "<>", "{}", "//", "[]", "@", "*", "~"];
+    const colors = ["#756858", "#6f7a43", "#b36a3c", "#8f6f4f", "#9a5f54", "#6f6251"];
+    const seed = [...name].reduce((total, char) => total + char.charCodeAt(0), 0);
+    return (
+        <span className="kanban-board-glyph" style={{ color: colors[seed % colors.length] }} aria-hidden="true">
+            {glyphs[seed % glyphs.length]}
+        </span>
+    );
+}
+
+function InlineBoardTitle({ board, onSave }: { board?: KanbanBoard; onSave: (name: string) => Promise<void> }): JSX.Element {
+    const [value, setValue] = useState(board?.name ?? "");
+    const [pending, setPending] = useState(false);
+
+    useEffect(() => {
+        setValue(board?.name ?? "");
+    }, [board?.id, board?.name]);
+
+    async function commit(): Promise<void> {
+        if (pending) return;
+        const nextName = value.trim();
+        if (!board || !nextName) {
+            setValue(board?.name ?? "");
+            return;
+        }
+        if (nextName === board.name) {
+            return;
+        }
+        setPending(true);
+        try {
+            await onSave(nextName);
+        } catch {
+            setValue(board.name);
+        } finally {
+            setPending(false);
+        }
+    }
+
+    if (!board) {
+        return <h2 className="kanban-board-title empty">No board</h2>;
+    }
+
+    return (
+        <input
+            className="kanban-board-title-input"
+            value={value}
+            disabled={pending}
+            onChange={(event) => setValue(event.target.value)}
+            onBlur={() => void commit()}
+            onKeyDown={(event) => {
+                if (event.key === "Enter") void commit();
+                if (event.key === "Escape") setValue(board.name);
+            }}
+            aria-label="Board name"
+        />
+    );
+}
+
 function EmptyBoard({ onCreate }: { onCreate: () => void }): JSX.Element {
     return (
         <div className="kanban-empty">
@@ -565,7 +617,6 @@ function SortableColumn({
     onCloseComposer,
     onCreateCard,
     onOpenCard,
-    onRenameCard,
     onArchiveCard,
     onDeleteCard,
     onRename,
@@ -581,7 +632,6 @@ function SortableColumn({
     onCloseComposer: () => void;
     onCreateCard: () => void;
     onOpenCard: (id: string) => void;
-    onRenameCard: (card: KanbanCard) => void;
     onArchiveCard: (id: string) => void;
     onDeleteCard: (id: string) => void;
     onRename: () => void;
@@ -608,7 +658,6 @@ function SortableColumn({
                             card={card}
                             labels={labels}
                             onOpen={() => onOpenCard(card.id)}
-                            onRename={() => onRenameCard(card)}
                             onArchive={() => onArchiveCard(card.id)}
                             onDelete={() => onDeleteCard(card.id)}
                         />
@@ -675,11 +724,10 @@ function CardDragPreview({ card, labels }: { card: KanbanCard; labels: KanbanLab
     );
 }
 
-function SortableCard({ card, labels, onOpen, onRename, onArchive, onDelete }: {
+function SortableCard({ card, labels, onOpen, onArchive, onDelete }: {
     card: KanbanCard;
     labels: KanbanLabel[];
     onOpen: () => void;
-    onRename: () => void;
     onArchive: () => void;
     onDelete: () => void;
 }): JSX.Element {
@@ -692,7 +740,6 @@ function SortableCard({ card, labels, onOpen, onRename, onArchive, onDelete }: {
                 <span className="kanban-card-id">Updated {formatDisplayDate(card.updatedAt)}</span>
                 <span className="kanban-card-actions">
                     <button type="button" onClick={onOpen} aria-label={`Edit ${card.title}`}><Pencil size={13} /></button>
-                    <button type="button" onClick={onRename} aria-label={`Rename ${card.title}`}>Title</button>
                     <button type="button" onClick={onArchive} aria-label={`Archive ${card.title}`}><Archive size={13} /></button>
                     <button type="button" onClick={onDelete} aria-label={`Delete ${card.title}`}><Trash2 size={13} /></button>
                 </span>
@@ -787,15 +834,13 @@ function ArchiveView({ cards, labels, onOpenCard, onRestore, onDelete }: {
     );
 }
 
-function CardDetails({ card, columns, labels, onClose, onSave, onArchive, onDelete, onCreateLabel, onToggleLabel }: {
+function CardDetails({ card, columns, labels, onClose, onSave, onCreateLabel, onToggleLabel }: {
     card: KanbanCard;
     columns: KanbanColumn[];
     labels: KanbanLabel[];
     onClose: () => void;
     onSave: (cardId: string, patch: Partial<KanbanCardPatch>) => Promise<void>;
-    onArchive: (cardId: string) => Promise<void>;
-    onDelete: (cardId: string) => Promise<void>;
-    onCreateLabel: () => Promise<void>;
+    onCreateLabel: (card: KanbanCard, name: string) => Promise<void>;
     onToggleLabel: (card: KanbanCard, labelId: string) => Promise<void>;
 }): JSX.Element {
     const [title, setTitle] = useState(card.title);
@@ -804,10 +849,26 @@ function CardDetails({ card, columns, labels, onClose, onSave, onArchive, onDele
     const [dueDate, setDueDate] = useState(card.dueDate ? dateInputValue(card.dueDate) : "");
     const [descriptionJson, setDescriptionJson] = useState<KanbanRichTextDocument | undefined>(card.descriptionJson);
     const [descriptionText, setDescriptionText] = useState(card.descriptionText ?? "");
+    const [subtasks, setSubtasks] = useState<KanbanSubtask[]>(card.subtasks);
+    const [comments, setComments] = useState<KanbanComment[]>(card.comments);
+    const [subtaskDraft, setSubtaskDraft] = useState("");
+    const [commentDraft, setCommentDraft] = useState("");
+    const [commentDraftJson, setCommentDraftJson] = useState<KanbanRichTextDocument>(emptyRichTextDocument);
+    const [tagDraft, setTagDraft] = useState("");
+    const [tagEditorOpen, setTagEditorOpen] = useState(false);
+    const lastSavedSnapshot = useRef("");
     const selectedColumn = columns.find((column) => column.id === columnId);
-    const savePatch = (): void => {
-        void onSave(card.id, { title, columnId, priority, dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null, descriptionJson, descriptionText });
-    };
+
+    useEffect(() => {
+        function handleKeyDown(event: KeyboardEvent): void {
+            if (event.key !== "Escape") return;
+            event.stopPropagation();
+            onClose();
+        }
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [onClose]);
 
     useEffect(() => {
         setTitle(card.title);
@@ -816,13 +877,88 @@ function CardDetails({ card, columns, labels, onClose, onSave, onArchive, onDele
         setDueDate(card.dueDate ? dateInputValue(card.dueDate) : "");
         setDescriptionJson(card.descriptionJson);
         setDescriptionText(card.descriptionText ?? "");
-    }, [card.id]);
+        setSubtasks(card.subtasks);
+        setComments(card.comments);
+        lastSavedSnapshot.current = cardDetailsSnapshot({
+            title: card.title,
+            columnId: card.columnId,
+            priority: card.priority,
+            dueDate: card.dueDate ? dateInputValue(card.dueDate) : "",
+            descriptionJson: card.descriptionJson,
+            descriptionText: card.descriptionText ?? "",
+            subtasks: card.subtasks,
+            comments: card.comments
+        });
+    }, [card.id, card.updatedAt]);
+
+    useEffect(() => {
+        const snapshot = cardDetailsSnapshot({ title, columnId, priority, dueDate, descriptionJson, descriptionText, subtasks, comments });
+        if (!lastSavedSnapshot.current) {
+            lastSavedSnapshot.current = snapshot;
+            return;
+        }
+        if (snapshot === lastSavedSnapshot.current) return;
+        const timeout = window.setTimeout(() => {
+            lastSavedSnapshot.current = snapshot;
+            void onSave(card.id, {
+                title,
+                columnId,
+                priority,
+                dueDate: dueDate ? new Date(`${dueDate}T00:00:00`).getTime() : null,
+                descriptionJson,
+                descriptionText,
+                subtasks,
+                comments
+            }).catch(() => {
+                lastSavedSnapshot.current = "";
+            });
+        }, 650);
+        return () => window.clearTimeout(timeout);
+    }, [card.id, title, columnId, priority, dueDate, descriptionJson, descriptionText, subtasks, comments, onSave]);
+
+    function addSubtask(): void {
+        const nextTitle = subtaskDraft.trim();
+        if (!nextTitle) return;
+        const now = Date.now();
+        setSubtasks((current) => [...current, { id: crypto.randomUUID(), title: nextTitle, completed: false, createdAt: now, updatedAt: now }]);
+        setSubtaskDraft("");
+    }
+
+    function updateSubtask(id: string, patch: Partial<Pick<KanbanSubtask, "title" | "completed">>): void {
+        const now = Date.now();
+        setSubtasks((current) => current.map((item) => item.id === id ? { ...item, ...patch, updatedAt: now } : item));
+    }
+
+    function deleteSubtask(id: string): void {
+        setSubtasks((current) => current.filter((item) => item.id !== id));
+    }
+
+    function addComment(): void {
+        const body = commentDraft.trim();
+        if (!body) return;
+        const now = Date.now();
+        setComments((current) => [...current, { id: crypto.randomUUID(), body, createdAt: now, updatedAt: now }]);
+        setCommentDraft("");
+        setCommentDraftJson(emptyRichTextDocument);
+    }
+
+    function deleteComment(id: string): void {
+        setComments((current) => current.filter((item) => item.id !== id));
+    }
+
+    function createTag(): void {
+        const name = tagDraft.trim();
+        if (!name) return;
+        setTagDraft("");
+        setTagEditorOpen(false);
+        void onCreateLabel(card, name);
+    }
 
     return (
         <aside className="kanban-details" aria-label="Card details">
             <header className="kanban-details-header">
                 <label className="kanban-title-label">
-                    <textarea className="kanban-title-input" aria-label="Card title" value={title} rows={2} onChange={(event) => setTitle(event.target.value)} />
+                    <input className="kanban-title-input" aria-label="Card title" value={title} onChange={(event) => setTitle(event.target.value)} />
                     <span>Updated {formatDisplayDate(card.updatedAt)}</span>
                 </label>
                 <button type="button" onClick={onClose} aria-label="Close details"><X size={16} /></button>
@@ -848,29 +984,55 @@ function CardDetails({ card, columns, labels, onClose, onSave, onArchive, onDele
                 </section>
                 <section className="kanban-detail-section">
                     <h4>Subtasks</h4>
-                    <div className="kanban-detail-row-empty">Subtasks are not configured for cards yet.</div>
+                    <div className="kanban-subtasks">
+                        {subtasks.map((subtask) => (
+                            <div className="kanban-subtask-row" key={subtask.id}>
+                                <input type="checkbox" checked={subtask.completed} onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })} aria-label={`Complete ${subtask.title}`} />
+                                <input value={subtask.title} onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })} aria-label="Subtask title" />
+                                <button type="button" onClick={() => deleteSubtask(subtask.id)} aria-label={`Delete ${subtask.title}`}><Trash2 size={13} /></button>
+                            </div>
+                        ))}
+                        <form className="kanban-inline-add kanban-subtask-add" onSubmit={(event) => { event.preventDefault(); addSubtask(); }}>
+                            <input value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Add subtask" />
+                        </form>
+                    </div>
                 </section>
                 <section className="kanban-detail-section">
-                    <h4>Labels</h4>
-                    <div className="kanban-labels">
-                        {labels.map((label) => (
-                            <button type="button" key={label.id} className={`label-toggle ${card.labelIds.includes(label.id) ? "active" : ""}`} onClick={() => void onToggleLabel(card, label.id)}>
+                    <h4>Tags</h4>
+                    <div className="kanban-tags">
+                        {labels.filter((label) => card.labelIds.includes(label.id)).map((label) => (
+                            <button type="button" key={label.id} className="kanban-tag-pill" onClick={() => void onToggleLabel(card, label.id)}>
                                 <LabelChip label={label} />
                             </button>
                         ))}
-                        <button type="button" className="kanban-label-create" onClick={() => void onCreateLabel()}><Plus size={14} /></button>
+                        {tagEditorOpen ? (
+                            <form className="kanban-tag-input-pill" onSubmit={(event) => { event.preventDefault(); createTag(); }}>
+                                <input autoFocus value={tagDraft} onChange={(event) => setTagDraft(event.target.value)} placeholder="Tag" onBlur={() => { if (!tagDraft.trim()) setTagEditorOpen(false); }} />
+                            </form>
+                        ) : (
+                            <button type="button" className="kanban-tag-add" aria-label="Add tag" onClick={() => setTagEditorOpen(true)}><Plus size={13} /></button>
+                        )}
                     </div>
                 </section>
                 <section className="kanban-detail-section">
                     <h4>Comments</h4>
-                    <div className="kanban-detail-row-empty">Comments are not configured for cards yet.</div>
+                    <div className="kanban-comments">
+                        {comments.map((comment) => (
+                            <article className="kanban-comment" key={comment.id}>
+                                <p>{comment.body}</p>
+                                <div>
+                                    <span>{formatDisplayDate(comment.createdAt)}</span>
+                                    <button type="button" onClick={() => deleteComment(comment.id)} aria-label="Delete comment"><Trash2 size={13} /></button>
+                                </div>
+                            </article>
+                        ))}
+                        <form className="kanban-comment-form" onSubmit={(event) => { event.preventDefault(); addComment(); }}>
+                            <RichTextEditor value={commentDraftJson} onChange={(json, text) => { setCommentDraftJson(json); setCommentDraft(text); }} />
+                            <button type="submit" disabled={!commentDraft.trim()}><Plus size={13} /> Add comment</button>
+                        </form>
+                    </div>
                 </section>
             </div>
-            <footer>
-                <ActionButton type="button" variant="primary" onClick={savePatch}><Save size={14} /> Save</ActionButton>
-                <ActionButton type="button" onClick={() => void onArchive(card.id)}><Archive size={14} /> Archive</ActionButton>
-                <ActionButton type="button" variant="danger" onClick={() => void onDelete(card.id)}><Trash2 size={14} /> Delete</ActionButton>
-            </footer>
         </aside>
     );
 }
@@ -946,6 +1108,19 @@ function LabelChip({ label }: { label: KanbanLabel }): JSX.Element {
     return <span className="kanban-label-chip" style={{ borderColor: label.color, color: label.color }}>{label.name}</span>;
 }
 
+function cardDetailsSnapshot(value: {
+    title: string;
+    columnId: string;
+    priority: KanbanPriority;
+    dueDate: string;
+    descriptionJson?: KanbanRichTextDocument;
+    descriptionText: string;
+    subtasks: KanbanSubtask[];
+    comments: KanbanComment[];
+}): string {
+    return JSON.stringify(value);
+}
+
 function filterCards(cards: KanbanCard[], search: string): KanbanCard[] {
     const query = search.trim().toLowerCase();
     if (!query) return cards;
@@ -953,7 +1128,7 @@ function filterCards(cards: KanbanCard[], search: string): KanbanCard[] {
 }
 
 function randomLabelColor(index: number): string {
-    return ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#d97706"][index % 5] ?? "#2563eb";
+    return ["#756858", "#6f7a43", "#b36a3c", "#8f6f4f", "#9a5f54"][index % 5] ?? "#756858";
 }
 
 function dateInputValue(timestamp: number): string {

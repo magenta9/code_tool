@@ -93,9 +93,9 @@
 
 初始取值应接近 Kanban：
 
-- primary: `#4f6f5f`
-- primary soft: `rgba(79, 111, 95, 0.11)`
-- primary soft strong: `rgba(79, 111, 95, 0.22)`
+- primary: `#756858`
+- primary soft: `rgba(117, 104, 88, 0.12)`
+- primary soft strong: `rgba(117, 104, 88, 0.22)`
 - border: `rgba(25, 25, 22, 0.1)`
 - border strong: `rgba(25, 25, 22, 0.18)`
 - text muted: `#686861`

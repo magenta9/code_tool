@@ -18,6 +18,8 @@ import type {
 } from "./types/kanban";
 import type {
   DecodeJwtResult,
+  EncodeJwtInput,
+  EncodeJwtResult,
   ImageBase64Inspection,
   JsonDiffResult,
   JsonToolInput,
@@ -48,6 +50,7 @@ export interface IpcContract {
     runJsonDiff(input: { left: string; right: string }): Promise<JsonDiffResult>;
     convertTimestamp(input: TimestampConversionInput): Promise<TimestampConversionResult>;
     decodeJwt(input: { token: string }): Promise<DecodeJwtResult>;
+    encodeJwt(input: EncodeJwtInput): Promise<EncodeJwtResult>;
     analyzeWordCloud(input: { text: string }): Promise<WordCloudResult>;
     inspectImageBase64(input: { base64: string }): Promise<ImageBase64Inspection>;
     saveImageBase64(input: SaveImageBase64Input): Promise<AssetRecord>;
@@ -110,6 +113,7 @@ export const ipcContractHandlers = [
   "tools.runJsonDiff",
   "tools.convertTimestamp",
   "tools.decodeJwt",
+  "tools.encodeJwt",
   "tools.analyzeWordCloud",
   "tools.inspectImageBase64",
   "tools.saveImageBase64",

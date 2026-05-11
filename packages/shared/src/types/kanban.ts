@@ -4,6 +4,21 @@ export type KanbanPriority = "none" | "low" | "medium" | "high" | "urgent";
 
 export type KanbanRichTextDocument = JsonValue;
 
+export interface KanbanSubtask {
+    id: string;
+    title: string;
+    completed: boolean;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface KanbanComment {
+    id: string;
+    body: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
 export interface KanbanBoard {
     id: string;
     name: string;
@@ -38,6 +53,8 @@ export interface KanbanCard {
     updatedAt: number;
     archivedAt?: number;
     labelIds: string[];
+    subtasks: KanbanSubtask[];
+    comments: KanbanComment[];
 }
 
 export interface KanbanLabel {
@@ -74,6 +91,8 @@ export interface KanbanCardPatch {
     descriptionText?: string;
     priority: KanbanPriority;
     dueDate?: number | null;
+    subtasks?: KanbanSubtask[];
+    comments?: KanbanComment[];
 }
 
 export interface CreateKanbanBoardInput {

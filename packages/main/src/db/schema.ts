@@ -92,6 +92,8 @@ export function migrate(database: Database.Database): void {
       title TEXT NOT NULL,
       description_json TEXT,
       description_text TEXT,
+      subtasks_json TEXT NOT NULL DEFAULT '[]',
+      comments_json TEXT NOT NULL DEFAULT '[]',
       priority TEXT NOT NULL DEFAULT 'none',
       due_date INTEGER,
       sort_order REAL NOT NULL,
@@ -116,4 +118,14 @@ export function migrate(database: Database.Database): void {
       PRIMARY KEY (card_id, label_id)
     );
   `);
+
+  ensureColumn(database, "kanban_cards", "subtasks_json", "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(database, "kanban_cards", "comments_json", "TEXT NOT NULL DEFAULT '[]'");
+}
+
+function ensureColumn(database: Database.Database, table: string, column: string, definition: string): void {
+  const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((item) => item.name === column)) {
+    database.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+  }
 }

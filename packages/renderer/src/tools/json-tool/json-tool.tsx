@@ -21,7 +21,7 @@ export function JsonToolPage(): JSX.Element {
           title="Input"
           actions={
             <div className="flex flex-wrap gap-2">
-              <ActionButton type="button" variant="primary" onClick={() => void run("format")}>
+              <ActionButton type="button" onClick={() => void run("format")}>
                 <Braces size={14} /> Format
               </ActionButton>
               <ActionButton type="button" onClick={() => void run("minify")}>

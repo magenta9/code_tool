@@ -30,8 +30,8 @@ type WordCloudOptions = {
 };
 
 const sampleText = "CodeTool helps teams inspect logs, compare JSON, decode tokens, and generate reliable word clouds.";
-const previewPalette = ["#d8ff63", "#9ee7ff", "#ffd27a", "#ff9e7a", "#b9f27e"];
-const fallbackPreviewColor = "#d8ff63";
+const previewPalette = ["#756858", "#6f7a43", "#b36a3c", "#8f6f4f", "#9a5f54"];
+const fallbackPreviewColor = "#756858";
 let wordCloudModulePromise: Promise<WordCloudModule> | null = null;
 
 async function loadWordCloudModule(): Promise<WordCloudModule> {
@@ -214,14 +214,14 @@ export function WordCloudPage(): JSX.Element {
         <Panel
           title="Source text"
           actions={
-            <ActionButton type="button" variant="primary" onClick={() => void handleAnalyze()} disabled={!text.trim() || isAnalyzing}>
+            <ActionButton type="button" onClick={() => void handleAnalyze()} disabled={!text.trim() || isAnalyzing}>
               <Cloud size={14} /> {isAnalyzing ? "Generating..." : result ? "Recompute" : "Generate cloud"}
             </ActionButton>
           }
         >
           <TextArea value={text} onChange={(event) => setText(event.target.value)} className="min-h-[360px]" />
           <div className="mt-3 text-[12px] leading-6 text-[var(--app-text-muted)]">
-            Supports deterministic English ranking and improved Chinese segmentation when the runtime exposes Intl.Segmenter.
+            Filters common stop words and Chinese connector words such as 的, 和, 把 before ranking terms.
           </div>
         </Panel>
         <div className="grid gap-4">

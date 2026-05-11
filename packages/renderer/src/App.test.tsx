@@ -67,6 +67,11 @@ describe("App smoke", () => {
     expect(screen.getByRole("button", { name: "Edit Fix task" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Archive Fix task" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete Fix task" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Fix task" }));
+    expect(screen.getByLabelText("Card details")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByLabelText("Card details")).not.toBeInTheDocument();
   });
 
   it("opens in-app Kanban board creation dialogs", async () => {
@@ -117,7 +122,7 @@ function createColumnFixture(boardId: string): KanbanColumn {
     id: "column-1",
     boardId,
     name: "Todo",
-    color: "#4f6f5f",
+    color: "#756858",
     sortOrder: 1000,
     createdAt: 1,
     updatedAt: 2
@@ -134,6 +139,8 @@ function createCardFixture(boardId: string, columnId: string): KanbanCard {
     sortOrder: 1000,
     createdAt: 1,
     updatedAt: 2,
-    labelIds: []
+    labelIds: [],
+    subtasks: [],
+    comments: []
   };
 }

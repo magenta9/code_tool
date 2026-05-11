@@ -12,6 +12,8 @@
     "@codetool/shared": "workspace:*",
     "@earendil-works/pi-coding-agent": "^0.74.0",
     "better-sqlite3": "^12.8.0",
-    "keytar": "^7.9.0"
+    "keytar": "^7.9.0",
+    "katex": "^0.16.45",
+    "marked": "^18.0.3"
   }
 }

@@ -15,6 +15,7 @@ export function allDeclaredInvokeChannels(): string[] {
   return [
     ipcChannels.system.getStatus,
     ...Object.values(ipcChannels.tools),
+    ...Object.values(ipcChannels.markdown),
     ...Object.values(ipcChannels.history),
     ...Object.values(ipcChannels.settings),
     ...Object.values(ipcChannels.secrets),

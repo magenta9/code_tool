@@ -15,6 +15,7 @@ import { SettingsHandlers } from "./settings";
 import { AiHandlers } from "./ai";
 import { DiagnosticsHandlers } from "./diagnostics";
 import { KanbanHandlers } from "./kanban";
+import { MarkdownHandlers } from "./markdown";
 import { bindInvoke } from "./contract-binder";
 
 export interface IpcServiceContext {
@@ -30,6 +31,7 @@ export function registerIpc(context: IpcServiceContext): void {
   const tools = new ToolHandlers(context.history, context.assets);
   const history = new HistoryHandlers(context.history);
   const kanban = new KanbanHandlers(context.kanban);
+  const markdown = new MarkdownHandlers(context.settings);
   const settings = new SettingsHandlers(context.settings);
   const diagnostics = new DiagnosticsHandlers(context.logger, context.logRoot);
   const secrets = new MiniMaxSecretStore();
@@ -65,6 +67,16 @@ export function registerIpc(context: IpcServiceContext): void {
   bindInvoke(ipcMain, ipcChannels.tools.analyzeWordCloud, (input) => tools.analyzeWordCloud(input));
   bindInvoke(ipcMain, ipcChannels.tools.inspectImageBase64, (input) => tools.inspectImageBase64(input));
   bindInvoke(ipcMain, ipcChannels.tools.saveImageBase64, (input) => tools.saveImageBase64(input));
+
+  bindInvoke(ipcMain, ipcChannels.markdown.openFile, () => markdown.openFile());
+  bindInvoke(ipcMain, ipcChannels.markdown.readFile, (input) => markdown.readFile(input));
+  bindInvoke(ipcMain, ipcChannels.markdown.saveFile, (input) => markdown.saveFile(input));
+  bindInvoke(ipcMain, ipcChannels.markdown.saveFileAs, (input) => markdown.saveFileAs(input));
+  bindInvoke(ipcMain, ipcChannels.markdown.openDirectory, () => markdown.openDirectory());
+  bindInvoke(ipcMain, ipcChannels.markdown.listDirectory, (input) => markdown.listDirectory(input));
+  bindInvoke(ipcMain, ipcChannels.markdown.saveImageAsset, (input) => markdown.saveImageAsset(input));
+  bindInvoke(ipcMain, ipcChannels.markdown.exportHtml, (input) => markdown.exportHtml(input));
+  bindInvoke(ipcMain, ipcChannels.markdown.exportPdf, (input) => markdown.exportPdf(input));
 
   bindInvoke(ipcMain, ipcChannels.history.list, (input) => history.list(input));
   bindInvoke(ipcMain, ipcChannels.history.load, (input) => history.load(input));

@@ -11,6 +11,7 @@ CodeTool is a macOS Electron workbench for local-first developer utilities, Mini
 - **JWT Tool** – Encode and decode JWT headers, payloads, and expiry claims
 - **Word Cloud** – Tokenize text and rank terms for deterministic word clouds
 - **Kanban** – Plan local boards in List or Kanban view with rich task details
+- **Markdown Editor** – Edit Markdown files with directory access, themes, and export
 - **AI Chat** – Stream MiniMax chat responses with history and diagnostics
 - **Pi Agent** – Run Pi coding-agent sessions with real tool calls, queue state, and workflow traces
 - **AI Speech** – Generate speech audio with MiniMax and keep output history

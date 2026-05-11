@@ -4,11 +4,18 @@ import type Database from "better-sqlite3";
 const defaultSettings: AppSettings = {
   theme: "dark",
   compactMode: true,
-  defaultTimezone: "UTC"
+  defaultTimezone: "UTC",
+  markdownEditor: {
+    viewMode: "write",
+    autosave: true,
+    enabledPlugins: ["gfm", "math", "mermaid", "codeHighlight", "frontmatter", "toc", "outline"],
+    themeId: "codetool",
+    recentDirectories: []
+  }
 };
 
 export class SettingsRepository {
-  constructor(private readonly database: Database.Database) {}
+  constructor(private readonly database: Database.Database) { }
 
   get(): AppSettings {
     const row = this.database.prepare("SELECT value_json FROM settings WHERE key = 'app'").get() as

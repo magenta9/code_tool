@@ -20,6 +20,17 @@ Object.defineProperty(window, "api", {
       inspectImageBase64: vi.fn(),
       saveImageBase64: vi.fn()
     },
+    markdown: {
+      openFile: vi.fn(),
+      readFile: vi.fn(),
+      saveFile: vi.fn(),
+      saveFileAs: vi.fn(),
+      openDirectory: vi.fn(),
+      listDirectory: vi.fn(),
+      saveImageAsset: vi.fn(),
+      exportHtml: vi.fn(),
+      exportPdf: vi.fn()
+    },
     history: {
       list: vi.fn(),
       load: vi.fn(),
@@ -27,7 +38,18 @@ Object.defineProperty(window, "api", {
       delete: vi.fn()
     },
     settings: {
-      get: vi.fn(),
+      get: vi.fn(async () => ({
+        theme: "dark" as const,
+        compactMode: true,
+        defaultTimezone: "UTC",
+        markdownEditor: {
+          viewMode: "write" as const,
+          autosave: true,
+          enabledPlugins: ["gfm" as const, "math" as const, "mermaid" as const, "codeHighlight" as const, "frontmatter" as const, "toc" as const, "outline" as const],
+          themeId: "codetool",
+          recentDirectories: []
+        }
+      })),
       save: vi.fn()
     },
     secrets: {

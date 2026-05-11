@@ -65,6 +65,15 @@ export const toolCatalog = [
     capabilities: ["history"]
   },
   {
+    id: "markdownEditor",
+    title: "Markdown Editor",
+    description: "Edit Markdown files with directory access, themes, and export.",
+    category: "devTools",
+    icon: "FileText",
+    routePath: "/tools/markdown-editor",
+    capabilities: ["history", "file", "media"]
+  },
+  {
     id: "aiChat",
     title: "AI Chat",
     description: "Stream MiniMax chat responses with history and diagnostics.",
